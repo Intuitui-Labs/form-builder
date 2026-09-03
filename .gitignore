@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Production build artifacts
+dist/
+build/
+
+# Cache and temporary files
+.turbo/
+*.tsbuildinfo
+.eslintcache
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS and Environment
+.DS_Store
+Thumbs.db
+.env
+.env.local
+.env.*.local

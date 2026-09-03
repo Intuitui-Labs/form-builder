@@ -1,0 +1,38 @@
+{
+  "extends": "../../packages/typescript-config/base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "composite": true,
+    "emitDeclarationOnly": true,
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ],
+      "@intuitui-labs/form-builder-engine/*": [
+        "./src/*"
+      ],
+      "@repo/core": [
+        "../core/dist/index.d.ts"
+      ],
+      "@repo/core/*": [
+        "../core/dist/*"
+      ],
+      "@repo/ui": [
+        "../ui/dist/index.d.ts"
+      ],
+      "@repo/ui/*": [
+        "../ui/dist/*"
+      ]
+    }
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

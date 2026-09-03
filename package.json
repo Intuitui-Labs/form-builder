@@ -1,0 +1,75 @@
+{
+  "name": "@intuitui-labs/form-builder-engine",
+  "version": "1.0.0",
+  "description": "Headless offline-first form builder state engine",
+  "type": "module",
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./core": {
+      "types": "./src/core/index.ts",
+      "import": "./src/core/index.ts",
+      "default": "./src/core/index.ts"
+    },
+    "./ports": {
+      "types": "./src/ports/index.ts",
+      "import": "./src/ports/index.ts",
+      "default": "./src/ports/index.ts"
+    },
+    "./schema": {
+      "types": "./src/schema/index.ts",
+      "import": "./src/schema/index.ts",
+      "default": "./src/schema/index.ts"
+    },
+    "./validation": {
+      "types": "./src/validation/index.ts",
+      "import": "./src/validation/index.ts",
+      "default": "./src/validation/index.ts"
+    },
+    "./hydration": {
+      "types": "./src/hydration/index.ts",
+      "import": "./src/hydration/index.ts",
+      "default": "./src/hydration/index.ts"
+    },
+    "./analytics": {
+      "types": "./src/analytics/index.ts",
+      "import": "./src/analytics/index.ts",
+      "default": "./src/analytics/index.ts"
+    },
+    "./codegen": {
+      "types": "./src/codegen/index.ts",
+      "import": "./src/codegen/index.ts",
+      "default": "./src/codegen/index.ts"
+    },
+    "./*": {
+      "types": "./src/*.ts",
+      "import": "./src/*.js",
+      "default": "./src/*.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "license": "MIT",
+  "scripts": {
+    "build": "node ../../scripts/run-and-report.mjs --cmd \"pnpm exec tsup src/index.ts src/core/index.ts src/ports/index.ts src/schema/index.ts src/validation/index.ts src/hydration/index.ts src/analytics/index.ts src/codegen/index.ts --format esm,cjs --dts --clean\" --name \"packages_form-builder-engine-build\"",
+    "check-types": "node ../../scripts/run-and-report.mjs --cmd \"tsc --build --noEmit\" --name \"packages_form-builder-engine-check-types\""
+  },
+  "dependencies": {
+    "@tanstack/form-core": "^0.20.0",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "tsup": "^8.5.1",
+    "typescript": "rc"
+  },
+  "_originalScripts": {
+    "build": "pnpm exec tsup src/index.ts src/core/index.ts src/ports/index.ts src/schema/index.ts src/validation/index.ts src/hydration/index.ts src/analytics/index.ts src/codegen/index.ts --format esm,cjs --dts --clean",
+    "check-types": "tsc --build --noEmit"
+  }
+}
