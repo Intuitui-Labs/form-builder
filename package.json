@@ -1,75 +1,100 @@
 {
-  "name": "@intuitui-labs/form-builder-engine",
-  "version": "1.0.0",
-  "description": "Headless offline-first form builder state engine",
+  "name": "@intuitui-labs/form-builder",
+  "version": "0.1.0",
+  "description": "Headless schema-driven form evaluation, validation, hydration, and analytics engine built on TanStack Form and Zod.",
   "type": "module",
-  "main": "./src/index.ts",
-  "module": "./src/index.ts",
-  "types": "./src/index.ts",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "package.json"
+  ],
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts",
-      "default": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     },
     "./core": {
-      "types": "./src/core/index.ts",
-      "import": "./src/core/index.ts",
-      "default": "./src/core/index.ts"
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.js",
+      "default": "./dist/core/index.js"
     },
     "./ports": {
-      "types": "./src/ports/index.ts",
-      "import": "./src/ports/index.ts",
-      "default": "./src/ports/index.ts"
+      "types": "./dist/ports/index.d.ts",
+      "import": "./dist/ports/index.js",
+      "default": "./dist/ports/index.js"
     },
     "./schema": {
-      "types": "./src/schema/index.ts",
-      "import": "./src/schema/index.ts",
-      "default": "./src/schema/index.ts"
+      "types": "./dist/schema/index.d.ts",
+      "import": "./dist/schema/index.js",
+      "default": "./dist/schema/index.js"
     },
     "./validation": {
-      "types": "./src/validation/index.ts",
-      "import": "./src/validation/index.ts",
-      "default": "./src/validation/index.ts"
+      "types": "./dist/validation/index.d.ts",
+      "import": "./dist/validation/index.js",
+      "default": "./dist/validation/index.js"
     },
     "./hydration": {
-      "types": "./src/hydration/index.ts",
-      "import": "./src/hydration/index.ts",
-      "default": "./src/hydration/index.ts"
+      "types": "./dist/hydration/index.d.ts",
+      "import": "./dist/hydration/index.js",
+      "default": "./dist/hydration/index.js"
     },
     "./analytics": {
-      "types": "./src/analytics/index.ts",
-      "import": "./src/analytics/index.ts",
-      "default": "./src/analytics/index.ts"
+      "types": "./dist/analytics/index.d.ts",
+      "import": "./dist/analytics/index.js",
+      "default": "./dist/analytics/index.js"
     },
     "./codegen": {
-      "types": "./src/codegen/index.ts",
-      "import": "./src/codegen/index.ts",
-      "default": "./src/codegen/index.ts"
+      "types": "./dist/codegen/index.d.ts",
+      "import": "./dist/codegen/index.js",
+      "default": "./dist/codegen/index.js"
     },
     "./*": {
-      "types": "./src/*.ts",
-      "import": "./src/*.js",
-      "default": "./src/*.js"
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js",
+      "default": "./dist/*.js"
     },
     "./package.json": "./package.json"
   },
-  "license": "MIT",
   "scripts": {
-    "build": "node ../../scripts/run-and-report.mjs --cmd \"pnpm exec tsup src/index.ts src/core/index.ts src/ports/index.ts src/schema/index.ts src/validation/index.ts src/hydration/index.ts src/analytics/index.ts src/codegen/index.ts --format esm,cjs --dts --clean\" --name \"packages_form-builder-engine-build\"",
-    "check-types": "node ../../scripts/run-and-report.mjs --cmd \"tsc --build --noEmit\" --name \"packages_form-builder-engine-check-types\""
+    "build": "tsc -p tsconfig.json",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true}); fs.rmSync('node_modules',{recursive:true,force:true})\"",
+    "prepublishOnly": "pnpm run check-types && pnpm run test && pnpm run build"
   },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/intuitui-labs/form-builder.git"
+  },
+  "keywords": [
+    "form",
+    "headless",
+    "tanstack-form",
+    "zod",
+    "validation",
+    "schema",
+    "hydration",
+    "analytics"
+  ],
+  "author": "Intuitui Labs & Neev Foundation",
+  "license": "MIT",
   "dependencies": {
     "@tanstack/form-core": "^0.20.0",
-    "zod": "4.5.4"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@repo/typescript-config": "workspace:*",
-    "tsup": "^8.5.1",
-    "typescript": "rc"
-  },
-  "_originalScripts": {
-    "build": "pnpm exec tsup src/index.ts src/core/index.ts src/ports/index.ts src/schema/index.ts src/validation/index.ts src/hydration/index.ts src/analytics/index.ts src/codegen/index.ts --format esm,cjs --dts --clean",
-    "check-types": "tsc --build --noEmit"
+    "@types/node": "^24.13.5",
+    "@vitest/coverage-v8": "^5.0.1",
+    "typescript": "7.0.2",
+    "vitest": "^5.0.1"
   }
 }

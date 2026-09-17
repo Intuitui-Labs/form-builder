@@ -1,32 +1,40 @@
+# Form Builder (`@intuitui-labs/form-builder`)
+
+[![CI](https://github.com/intuitui-labs/form-builder/actions/workflows/ci.yml/badge.svg)](https://github.com/intuitui-labs/form-builder/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/@intuitui-labs/form-builder?style=flat-square&color=blue)](https://www.npmjs.com/package/@intuitui-labs/form-builder)
+[![TypeScript](https://img.shields.io/badge/TypeScript-7.0.2-blue.svg?style=flat-square)](https://www.typescriptlang.org/)
+[![Vitest 5](https://img.shields.io/badge/tested%20with-Vitest%205-729B1B.svg?style=flat-square)](https://vitest.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
+
+> **Headless schema-driven form evaluation, validation, hydration, and analytics engine built on TanStack Form and Zod.**
+
 ---
-title: "@intuitui-labs/form-builder-engine"
-status: "active"
-created: 2026-05-22
-updated: 2026-05-22
-author: "Naveen"
-scribe: "opencode"
-tags: [packages, form-builder-engine]
+
+## 📦 Installation & Usage
+
+```bash
+pnpm add @intuitui-labs/form-builder @tanstack/form-core zod
+```
+
+### Tree-Shakable Subpaths
+```typescript
+import { createFormSchema } from '@intuitui-labs/form-builder/schema';
+import { validateField } from '@intuitui-labs/form-builder/validation';
+import { hydrateFormValues } from '@intuitui-labs/form-builder/hydration';
+import { trackFormMetrics } from '@intuitui-labs/form-builder/analytics';
+```
+
 ---
 
-# @intuitui-labs/form-builder-engine
+## 🛠️ Development & Quality Gates
 
-Headless, hexagonal, offline-first form engine with schema-driven validation and adapter ports.
+```bash
+pnpm run check-types
+pnpm test
+pnpm run build
+```
 
-## What this package provides
-- versioned form schema types
-- validation helpers
-- form state manager
-- schema hydration
-- analytics interfaces and primitives
-- storage/sync/analytics adapter ports
-- QR code and public-share URL ports for hosts that need distribution flows
+---
 
-## What this package does not provide
-- React or React Native UI
-- app routing
-- repository-specific APIs
-- design-system components
-- QR/scanner integrations
-
-## Design rule
-Anything environment-specific should be supplied through adapters, not imported from a host app.
+## 📄 License
+MIT © Intuitui Labs & Neev Foundation.
