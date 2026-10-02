@@ -1,5 +1,5 @@
-import { FormApi } from '@tanstack/form-core';
-import type { ValidationResult } from '@intuitui-labs/form-builder-engine/validation/ValidationEngine';
+﻿import { FormApi } from '@tanstack/form-core';
+import type { ValidationResult } from '../validation/ValidationEngine.js';
 
 export interface FormFieldConfig<T = unknown> {
   label?: string;

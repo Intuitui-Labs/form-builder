@@ -1,5 +1,5 @@
 {
-  "name": "@intuitui-labs/form-builder",
+  "name": "@intuitui-labs/form-builder-engine",
   "version": "0.1.0",
   "description": "Headless schema-driven form evaluation, validation, hydration, and analytics engine built on TanStack Form and Zod.",
   "type": "module",
@@ -73,7 +73,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/intuitui-labs/form-builder.git"
+    "url": "git+https://github.com/intuitui-labs/form-builder.git"
   },
   "keywords": [
     "form",
@@ -92,9 +92,9 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@types/node": "^24.13.5",
-    "@vitest/coverage-v8": "^5.0.1",
+    "@types/node": "^26.6.3",
+    "@vitest/coverage-v8": "^5.0.3",
     "typescript": "7.0.2",
-    "vitest": "^5.0.1"
+    "vitest": "^5.0.3"
   }
 }

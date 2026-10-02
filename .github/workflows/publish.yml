@@ -6,7 +6,7 @@ on:
 
 jobs:
   publish:
-    name: Publish @intuitui-labs/form-builder
+    name: Publish @intuitui-labs/form-builder-engine
     runs-on: ubuntu-latest
     permissions:
       contents: read

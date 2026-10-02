@@ -1,6 +1,6 @@
-import { FormHydrator } from '@intuitui-labs/form-builder-engine/hydrator/FormHydrator';
-import type { FormPage, FormSchema } from '@intuitui-labs/form-builder-engine/schema/FormSchema';
-import { FormManager } from '@intuitui-labs/form-builder-engine/manager/FormManager';
+﻿import { FormHydrator } from '../hydrator/FormHydrator.js';
+import type { FormPage, FormSchema } from '../schema/FormSchema.js';
+import { FormManager } from './FormManager.js';
 
 export class MultiStepFormManager<T extends Record<string, unknown>> {
   private schema: FormSchema;

@@ -1,4 +1,4 @@
-export type {
+﻿export type {
   FieldDefinition,
   FieldType,
   FormField,
@@ -7,4 +7,4 @@ export type {
   FormSchema,
   FormSettings,
   ValidatorRule,
-} from '@intuitui-labs/form-builder-engine/schema/FormSchema';
+} from './FormSchema.js';

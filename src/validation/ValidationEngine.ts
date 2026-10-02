@@ -1,4 +1,4 @@
-import type { FormSchema, ValidatorRule } from '@intuitui-labs/form-builder-engine/schema/FormSchema';
+﻿import type { FormSchema, ValidatorRule } from '../schema/FormSchema.js';
 
 export interface ValidationResult {
   isValid: boolean;

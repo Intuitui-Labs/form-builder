@@ -1,6 +1,6 @@
-import type { ValidatorRule } from '@intuitui-labs/form-builder-engine/schema/FormSchema';
-import { type FormConfig, type FormFieldConfig, FormManager } from '@intuitui-labs/form-builder-engine/manager/FormManager';
-import { applyRule, ValidationEngine } from '@intuitui-labs/form-builder-engine/validation/ValidationEngine';
+﻿import type { ValidatorRule } from '../schema/FormSchema.js';
+import { type FormConfig, type FormFieldConfig, FormManager } from '../manager/FormManager.js';
+import { applyRule, ValidationEngine } from '../validation/ValidationEngine.js';
 
 export interface HydratedFieldDefinition {
   name: string;

@@ -1,4 +1,4 @@
-import type { FieldDefinition } from '@intuitui-labs/form-builder-engine/schema/FormSchema';
+﻿import type { FieldDefinition } from '../schema/FormSchema.js';
 
 export function exportToStaticReact(
   title: string,

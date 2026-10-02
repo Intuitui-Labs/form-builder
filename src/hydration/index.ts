@@ -1,2 +1,2 @@
-export type { HydratedFieldDefinition, HydrationPayload } from '@intuitui-labs/form-builder-engine/hydrator/FormHydrator';
-export { FormHydrator, registerCustomValidator, clearCustomValidators } from '@intuitui-labs/form-builder-engine/hydrator/FormHydrator';
+﻿export type { HydratedFieldDefinition, HydrationPayload } from '../hydrator/FormHydrator.js';
+export { FormHydrator, registerCustomValidator, clearCustomValidators } from '../hydrator/FormHydrator.js';

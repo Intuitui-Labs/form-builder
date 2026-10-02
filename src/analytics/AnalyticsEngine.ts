@@ -1,4 +1,4 @@
-import type { FieldDefinition, FormResponse } from '@intuitui-labs/form-builder-engine/schema/FormSchema';
+﻿import type { FieldDefinition, FormResponse } from '../schema/FormSchema.js';
 
 export interface FieldAnalytics {
   fieldId: string;
