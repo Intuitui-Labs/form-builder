@@ -1,0 +1,41 @@
+name: Cross-SDK Matrix Quality Gate
+
+on:
+  push:
+    branches: [master, main, 'feat/*']
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  matrix-test:
+    name: Fixture ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - fixture: '57'
+            name: 'Expo SDK 57 (RN 0.86 / React 19.2)'
+          - fixture: '58'
+            name: 'Expo SDK 58 (RN 0.88 / React 19.3)'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install Monorepo Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify Engine Types
+        run: pnpm run check-types
+
+      - name: Run Dedicated Fixture Matrix (${{ matrix.name }})
+        run: pnpm run test:matrix:${{ matrix.fixture }}

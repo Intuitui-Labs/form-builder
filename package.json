@@ -66,6 +66,10 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true}); fs.rmSync('node_modules',{recursive:true,force:true})\"",
+    "clean:fixtures": "node scripts/run-matrix-test.mjs --clean",
+    "test:matrix": "node scripts/run-matrix-test.mjs --all",
+    "test:matrix:57": "node scripts/run-matrix-test.mjs --target=57",
+    "test:matrix:58": "node scripts/run-matrix-test.mjs --target=58",
     "prepublishOnly": "pnpm run check-types && pnpm run test && pnpm run build"
   },
   "publishConfig": {

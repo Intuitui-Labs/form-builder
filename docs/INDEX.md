@@ -22,6 +22,7 @@ Welcome to the technical documentation library for `@intuitui-labs/form-builder-
     *   [Testing Architecture & Evidence Specification](./testing.md) — Evidence levels, Vitest configuration, and verification contracts.
     *   [Expo SDK 58 Readiness Guide](./EXPO_58_READINESS.md) — Dual-SDK (57/58) compatibility and CLI verification workflows.
 *   [Architecture Decision Records (ADRs)](./decisions/2026-06-12-transition-to-tanstack-form.md)
+    *   [2026-10-10: Enterprise Multi-Version Matrix Testing & Fixture Architecture](./decisions/2026-10-10-enterprise-matrix-testing-fixtures.md) — Transition from mutable single-folder showcases to parallel immutable fixtures and tarball pack-testing.
     *   [2026-06-12: Transition to TanStack Form & Multi-Step Wizard Support](./decisions/2026-06-12-transition-to-tanstack-form.md) — The rationale behind choosing TSF over RHF for headless, offline-first execution.
     *   [2026-06-20: Dynamic Exporter Codegen & Dependency Isolation](./decisions/2026-06-20-codegen-addition-and-dependency-isolation.md) — How we support React Hook Form codegen without polluting the headless package.
 
