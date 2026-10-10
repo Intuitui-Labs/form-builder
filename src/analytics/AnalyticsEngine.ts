@@ -1,4 +1,4 @@
-﻿import type { FieldDefinition, FormResponse } from '../schema/FormSchema.js';
+import type { FieldDefinition, FormResponse } from '../schema/FormSchema.js';
 
 export interface FieldAnalytics {
   fieldId: string;
@@ -57,28 +57,54 @@ export const AnalyticsEngine = {
   },
 
   /**
+   * Sanitizes values against CSV Formula Injection (OWASP mitigation)
+   */
+  sanitizeCSVValue(value: unknown): string {
+    if (value === null || value === undefined) return '';
+    let str = String(value);
+
+    // Prepend single-quote to prevent spreadsheet formula execution if starting with trigger characters
+    if (/^[=+\-@\t\r]/.test(str)) {
+      str = `'${str}`;
+    }
+
+    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  },
+
+  /**
+   * Escapes XML special characters for SpreadsheetML
+   */
+  escapeXML(value: unknown): string {
+    if (value === null || value === undefined) return '';
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+  },
+
+  /**
    * Converts form responses to a CSV string
    */
   toCSV(fields: FieldDefinition[], responses: FormResponse[]): string {
     if (responses.length === 0) return '';
 
     const headers = ['Submitted At', ...fields.map((f) => f.label ?? f.name ?? f.id)];
+    const sanitizedHeaders = headers.map((h) => this.sanitizeCSVValue(h));
+
     const rows = responses.map((r) => {
       const row = [
-        new Date(r.submittedAt).toLocaleString(),
-        ...fields.map((f) => {
-          const val = r.data[f.name];
-          // Handle commas and quotes for CSV safety
-          if (typeof val === 'string' && (val.includes(',') || val.includes('"'))) {
-            return `"${val.replace(/"/g, '""')}"`;
-          }
-          return val ?? '';
-        }),
+        this.sanitizeCSVValue(new Date(r.submittedAt).toLocaleString()),
+        ...fields.map((f) => this.sanitizeCSVValue(r.data[f.name])),
       ];
       return row.join(',');
     });
 
-    return [headers.join(','), ...rows].join('\n');
+    return [sanitizedHeaders.join(','), ...rows].join('\n');
   },
 
   /**
@@ -104,13 +130,18 @@ export const AnalyticsEngine = {
  </Workbook>`;
 
     const headerRow = `   <Row ss:StyleID="Header">
-${headers.map((h) => `    <Cell><Data ss:Type="String">${h}</Data></Cell>`).join('\n')}
+${headers.map((h) => `    <Cell><Data ss:Type="String">${this.escapeXML(h)}</Data></Cell>`).join('\n')}
    </Row>`;
 
     const dataRows = rows
       .map((row) => {
         return `   <Row>
-${row.map((val) => `    <Cell><Data ss:Type="${typeof val === 'number' ? 'Number' : 'String'}">${val}</Data></Cell>`).join('\n')}
+${row
+  .map((val) => {
+    const isNum = typeof val === 'number';
+    return `    <Cell><Data ss:Type="${isNum ? 'Number' : 'String'}">${isNum ? val : this.escapeXML(val)}</Data></Cell>`;
+  })
+  .join('\n')}
    </Row>`;
       })
       .join('\n');

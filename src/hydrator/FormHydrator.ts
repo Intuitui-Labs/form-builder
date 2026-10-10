@@ -1,4 +1,4 @@
-﻿import type { ValidatorRule } from '../schema/FormSchema.js';
+import type { ValidatorRule } from '../schema/FormSchema.js';
 import { type FormConfig, type FormFieldConfig, FormManager } from '../manager/FormManager.js';
 import { applyRule, ValidationEngine } from '../validation/ValidationEngine.js';
 
@@ -52,15 +52,18 @@ export class FormHydrator {
   ): FormManager<T> {
     const fields: Record<string, FormFieldConfig<unknown>> = {};
 
+    const dangerousKeys = new Set(['__proto__', 'constructor', 'prototype']);
+
     // Handle both array of fields and object-based fields mapping for compatibility
-    const jsonFields = Array.isArray(json.fields)
+    const jsonFields = (Array.isArray(json.fields)
       ? json.fields
       : json.fields
         ? Object.entries(json.fields).map(([name, f]) => ({
             ...(f as HydratedFieldDefinition),
             name,
           }))
-        : [];
+        : []
+    ).filter((f) => f && f.name && !dangerousKeys.has(f.name));
 
     jsonFields.forEach((field) => {
       const fieldValidators: Array<(value: unknown) => { isValid: boolean; error?: string }> = [];

@@ -60,6 +60,7 @@ export class FormManager<T extends Record<string, unknown>> {
         }
       },
     });
+    this.tsForm.mount?.();
   }
 
   public getState(): FormState<T> {
@@ -89,7 +90,7 @@ export class FormManager<T extends Record<string, unknown>> {
   }
 
   public setFieldValue<K extends keyof T>(field: K, value: T[K]) {
-    this.tsForm.setFieldValue(field as any, value as any, { touch: true });
+    this.tsForm.setFieldValue(field as any, value as any);
     this.validateField(field);
   }
 
@@ -116,13 +117,19 @@ export class FormManager<T extends Record<string, unknown>> {
       delete this.fieldErrors[field];
     }
 
-    this.tsForm.store.setState((prev: any) => ({
-      ...prev,
-      errorMap: {
-        ...prev.errorMap,
-        ...this.fieldErrors,
-      },
-    }));
+    const store: any = (this.tsForm as any).baseStore ?? (this.tsForm as any).store;
+    store.setState((prev: any) => {
+      const nextErrorMap = { ...prev.errorMap };
+      if (this.fieldErrors[field]) {
+        nextErrorMap[field] = this.fieldErrors[field];
+      } else {
+        delete nextErrorMap[field];
+      }
+      return {
+        ...prev,
+        errorMap: nextErrorMap,
+      };
+    });
 
     return !this.fieldErrors[field];
   }
@@ -151,5 +158,10 @@ export class FormManager<T extends Record<string, unknown>> {
     this.submitError = null;
     this.submitSuccess = false;
     this.tsForm.reset();
+    const store: any = (this.tsForm as any).baseStore ?? (this.tsForm as any).store;
+    store.setState((prev: any) => ({
+      ...prev,
+      errorMap: {},
+    }));
   }
 }

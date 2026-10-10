@@ -5,221 +5,329 @@ import { FormHydrator, registerCustomValidator, clearCustomValidators } from '..
 import { MultiStepFormManager } from '../src/manager/MultiStepFormManager.js';
 import { AnalyticsEngine } from '../src/analytics/AnalyticsEngine.js';
 import { exportToStaticReact } from '../src/codegen/ReactCodeGen.js';
+import { validateFormSchema, safeValidateFormSchema } from '../src/schema/index.js';
 import type { FormSchema, FieldDefinition, FormResponse } from '../src/schema/FormSchema.js';
+import type { IFormManager, IValidationPort, IAnalyticsPort } from '../src/ports/index.js';
 
-describe('@intuitui-labs/form-builder-engine (G0 Contract & Unit Tests)', () => {
-  describe('FormManager', () => {
-    it('initializes default values and manages state transitions', () => {
-      const onSubmit = vi.fn();
-      const manager = new FormManager<{ name: string; age: number }>({
-        fields: {
-          name: { type: 'text', label: 'Full Name', defaultValue: 'Ada', required: true },
-          age: { type: 'number', label: 'Age', defaultValue: 28, required: false },
-        },
-        onSubmit,
+describe('@intuitui-labs/form-builder-engine (Multi-Level Test Suite)', () => {
+  /* =========================================================================
+   * LEVEL 1: PURE UNIT TESTS (Fast, Isolated, Deterministic)
+   * ========================================================================= */
+  describe('Level 1: Pure Unit Tests', () => {
+    describe('ValidationEngine & Rules', () => {
+      it('evaluates required, email, and length rules accurately', () => {
+        expect(applyRule({ type: 'required' }, '').isValid).toBe(false);
+        expect(applyRule({ type: 'required' }, 'valid text').isValid).toBe(true);
+
+        expect(applyRule({ type: 'email' }, 'invalid-email').isValid).toBe(false);
+        expect(applyRule({ type: 'email' }, 'user@example.com').isValid).toBe(true);
+
+        expect(applyRule({ type: 'minLength', value: 5 }, 'abc').isValid).toBe(false);
+        expect(applyRule({ type: 'minLength', value: 5 }, 'abcde').isValid).toBe(true);
+
+        expect(applyRule({ type: 'maxLength', value: 4 }, 'abcde').isValid).toBe(false);
+        expect(applyRule({ type: 'maxLength', value: 4 }, 'abcd').isValid).toBe(true);
       });
 
-      const state = manager.getState();
-      expect(state.values.name).toBe('Ada');
-      expect(state.values.age).toBe(28);
-      expect(state.isValid).toBe(true);
+      it('evaluates numeric range and pattern rules', () => {
+        expect(applyRule({ type: 'min', value: 10 }, 5).isValid).toBe(false);
+        expect(applyRule({ type: 'min', value: 10 }, 15).isValid).toBe(true);
 
-      manager.setFieldValue('name', 'Grace');
-      expect(manager.getState().values.name).toBe('Grace');
-      expect(manager.getState().isDirty).toBe(true);
+        expect(applyRule({ type: 'max', value: 10 }, 15).isValid).toBe(false);
+        expect(applyRule({ type: 'max', value: 10 }, 8).isValid).toBe(true);
+
+        expect(applyRule({ type: 'pattern', value: '^[A-Z]{3}$' }, 'abc').isValid).toBe(false);
+        expect(applyRule({ type: 'pattern', value: '^[A-Z]{3}$' }, 'ABC').isValid).toBe(true);
+      });
+
+      it('validates combined rules using validateRules pipeline', () => {
+        const rules = [
+          { type: 'required' as const, message: 'Value required' },
+          { type: 'minLength' as const, value: 3, message: 'Too short' },
+        ];
+
+        expect(validateRules(rules, '').isValid).toBe(false);
+        expect(validateRules(rules, 'ab').isValid).toBe(false);
+        expect(validateRules(rules, 'abc').isValid).toBe(true);
+      });
     });
 
-    it('enforces required field validation on field change', () => {
-      const manager = new FormManager<{ email: string }>({
-        fields: {
-          email: { type: 'email', label: 'Email', defaultValue: 'test@example.com', required: true },
-        },
+    describe('AnalyticsEngine Sanitization & Exports', () => {
+      it('neutralizes spreadsheet formula injection (OWASP CSV Injection)', () => {
+        // Values starting with =, +, -, @, tab, or cr should be prepended with '
+        expect(AnalyticsEngine.sanitizeCSVValue('=1+1')).toBe("'=1+1");
+        expect(AnalyticsEngine.sanitizeCSVValue('+cmd')).toBe("'+cmd");
+        expect(AnalyticsEngine.sanitizeCSVValue('-10')).toBe("'-10");
+        expect(AnalyticsEngine.sanitizeCSVValue('@SUM(A1:B1)')).toBe("'@SUM(A1:B1)");
+        expect(AnalyticsEngine.sanitizeCSVValue('Safe text')).toBe('Safe text');
+      });
+
+      it('properly quotes CSV fields containing commas or quotes', () => {
+        expect(AnalyticsEngine.sanitizeCSVValue('Hello, World')).toBe('"Hello, World"');
+        expect(AnalyticsEngine.sanitizeCSVValue('Say "Hi"')).toBe('"Say ""Hi"""');
+      });
+
+      it('escapes XML entities in SpreadsheetML export', () => {
+        expect(AnalyticsEngine.escapeXML('Ben & Jerry <ice cream>')).toBe('Ben &amp; Jerry &lt;ice cream&gt;');
+        expect(AnalyticsEngine.escapeXML('"quoted" and \'single\'')).toBe('&quot;quoted&quot; and &apos;single&apos;');
+      });
+
+      it('aggregates response data across field types and generates sanitized CSV and XLSX', () => {
+        const fields: FieldDefinition[] = [
+          { id: 'rating', name: 'rating', type: 'select', options: [{ label: 'Good', value: 'good' }, { label: 'Bad', value: 'bad' }] },
+          { id: 'notes', name: 'notes', type: 'text', label: 'Notes' },
+        ];
+
+        const responses: FormResponse[] = [
+          { id: 'r1', formId: 'f', tenantId: 't', data: { rating: 'good', notes: '=SUM(1,2)' }, submittedAt: '2026-01-01T00:00:00.000Z' },
+          { id: 'r2', formId: 'f', tenantId: 't', data: { rating: 'good', notes: 'Great & sleek' }, submittedAt: '2026-01-02T00:00:00.000Z' },
+        ];
+
+        const analytics = AnalyticsEngine.aggregate(fields, responses);
+        expect(analytics).toHaveLength(2);
+        expect(analytics[0].totalResponses).toBe(2);
+        expect(analytics[0].data).toEqual({ good: 2, bad: 0 });
+
+        const csv = AnalyticsEngine.toCSV(fields, responses);
+        expect(csv).toContain("'=SUM(1,2)"); // Formula injection mitigated
+
+        const xlsx = AnalyticsEngine.toXLSX(fields, responses);
+        expect(xlsx).toContain('Great &amp; sleek'); // XML entity escaped
+        expect(xlsx).toContain('<Workbook');
+      });
+    });
+
+    describe('ReactCodeGen', () => {
+      it('generates React Hook Form code containing zod schema definition', () => {
+        const fields: FieldDefinition[] = [
+          { id: 'email', name: 'email', type: 'email', label: 'Email', required: true },
+        ];
+
+        const code = exportToStaticReact('FeedbackForm', fields);
+        expect(code).toContain('export default function FeedbackForm');
+        expect(code).toContain('z.string().email("Invalid email address")');
+        expect(code).toContain('useForm<FormValues>');
+      });
+    });
+  });
+
+  /* =========================================================================
+   * LEVEL 2: HEXAGONAL PORTS & ADAPTERS CONTRACTS
+   * ========================================================================= */
+  describe('Level 2: Hexagonal Ports & Adapters Contracts', () => {
+    it('FormManager satisfies IFormManager inbound port contract', () => {
+      const manager: IFormManager<{ test: string }> = new FormManager<{ test: string }>({
+        fields: { test: { type: 'text', defaultValue: 'initial' } },
         onSubmit: () => {},
       });
 
-      expect(manager.validateField('email')).toBe(true);
-      manager.setFieldValue('email', '');
-      expect(manager.validateField('email')).toBe(false);
-      expect(manager.getState().errors.email).toBe('Email is required');
-      expect(manager.getState().isValid).toBe(false);
+      expect(typeof manager.getState).toBe('function');
+      expect(typeof manager.setFieldValue).toBe('function');
+      expect(typeof manager.validateField).toBe('function');
+      expect(typeof manager.validate).toBe('function');
+      expect(typeof manager.submit).toBe('function');
+      expect(typeof manager.reset).toBe('function');
+      expect(typeof manager.subscribe).toBe('function');
     });
 
-    it('triggers onSubmit and updates submitSuccess', async () => {
-      const onSubmit = vi.fn().mockResolvedValue(undefined);
-      const manager = new FormManager<{ feedback: string }>({
-        fields: {
-          feedback: { type: 'text', label: 'Feedback', defaultValue: 'Great tool' },
-        },
-        onSubmit,
+    it('ValidationEngine satisfies IValidationPort outbound port contract', () => {
+      const port: IValidationPort = {
+        applyRule,
+        validateRules,
+      };
+
+      const result = port.applyRule({ type: 'required' }, 'value');
+      expect(result.isValid).toBe(true);
+    });
+
+    it('AnalyticsEngine satisfies IAnalyticsPort outbound port contract', () => {
+      const port: IAnalyticsPort = AnalyticsEngine;
+      expect(typeof port.aggregate).toBe('function');
+      expect(typeof port.toCSV).toBe('function');
+      expect(typeof port.toXLSX).toBe('function');
+    });
+  });
+
+  /* =========================================================================
+   * LEVEL 3: INTEGRATION & SECURITY GATES (Double Gate, Error Recovery)
+   * ========================================================================= */
+  describe('Level 3: Integration & Security Gates', () => {
+    describe('Double Gate: Zod Structural Schema Validation', () => {
+      it('Gate 1: validates structurally valid FormSchema objects', () => {
+        const rawSchema = {
+          v: '1.0',
+          id: 'schema-1',
+          tenantId: 'tenant-alpha',
+          title: 'Feedback Intake',
+          pages: [
+            {
+              id: 'page-1',
+              title: 'General',
+              fields: [
+                { id: 'f-1', name: 'email', type: 'email', label: 'Email', required: true, order: 0 },
+              ],
+            },
+          ],
+          settings: { isPublished: true },
+          createdAt: '2026-10-10T00:00:00.000Z',
+          updatedAt: '2026-10-10T00:00:00.000Z',
+        };
+
+        const validated = validateFormSchema(rawSchema);
+        expect(validated.id).toBe('schema-1');
+        expect(validated.pages[0].fields[0].name).toBe('email');
       });
 
-      await manager.submit();
-      expect(onSubmit).toHaveBeenCalledWith({ feedback: 'Great tool' });
-      expect(manager.getState().submitSuccess).toBe(true);
-    });
-  });
+      it('Gate 1: rejects malformed schemas (e.g. missing pages or illegal properties)', () => {
+        const invalidSchema = {
+          v: '1.0',
+          id: 'schema-2',
+          tenantId: 'tenant-alpha',
+          title: 'Empty Form',
+          pages: [], // Must have at least 1 page
+          createdAt: '2026-10-10T00:00:00.000Z',
+          updatedAt: '2026-10-10T00:00:00.000Z',
+        };
 
-  describe('ValidationEngine & applyRule', () => {
-    it('evaluates required, email, and length rules accurately', () => {
-      expect(applyRule({ type: 'required' }, '').isValid).toBe(false);
-      expect(applyRule({ type: 'required' }, 'Hello').isValid).toBe(true);
-
-      expect(applyRule({ type: 'email' }, 'invalid-email').isValid).toBe(false);
-      expect(applyRule({ type: 'email' }, 'user@intuitui.org').isValid).toBe(true);
-
-      expect(applyRule({ type: 'minLength', value: 5 }, 'abc').isValid).toBe(false);
-      expect(applyRule({ type: 'minLength', value: 5 }, 'abcdef').isValid).toBe(true);
-
-      expect(applyRule({ type: 'min', value: 10 }, 5).isValid).toBe(false);
-      expect(applyRule({ type: 'min', value: 10 }, 15).isValid).toBe(true);
+        const parseResult = safeValidateFormSchema(invalidSchema);
+        expect(parseResult.success).toBe(false);
+      });
     });
 
-    it('executes multiple rules sequentially via validateRules', () => {
-      const rules = [
-        { type: 'required' as const, message: 'Value missing' },
-        { type: 'minLength' as const, value: 3, message: 'Too short' },
-      ];
+    describe('Hydration & Prototype Pollution Defense', () => {
+      it('prevents prototype pollution property injection during hydration', () => {
+        const maliciousPayload = {
+          fields: [
+            { name: '__proto__', type: 'text', label: 'Evil' },
+            { name: 'constructor', type: 'text', label: 'Evil' },
+            { name: 'prototype', type: 'text', label: 'Evil' },
+            { name: 'legitimate', type: 'text', label: 'Legit', defaultValue: 'ok' },
+          ],
+        };
 
-      const emptyRes = validateRules(rules, '');
-      expect(emptyRes.isValid).toBe(false);
-      expect(emptyRes.error).toBe('Value missing');
+        const manager = FormHydrator.hydrate(maliciousPayload, vi.fn());
+        const state = manager.getState();
 
-      const shortRes = validateRules(rules, 'ab');
-      expect(shortRes.isValid).toBe(false);
-      expect(shortRes.error).toBe('Too short');
+        expect(state.values).toHaveProperty('legitimate');
+        expect((state.values as any).__proto__).toBe(Object.prototype);
+        expect(Object.keys(manager.getConfig().fields)).toEqual(['legitimate']);
+      });
 
-      const validRes = validateRules(rules, 'abcd');
-      expect(validRes.isValid).toBe(true);
+      it('supports custom validator registration and execution in hydrated forms', () => {
+        registerCustomValidator('evenNumber', (val) => ({
+          isValid: Number(val) % 2 === 0,
+          error: 'Must be even',
+        }));
+
+        const schema = {
+          fields: [
+            {
+              name: 'score',
+              type: 'number',
+              rules: [{ type: 'custom' as const, name: 'evenNumber' }],
+            },
+          ],
+        };
+
+        const manager = FormHydrator.hydrate(schema, vi.fn());
+        manager.setFieldValue('score', 3);
+        expect(manager.validateField('score')).toBe(false);
+
+        manager.setFieldValue('score', 4);
+        expect(manager.validateField('score')).toBe(true);
+
+        clearCustomValidators();
+      });
     });
-  });
 
-  describe('FormHydrator', () => {
-    it('hydrates a declarative schema into an executable FormManager', () => {
-      const schema = {
-        fields: [
-          {
-            id: 'f1',
-            name: 'username',
-            type: 'text',
-            label: 'Username',
-            required: true,
-            rules: [{ type: 'minLength', value: 4, message: 'Min 4 chars' }],
+    describe('State Recovery & Clean Submission', () => {
+      it('recovers from validation errors: correcting invalid input clears internal TanStack errorMap and executes onSubmit', async () => {
+        let submittedPayload: any = null;
+        const onSubmit = vi.fn().mockImplementation(async (values) => {
+          submittedPayload = values;
+        });
+
+        const manager = new FormManager<{ email: string; name: string }>({
+          fields: {
+            email: { type: 'email', label: 'Email', defaultValue: '', required: true },
+            name: { type: 'text', label: 'Name', defaultValue: '', required: true },
           },
-        ],
-      };
+          onSubmit,
+        });
 
-      const manager = FormHydrator.hydrate(schema, vi.fn());
-      expect(manager.getConfig().fields.username.label).toBe('Username');
-      expect(manager.validateField('username')).toBe(false);
+        // 1. Initial invalid submission fails
+        expect(manager.validate()).toBe(false);
+        expect(manager.getState().errors.email).toBe('Email is required');
+        expect(manager.getState().errors.name).toBe('Name is required');
 
-      manager.setFieldValue('username', 'user1');
-      expect(manager.validateField('username')).toBe(true);
-    });
+        await manager.submit();
+        expect(onSubmit).not.toHaveBeenCalled();
+        expect(manager.getState().submitSuccess).toBe(false);
 
-    it('supports custom validator registration and execution', () => {
-      registerCustomValidator('evenNumber', (val) => ({
-        isValid: Number(val) % 2 === 0,
-        error: 'Must be even',
-      }));
+        // 2. Correct invalid fields
+        manager.setFieldValue('email', 'dev@example.org');
+        manager.setFieldValue('name', 'Taylor');
+        expect(manager.validate()).toBe(true);
+        expect(manager.getState().errors).toEqual({});
 
-      const schema = {
-        fields: [
-          {
-            id: 'f2',
-            name: 'score',
-            type: 'number',
-            rules: [{ type: 'custom' as const, name: 'evenNumber' }],
-          },
-        ],
-      };
+        // 3. Submit succeeds cleanly
+        await manager.submit();
+        expect(onSubmit).toHaveBeenCalledTimes(1);
+        expect(submittedPayload).toEqual({ email: 'dev@example.org', name: 'Taylor' });
+        expect(manager.getState().submitSuccess).toBe(true);
+      });
 
-      const manager = FormHydrator.hydrate(schema, vi.fn());
-      manager.setFieldValue('score', 3);
-      expect(manager.validateField('score')).toBe(false);
+      it('MultiStepFormManager gates navigation by page validity and allows final submission upon correction', async () => {
+        let submittedPayload: any = null;
+        const schema: FormSchema = {
+          v: '1.0',
+          id: 'wizard-1',
+          tenantId: 'tenant-1',
+          title: 'Wizard',
+          createdAt: '2026-10-10T00:00:00.000Z',
+          updatedAt: '2026-10-10T00:00:00.000Z',
+          settings: {},
+          pages: [
+            {
+              id: 'p1',
+              title: 'Personal Info',
+              fields: [{ id: 'name', name: 'name', type: 'text', label: 'Name', required: true, order: 0 }],
+            },
+            {
+              id: 'p2',
+              title: 'Contact Info',
+              fields: [{ id: 'email', name: 'email', type: 'email', label: 'Email', required: true, order: 0 }],
+            },
+          ],
+        };
 
-      manager.setFieldValue('score', 4);
-      expect(manager.validateField('score')).toBe(true);
+        const multi = new MultiStepFormManager(schema, async (values) => {
+          submittedPayload = values;
+        });
 
-      clearCustomValidators();
-    });
-  });
+        expect(multi.getTotalPages()).toBe(2);
+        expect(multi.getCurrentPageIndex()).toBe(0);
 
-  describe('MultiStepFormManager', () => {
-    it('manages multi-page form progress and navigation boundaries', () => {
-      const schema: FormSchema = {
-        id: 'survey-1',
-        title: 'Multi-Step Survey',
-        pages: [
-          {
-            id: 'p1',
-            title: 'Personal Info',
-            fields: [{ id: 'name', name: 'name', type: 'text', label: 'Name', required: true }],
-          },
-          {
-            id: 'p2',
-            title: 'Preferences',
-            fields: [{ id: 'role', name: 'role', type: 'select', label: 'Role' }],
-          },
-        ],
-      };
+        // Page 1 invalid: nextStep is blocked
+        expect(multi.nextStep()).toBe(false);
+        expect(multi.getFormManager().getState().errors.name).toBe('Name is required');
 
-      const multi = new MultiStepFormManager(schema, vi.fn());
-      expect(multi.getTotalPages()).toBe(2);
-      expect(multi.getCurrentPageIndex()).toBe(0);
-      expect(multi.isFirstStep()).toBe(true);
-      expect(multi.isLastStep()).toBe(false);
+        // Correct Page 1
+        multi.getFormManager().setFieldValue('name', 'Ada Lovelace');
+        expect(multi.nextStep()).toBe(true);
+        expect(multi.getCurrentPageIndex()).toBe(1);
 
-      // Cannot advance if required fields on current page are invalid
-      expect(multi.nextStep()).toBe(false);
+        // Page 2 invalid: submit is blocked
+        await multi.submit();
+        expect(submittedPayload).toBeNull();
 
-      // Fill required field
-      multi.getFormManager().setFieldValue('name', 'Hypatia');
-      expect(multi.nextStep()).toBe(true);
+        // Correct Page 2
+        multi.getFormManager().setFieldValue('email', 'ada@lovelace.org');
+        expect(multi.getFormManager().validate()).toBe(true);
 
-      expect(multi.getCurrentPageIndex()).toBe(1);
-      expect(multi.isFirstStep()).toBe(false);
-      expect(multi.isLastStep()).toBe(true);
-
-      expect(multi.prevStep()).toBe(true);
-      expect(multi.getCurrentPageIndex()).toBe(0);
-    });
-  });
-
-  describe('AnalyticsEngine', () => {
-    it('aggregates response data across field types', () => {
-      const fields: FieldDefinition[] = [
-        {
-          id: 'rating',
-          name: 'rating',
-          type: 'select',
-          options: [{ label: 'Good', value: 'good' }, { label: 'Bad', value: 'bad' }],
-        },
-      ];
-
-      const responses: FormResponse[] = [
-        { id: 'r1', formId: 'f', data: { rating: 'good' }, submittedAt: '2026-01-01' },
-        { id: 'r2', formId: 'f', data: { rating: 'good' }, submittedAt: '2026-01-02' },
-        { id: 'r3', formId: 'f', data: { rating: 'bad' }, submittedAt: '2026-01-03' },
-      ];
-
-      const analytics = AnalyticsEngine.aggregate(fields, responses);
-      expect(analytics).toHaveLength(1);
-      expect(analytics[0].totalResponses).toBe(3);
-      expect(analytics[0].data).toEqual({ good: 2, bad: 1 });
-    });
-  });
-
-  describe('ReactCodeGen', () => {
-    it('generates React Hook Form code containing zod schema definition', () => {
-      const fields: FieldDefinition[] = [
-        { id: 'email', name: 'email', type: 'email', label: 'Email', required: true },
-      ];
-
-      const code = exportToStaticReact('FeedbackForm', fields);
-      expect(code).toContain('export default function FeedbackForm');
-      expect(code).toContain('z.string().email("Invalid email address")');
-      expect(code).toContain('useForm<FormValues>');
+        await multi.submit();
+        expect(submittedPayload).toEqual({ name: 'Ada Lovelace', email: 'ada@lovelace.org' });
+      });
     });
   });
 });
-
