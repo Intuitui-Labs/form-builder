@@ -146,6 +146,20 @@ describe('@intuitui-labs/form-builder-engine (Multi-Level Test Suite)', () => {
       expect(typeof port.toCSV).toBe('function');
       expect(typeof port.toXLSX).toBe('function');
     });
+
+    it('PureSchemaAdapter and ZodSchemaAdapter satisfy ISchemaValidator outbound port contract', async () => {
+      const { PureSchemaAdapter, ZodSchemaAdapter } = await import('../src/schema/index.js');
+      const pure = new PureSchemaAdapter();
+      const zod = new ZodSchemaAdapter();
+
+      expect(typeof pure.validate).toBe('function');
+      expect(typeof pure.safeValidate).toBe('function');
+      expect(pure.name).toBe('pure');
+
+      expect(typeof zod.validate).toBe('function');
+      expect(typeof zod.safeValidate).toBe('function');
+      expect(zod.name).toBe('zod');
+    });
   });
 
   /* =========================================================================
@@ -330,4 +344,62 @@ describe('@intuitui-labs/form-builder-engine (Multi-Level Test Suite)', () => {
       });
     });
   });
+
+  /* =========================================================================
+   * LEVEL 4: CROSS-SDK MATRIX & PACKAGING ARCHITECTURE GATES
+   * ========================================================================= */
+  describe('Level 4: Cross-SDK Matrix & Packaging Architecture Gates', () => {
+    it('declares and packages all first-class subpath entry points in package.json', async () => {
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+      const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../package.json'), 'utf8'));
+
+      const expectedExports = [
+        '.',
+        './core',
+        './ports',
+        './schema',
+        './validation',
+        './hydration',
+        './analytics',
+        './codegen',
+      ];
+
+      for (const exp of expectedExports) {
+        expect(pkg.exports).toHaveProperty(exp);
+      }
+    });
+
+    it('maintains dedicated, immutable multi-version test fixtures for Expo SDK 57 and SDK 58', async () => {
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+
+      const fixtures = ['expo-57', 'expo-58'];
+      for (const fix of fixtures) {
+        const fixtureDir = path.resolve(__dirname, '../fixtures', fix);
+        expect(fs.existsSync(fixtureDir)).toBe(true);
+
+        const manifestPath = path.join(fixtureDir, 'package.json');
+        expect(fs.existsSync(manifestPath)).toBe(true);
+
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+        expect(manifest.name).toBe(`fixture-${fix}`);
+
+        const smokeTestPath = path.join(fixtureDir, 'tests/engine.smoke.test.mjs');
+        expect(fs.existsSync(smokeTestPath)).toBe(true);
+      }
+    });
+
+    it('provides an automated zero-network matrix runner script', async () => {
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+      const runnerPath = path.resolve(__dirname, '../scripts/run-matrix-test.mjs');
+
+      expect(fs.existsSync(runnerPath)).toBe(true);
+      const content = fs.readFileSync(runnerPath, 'utf8');
+      expect(content).toContain('Enterprise Matrix Test Runner');
+      expect(content).toContain('installTarballIntoFixture');
+    });
+  });
 });
+

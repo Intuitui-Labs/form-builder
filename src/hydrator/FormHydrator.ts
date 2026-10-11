@@ -1,4 +1,6 @@
 import type { ValidatorRule } from '../schema/FormSchema.js';
+import type { Condition } from '../schema/FormBranching.js';
+import type { ISchemaValidator } from '../ports/index.js';
 import { type FormConfig, type FormFieldConfig, FormManager } from '../manager/FormManager.js';
 import { applyRule, ValidationEngine } from '../validation/ValidationEngine.js';
 
@@ -16,6 +18,8 @@ export interface HydratedFieldDefinition {
   validate?: string;
   rules?: ValidatorRule[];
   validators?: Array<(value: unknown) => { isValid: boolean; error?: string }>;
+  visibleIf?: Condition;
+  clearValueOnHide?: boolean;
   [key: string]: unknown;
 }
 
@@ -40,6 +44,10 @@ export interface HydrationPayload {
   fields?: HydratedFieldDefinition[] | Record<string, HydratedFieldDefinition>;
   [key: string]: unknown;
 }
+export interface HydrationOptions {
+  schemaValidator?: ISchemaValidator;
+  strict?: boolean;
+}
 
 export class FormHydrator {
   /**
@@ -49,7 +57,12 @@ export class FormHydrator {
   static hydrate<T extends Record<string, unknown>>(
     json: HydrationPayload,
     onSubmit: (values: T) => Promise<void> | void,
+    options?: HydrationOptions,
   ): FormManager<T> {
+    if (options?.strict && options.schemaValidator) {
+      options.schemaValidator.validate(json);
+    }
+
     const fields: Record<string, FormFieldConfig<unknown>> = {};
 
     const dangerousKeys = new Set(['__proto__', 'constructor', 'prototype']);
@@ -79,8 +92,8 @@ export class FormHydrator {
               const customFn = customValidators[rule.name];
               return customFn || (() => ({ isValid: true }));
             }
-            return (val: unknown) =>
-              applyRule(rule, val, field.label || field.name);
+            return (val: unknown, allVals?: Record<string, unknown>) =>
+              applyRule(rule, val, field.label || field.name, allVals);
           }),
         );
       }

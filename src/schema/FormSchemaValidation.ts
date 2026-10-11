@@ -70,17 +70,20 @@ export const FormSchemaZod = z.object({
   updatedAt: z.string(),
 });
 
+import { getSchemaValidator } from './SchemaValidatorRegistry.js';
+
 /**
- * Validates a raw object against the FormSchema Zod contract.
+ * Validates a raw object against the active ISchemaValidator contract.
  * Returns the parsed typed FormSchema or throws a structured validation error.
  */
 export function validateFormSchema(input: unknown): FormSchema {
-  return FormSchemaZod.parse(input) as FormSchema;
+  return getSchemaValidator().validate(input);
 }
 
 /**
- * Safely parses a raw object against the FormSchema Zod contract.
+ * Safely parses a raw object against the active ISchemaValidator contract.
  */
 export function safeValidateFormSchema(input: unknown) {
-  return FormSchemaZod.safeParse(input);
+  return getSchemaValidator().safeValidate(input);
 }
+
