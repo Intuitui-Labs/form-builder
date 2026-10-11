@@ -1,7 +1,7 @@
 {
   "name": "@intuitui-labs/form-builder-engine",
-  "version": "0.1.0",
-  "description": "Headless schema-driven form evaluation, validation, hydration, and analytics engine built on TanStack Form and Zod.",
+  "version": "0.2.0",
+  "description": "Headless schema-driven form evaluation, validation, hydration, and analytics engine built on TanStack Form and Zod for React Native, Expo, and Web.",
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.js",
@@ -53,7 +53,28 @@
       "import": "./dist/codegen/index.js",
       "default": "./dist/codegen/index.js"
     },
+    "./affordance": {
+      "types": "./dist/affordance/index.d.ts",
+      "import": "./dist/affordance/index.js",
+      "default": "./dist/affordance/index.js"
+    },
+    "./adapters": {
+      "types": "./dist/adapters/index.d.ts",
+      "import": "./dist/adapters/index.js",
+      "default": "./dist/adapters/index.js"
+    },
+    "./persistence": {
+      "types": "./dist/persistence/index.d.ts",
+      "import": "./dist/persistence/index.js",
+      "default": "./dist/persistence/index.js"
+    },
+    "./focus": {
+      "types": "./dist/focus/index.d.ts",
+      "import": "./dist/focus/index.js",
+      "default": "./dist/focus/index.js"
+    },
     "./*": {
+
       "types": "./dist/*.d.ts",
       "import": "./dist/*.js",
       "default": "./dist/*.js"
@@ -63,6 +84,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check-types": "tsc --noEmit",
+    "check-types:tsgo": "tsgo --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true}); fs.rmSync('node_modules',{recursive:true,force:true})\"",
@@ -70,6 +92,9 @@
     "test:matrix": "node scripts/run-matrix-test.mjs --all",
     "test:matrix:57": "node scripts/run-matrix-test.mjs --target=57",
     "test:matrix:58": "node scripts/run-matrix-test.mjs --target=58",
+    "expo:go": "pnpm --filter form-builder-engine-showcase run start:go",
+    "expo:tunnel": "pnpm --filter form-builder-engine-showcase run start:tunnel",
+    "expo:web": "pnpm --filter form-builder-engine-showcase run web",
     "prepublishOnly": "pnpm run check-types && pnpm run test && pnpm run build"
   },
   "publishConfig": {
@@ -80,12 +105,18 @@
     "url": "git+https://github.com/intuitui-labs/form-builder.git"
   },
   "keywords": [
+    "react-native",
+    "expo",
+    "mobile",
     "form",
+    "form-builder",
     "headless",
     "tanstack-form",
     "zod",
     "validation",
     "schema",
+    "offline-first",
+    "cross-platform",
     "hydration",
     "analytics"
   ],
@@ -97,6 +128,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.3",
+    "@typescript/native-preview": "^7.0.0-dev.20260707.2",
     "@vitest/coverage-v8": "^5.0.3",
     "typescript": "7.0.2",
     "vitest": "^5.0.3"

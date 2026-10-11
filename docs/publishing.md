@@ -1,7 +1,7 @@
-# Publishing Guide for `@intuitui-labs/form-builder`
+# Publishing Guide for `@intuitui-labs/form-builder-engine`
 
 This guide details the release cycle, quality verification gates, authentication, and CI/CD automation for publishing 
-**`@intuitui-labs/form-builder`** to the public npm registry.
+**`@intuitui-labs/form-builder-engine`** to the public npm registry.
 
 ---
 
@@ -52,7 +52,7 @@ on:
 
 jobs:
   publish:
-    name: Publish @intuitui-labs/form-builder
+    name: Publish @intuitui-labs/form-builder-engine
     runs-on: ubuntu-latest
     permissions:
       contents: read

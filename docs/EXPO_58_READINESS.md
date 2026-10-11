@@ -1,6 +1,16 @@
+---
+title: "Expo SDK 58 Readiness & Dual-SDK Architecture Guide"
+status: "active"
+created: 2026-10-10
+updated: 2026-10-10
+author: "Naveen"
+scribe: "Antigravity"
+tags: [expo, sdk57, sdk58, mobile, testing, pnpm]
+---
+
 # Expo SDK 58 Readiness & Dual-SDK Testing Guide
 
-This guide documents the Expo SDK 58 upgrade path and dual-SDK testing strategy for the `@intuitui-labs/form-builder-engine` showcase application.
+This guide documents the Expo SDK 58 upgrade path and dual-SDK testing strategy for the `@intuitui-labs/form-builder-engine` monorepo.
 
 ---
 
@@ -30,43 +40,39 @@ When running projects on **Expo SDK 58 beta**:
 
 ---
 
-## 3. Switching Between SDK 57 and SDK 58 in Showcase
+## 3. Running Expo Go for Expo SDK 57 with pnpm
 
-The showcase directory includes dual package manifests for instantaneous switching:
-* `showcase/package.sdk57.json` (SDK 57 stable)
-* `showcase/package.sdk58.json` (SDK 58 beta)
+The showcase application is managed as a first-class hoisted workspace member in `pnpm-workspace.yaml`.
 
-### To switch to Expo SDK 57 (Expo Go compatible):
+### 1. Launch Expo Go directly from root:
 ```powershell
-cd showcase
-npm run use:sdk57
-npm install --legacy-peer-deps
-npx expo start
+pnpm expo:go
 ```
+This executes `expo start --go` inside the `showcase` workspace, spins up Metro on port 8081, and prints the QR code to scan with your iOS or Android Expo Go client.
 
-### To switch to Expo SDK 58:
+### 2. Launch Web Preview:
 ```powershell
-cd showcase
-npm run use:sdk58
-npm install --legacy-peer-deps
-npx expo start --web
+pnpm expo:web
 ```
 
 ---
 
-## 4. Verification & Health Commands
+## 4. Headless Multi-Version Matrix Testing (CI & Local)
 
-Run these checks within the `showcase` directory:
+To test the engine against both Expo SDK 57 and SDK 58 simultaneously without touching `showcase` dependencies or triggering network downloads:
 
 ```powershell
-# 1. Run Node smoke test suite against local form-builder-engine
-npm test
+# Run zero-network smoke tests across both SDK 57 and SDK 58
+pnpm test:matrix
 
-# 2. Strict TypeScript typechecking
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; npm run typecheck
-
-# 3. Metro Web Bundle validation
-npx expo export --platform web
+# Run target-specific smoke tests
+pnpm test:matrix:57
+pnpm test:matrix:58
 ```
 
-All 6 test cases in `engine.smoke.test.mjs` pass across both SDK 57 and SDK 58, confirming that the engine's validation recovery, multi-step page gating, JSON hydration, and response analytics operate identically across React Native versions.
+Both fixtures (`fixtures/expo-57` and `fixtures/expo-58`) test:
+- Zod schema validation
+- TanStack Form evaluation
+- Submission error recovery
+- JSON form hydration
+- Response timing analytics

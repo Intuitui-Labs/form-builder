@@ -68,10 +68,16 @@ run('tsc -p tsconfig.json', rootDir);
 
 // 2. Pack tarball into .tarball/
 log('\n📦 Step 2: Packaging authentic .tgz artifact via pnpm pack...');
-if (fs.existsSync(tarballDir)) fs.rmSync(tarballDir, { recursive: true, force: true });
-fs.mkdirSync(tarballDir, { recursive: true });
+if (!fs.existsSync(tarballDir)) {
+  fs.mkdirSync(tarballDir, { recursive: true });
+} else {
+  for (const f of fs.readdirSync(tarballDir)) {
+    fs.rmSync(path.join(tarballDir, f), { force: true });
+  }
+}
 
-execSync(`pnpm pack --pack-destination "${tarballDir}"`, { cwd: rootDir, stdio: 'pipe' });
+const safeDest = tarballDir.replace(/\\/g, '/');
+execSync(`pnpm pack --pack-destination "${safeDest}"`, { cwd: rootDir, stdio: 'pipe' });
 const tarballFiles = fs.readdirSync(tarballDir).filter((f) => f.endsWith('.tgz'));
 if (tarballFiles.length === 0) {
   console.error('\x1b[31m❌ Error: No tarball was generated.\x1b[0m');

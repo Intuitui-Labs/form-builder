@@ -1,5 +1,6 @@
 packages:
   - '.'
+  - 'showcase'
 
 allowBuilds:
   esbuild: true

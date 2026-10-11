@@ -157,3 +157,12 @@ test('AnalyticsEngine aggregates responses and emits CSV and Excel-compatible XM
   assert.match(xml, /<Workbook/);
   assert.match(xml, /Bio, Better/);
 });
+
+test('PureSchemaAdapter and validateFormSchema validate schema structure cleanly', async () => {
+  const { validateFormSchema, PureSchemaAdapter } = await import('@intuitui-labs/form-builder-engine/schema');
+  const pure = new PureSchemaAdapter();
+  assert.equal(pure.safeValidate(schema).success, true);
+  const validated = validateFormSchema(schema);
+  assert.equal(validated.id, 'smoke-wizard');
+});
+
