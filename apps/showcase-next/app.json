@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "Form Engine Lab (SDK 58 Next)",
+    "slug": "form-builder-engine-showcase-next",
+    "scheme": "formenginelab-next",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
