@@ -1,18 +1,29 @@
 import { FormApi } from '@tanstack/form-core';
-import { applyRule, type ValidationResult } from '../validation/ValidationEngine.js';
+import type { ValidationResult } from '../validation/ValidationEngine.js';
 import type { Condition } from '../schema/FormBranching.js';
-import type { NormalizerType, ValidatorRule, FieldType, SemanticIntent, FormField } from '../schema/FormSchema.js';
+import type { NormalizerType, ValidatorRule, SemanticIntent } from '../schema/FormSchema.js';
 import { ConditionEvaluator } from '../core/ConditionEvaluator.js';
 import { FieldDependencyGraph } from '../core/DependencyGraph.js';
 import { ValueNormalizer } from '../core/ValueNormalizer.js';
-
 import type { ITelemetryPort } from '../ports/ITelemetryPort.js';
 import type { AddressCandidate, PickedContact } from '../ports/IAddressAutofillPort.js';
 import type { IEntityExtractorPort } from '../ports/IEntityExtractorPort.js';
 import type { IHapticFeedbackPort } from '../ports/IHapticFeedbackPort.js';
-import { RegexRuleExtractorAdapter } from '../adapters/ai/RegexRuleExtractorAdapter.js';
-import { AddressFieldMapper, type ExplicitAddressFieldMap } from '../affordance/AddressFieldMapper.js';
-import { ContactFieldMapper, type ExplicitContactFieldMap } from '../affordance/ContactFieldMapper.js';
+import type { ExplicitAddressFieldMap } from '../affordance/AddressFieldMapper.js';
+import type { ExplicitContactFieldMap } from '../affordance/ContactFieldMapper.js';
+import type {
+  FormState,
+  OverwritePolicy,
+  BatchSetOptions,
+  FieldOriginInfo,
+  BatchEnrichmentResult,
+} from '../ports/index.js';
+import {
+  FormEnrichmentEngine,
+  type FormEnrichmentContext,
+} from './core/FormEnrichmentEngine.js';
+import { FormDagEngine } from './core/FormDagEngine.js';
+import { FormValidationEngine } from './core/FormValidationEngine.js';
 
 export interface FormFieldConfig<T = unknown> {
   label?: string;
@@ -54,14 +65,6 @@ export interface FormConfig<T extends Record<string, unknown> = Record<string, u
   entityExtractor?: IEntityExtractorPort;
 }
 
-import type {
-  FormState,
-  OverwritePolicy,
-  BatchSetOptions,
-  FieldOriginInfo,
-  BatchEnrichmentResult,
-} from '../ports/index.js';
-
 export type {
   FormState,
   OverwritePolicy,
@@ -72,7 +75,6 @@ export type {
 
 function getInitialFieldValue(fieldConfig: { defaultValue?: unknown; type?: string }): unknown {
   if (fieldConfig.defaultValue !== undefined) {
-
     return fieldConfig.defaultValue;
   }
   switch (fieldConfig.type) {
@@ -98,12 +100,15 @@ export class FormManager<T extends Record<string, unknown>> {
   private touchedFields: Partial<Record<keyof T, boolean>> = {};
   private submitError: string | null = null;
   private submitSuccess = false;
-  private dependencyGraph: FieldDependencyGraph = new FieldDependencyGraph();
   private telemetry?: ITelemetryPort;
   private formId: string;
   private formStartTime: number;
   private fieldFocusTimestamps: Map<keyof T, number> = new Map();
-  private fieldOrigins: Map<keyof T, FieldOriginInfo> = new Map();
+
+  // Modular Sub-Engines
+  private dagEngine: FormDagEngine<T>;
+  private validationEngine: FormValidationEngine<T>;
+  private enrichmentEngine: FormEnrichmentEngine<T>;
 
   constructor(config: FormConfig<T>) {
     this.config = config;
@@ -121,45 +126,10 @@ export class FormManager<T extends Record<string, unknown>> {
       });
     }
 
-    // Register dependency edges in DAG
-    for (const fieldName in config.fields) {
-      const fieldConfig = config.fields[fieldName];
-      if (!fieldConfig) continue;
-
-      if (fieldConfig.dependsOn) {
-        for (const dep of fieldConfig.dependsOn) {
-          this.dependencyGraph.addDependency(fieldName, dep);
-        }
-      }
-
-      if (fieldConfig.computed?.dependsOn) {
-        for (const dep of fieldConfig.computed.dependsOn) {
-          this.dependencyGraph.addDependency(fieldName, dep);
-        }
-      }
-
-      if (fieldConfig.rules) {
-        if (!fieldConfig.validators) {
-          fieldConfig.validators = fieldConfig.rules.map((rule) => {
-            return (val: unknown, allVals?: Record<string, unknown>) =>
-              applyRule(rule, val, fieldConfig.label || fieldName, allVals);
-          });
-        }
-        for (const rule of fieldConfig.rules) {
-          if ('targetField' in rule && rule.targetField) {
-            this.dependencyGraph.addDependency(fieldName, rule.targetField);
-          }
-        }
-      }
-    }
-
-    // Detect circular dependency cycles
-    const cycle = this.dependencyGraph.detectCycles();
-    if (cycle) {
-      throw new Error(
-        `Circular dependency detected in form schema between fields: ${cycle.join(' -> ')}`
-      );
-    }
+    // Initialize Sub-Engines
+    this.dagEngine = new FormDagEngine<T>(config);
+    this.validationEngine = new FormValidationEngine<T>();
+    this.enrichmentEngine = new FormEnrichmentEngine<T>();
 
     const initialValues = {} as T;
     for (const key in config.fields) {
@@ -192,6 +162,23 @@ export class FormManager<T extends Record<string, unknown>> {
     this.tsForm.mount?.();
   }
 
+  private getEnrichmentContext(): FormEnrichmentContext<T> {
+    return {
+      config: this.config,
+      tsForm: this.tsForm,
+      formId: this.formId,
+      telemetry: this.telemetry,
+      touchedFields: this.touchedFields,
+      fieldErrors: this.fieldErrors,
+      isFieldVisible: (f) => this.isFieldVisible(f),
+      validateField: (f) => this.validateField(f),
+      syncErrorMap: () => this.syncErrorMap(),
+      recomputeDependents: (fields) =>
+        this.dagEngine.recomputeDependents(fields, this.config, this.tsForm, (f) => this.validateField(f)),
+      setFieldValue: (f, v, opts) => this.setFieldValue(f, v, opts),
+    };
+  }
+
   public getState(): FormState<T> {
     const tsState = this.tsForm.state;
     const errorsCount = Object.keys(this.fieldErrors).length;
@@ -219,10 +206,6 @@ export class FormManager<T extends Record<string, unknown>> {
     });
   }
 
-  /**
-   * Subscribes specifically to changes affecting a single field (value, error, visibility).
-   * Prevents full-form 60 FPS re-renders during high-frequency typing on mobile.
-   */
   public subscribeToField<K extends keyof T>(
     field: K,
     callback: (value: T[K], error?: string, isVisible?: boolean) => void,
@@ -266,11 +249,6 @@ export class FormManager<T extends Record<string, unknown>> {
     this.syncErrorMap();
   }
 
-
-
-  /**
-   * Evaluates reactive visibility for a given field based on current form values.
-   */
   public isFieldVisible(field: keyof T): boolean {
     const fieldConfig = this.config.fields[field];
     if (!fieldConfig || !fieldConfig.visibleIf) {
@@ -282,9 +260,6 @@ export class FormManager<T extends Record<string, unknown>> {
     );
   }
 
-  /**
-   * Records field focus timestamp and emits field_focused telemetry.
-   */
   public focusField(field: keyof T): void {
     this.fieldFocusTimestamps.set(field, Date.now());
     if (this.telemetry) {
@@ -337,7 +312,7 @@ export class FormManager<T extends Record<string, unknown>> {
   }
 
   public getDependencyGraph(): FieldDependencyGraph {
-    return this.dependencyGraph;
+    return this.dagEngine.getDependencyGraph();
   }
 
   public getFieldValue<K extends keyof T>(field: K): T[K] {
@@ -348,7 +323,7 @@ export class FormManager<T extends Record<string, unknown>> {
     field: K,
     value: T[K],
     options?: { skipNormalization?: boolean; origin?: string },
-  ) {
+  ): void {
     const previousValue = this.tsForm.state.values[field];
     const fieldConfig = this.config.fields[field];
     let finalValue = value;
@@ -356,7 +331,7 @@ export class FormManager<T extends Record<string, unknown>> {
       finalValue = ValueNormalizer.normalize(value, fieldConfig.normalizer) as T[K];
     }
 
-    this.fieldOrigins.set(field, {
+    this.enrichmentEngine.setFieldOrigin(field, {
       origin: options?.origin ?? 'user',
       timestamp: Date.now(),
       previousValue,
@@ -375,224 +350,40 @@ export class FormManager<T extends Record<string, unknown>> {
       }
     }
 
-    // Reactive topological dependency updates:
-    const dependents = this.dependencyGraph.getDependents(String(field));
-    for (const dep of dependents) {
-      const depConfig = this.config.fields[dep as keyof T];
-      if (depConfig) {
-        // 1. Recompute derived value if computed
-        if (depConfig.computed?.fn) {
-          const derived = depConfig.computed.fn(
-            this.tsForm.state.values as Record<string, unknown>
-          );
-          this.tsForm.setFieldValue(dep as any, derived as any);
-        }
-        // 2. Re-validate dependent field with latest values
-        this.validateField(dep as keyof T);
-      }
-    }
+    // Reactive topological dependency updates via dagEngine
+    this.dagEngine.recomputeDependents([field], this.config, this.tsForm, (dep) =>
+      this.validateField(dep)
+    );
 
     this.syncErrorMap();
   }
 
-  /**
-   * Atomically enriches multiple form fields in a single transaction.
-   * Respects overwrite policies to protect user agency, recalculates downstream
-   * DAG dependencies once, and syncs validation without multiple render cascades.
-   */
   public batchSetFieldValues(
     updates: Partial<T>,
     options?: BatchSetOptions<T>,
   ): BatchEnrichmentResult<T> {
-    const rawPolicy = options?.overwritePolicy ?? 'always';
-    const policy = rawPolicy === 'if-empty' ? 'empty-only' : rawPolicy;
-    const origin = options?.origin ?? 'autofill';
-    const appliedFields: Array<keyof T> = [];
-    const skippedFields: BatchEnrichmentResult<T>['skippedFields'] = [];
-
-    const currentValues = this.tsForm.state.values;
-
-    for (const keyStr in updates) {
-      const field = keyStr as keyof T;
-      if (!(field in this.config.fields)) continue;
-
-      const currentValue = currentValues[field];
-      const nextValue = updates[field];
-      const isCurrentEmpty =
-        currentValue === undefined ||
-        currentValue === null ||
-        currentValue === '' ||
-        (Array.isArray(currentValue) && currentValue.length === 0);
-
-      const existingOrigin = this.fieldOrigins.get(field);
-      const isUserEdited = existingOrigin?.origin === 'user';
-
-      if (policy === 'empty-only' && !isCurrentEmpty) {
-        skippedFields.push({
-          field,
-          reason: 'already_set',
-          currentValue,
-          attemptedValue: nextValue,
-        });
-        continue;
-      }
-
-      if (policy === 'preserve-user-edits' && isUserEdited && !isCurrentEmpty) {
-        skippedFields.push({
-          field,
-          reason: 'user_edited',
-          currentValue,
-          attemptedValue: nextValue,
-        });
-        continue;
-      }
-
-      // Normalization check
-      const fieldConfig = this.config.fields[field];
-      let finalValue = nextValue as T[keyof T];
-      if (fieldConfig?.normalizer && !options?.skipNormalization && fieldConfig.normalizeOn === 'change') {
-        finalValue = ValueNormalizer.normalize(nextValue, fieldConfig.normalizer) as T[keyof T];
-      }
-
-      this.fieldOrigins.set(field, {
-        origin,
-        timestamp: Date.now(),
-        previousValue: currentValue,
-      });
-
-      this.touchedFields[field] = true;
-      this.tsForm.setFieldValue(field as any, finalValue as any);
-      appliedFields.push(field);
-    }
-
-    if (appliedFields.length > 0) {
-      // Re-evaluate visibility for dependent fields
-      for (const otherField in this.config.fields) {
-        if (!appliedFields.includes(otherField as keyof T) && this.config.fields[otherField].visibleIf) {
-          if (!this.isFieldVisible(otherField)) {
-            delete this.fieldErrors[otherField];
-          }
-        }
-      }
-
-      // Collect all downstream dependents across all applied fields
-      const allDependents = new Set<string>();
-      for (const field of appliedFields) {
-        const deps = this.dependencyGraph.getDependents(String(field));
-        for (const d of deps) {
-          allDependents.add(d);
-        }
-      }
-
-      // Recompute derived fields in DAG order
-      for (const dep of allDependents) {
-        const depConfig = this.config.fields[dep as keyof T];
-        if (depConfig) {
-          if (depConfig.computed?.fn) {
-            const derived = depConfig.computed.fn(
-              this.tsForm.state.values as Record<string, unknown>
-            );
-            this.tsForm.setFieldValue(dep as any, derived as any);
-          }
-          this.validateField(dep as keyof T);
-        }
-      }
-
-      // Validate all newly enriched fields
-      for (const field of appliedFields) {
-        this.validateField(field);
-      }
-
-      this.syncErrorMap();
-
-      if (this.telemetry && !options?.silent) {
-        this.telemetry.dispatch({
-          type: 'fields_enriched',
-          formId: this.formId,
-          source: origin,
-          fieldNames: appliedFields.map(String),
-          overwritePolicy: policy,
-          appliedCount: appliedFields.length,
-          skippedCount: skippedFields.length,
-          timestamp: Date.now(),
-        });
-      }
-    }
-
-    return {
-      appliedFields,
-      appliedCount: appliedFields.length,
-      skippedFields,
-      rollback: () => this.revertEnrichedFields(appliedFields),
-    };
+    return this.enrichmentEngine.batchSetFieldValues(updates, options, this.getEnrichmentContext());
   }
 
-  /**
-   * Reverts fields that were enriched via autofill back to their previous value.
-   * If no specific fields are provided, all autofilled fields with recorded previous values are restored.
-   */
   public revertEnrichedFields(fields?: Array<keyof T>): Array<keyof T> {
-    const targetFields = fields ?? Array.from(this.fieldOrigins.keys());
-    const reverted: Array<keyof T> = [];
-
-    for (const field of targetFields) {
-      const info = this.fieldOrigins.get(field);
-      if (info && info.previousValue !== undefined && info.origin !== 'user') {
-        this.setFieldValue(field, info.previousValue as T[keyof T], {
-          origin: 'revert',
-          skipNormalization: true,
-        });
-        reverted.push(field);
-      }
-    }
-
-    return reverted;
+    return this.enrichmentEngine.revertEnrichedFields(fields, this.getEnrichmentContext());
   }
 
   public getFieldOrigin<K extends keyof T>(field: K): FieldOriginInfo | undefined {
-    return this.fieldOrigins.get(field);
+    return this.enrichmentEngine.getFieldOrigin(field);
   }
 
   public getAllFieldOrigins(): Partial<Record<keyof T, FieldOriginInfo>> {
-    const result: Partial<Record<keyof T, FieldOriginInfo>> = {};
-    for (const [key, val] of this.fieldOrigins.entries()) {
-      result[key] = val;
-    }
-    return result;
+    return this.enrichmentEngine.getAllFieldOrigins();
   }
 
-  /**
-   * Enriches form fields from an AddressCandidate, automatically inferring schema mappings
-   * if no explicit map is supplied.
-   */
   public enrichFromAddressCandidate(
     candidate: Partial<AddressCandidate>,
     options?: BatchSetOptions<T> & { explicitMap?: ExplicitAddressFieldMap },
   ): BatchEnrichmentResult<T> {
-    let fieldMap = options?.explicitMap;
-    if (!fieldMap) {
-      const pseudoFields = Object.entries(this.config.fields).map(([name, conf]) => ({
-        id: name,
-        name,
-        label: (conf as FormFieldConfig).label || name,
-        type: ((conf as FormFieldConfig).type || 'text') as FieldType,
-        semanticIntent: (conf as FormFieldConfig).semanticIntent,
-        required: Boolean((conf as FormFieldConfig).required),
-        order: 0,
-      }));
-      fieldMap = AddressFieldMapper.inferFieldMap(pseudoFields as unknown as FormField[]);
-    }
-    const updates = AddressFieldMapper.candidateToFormValues(candidate, fieldMap) as Partial<T>;
-    return this.batchSetFieldValues(updates, {
-      origin: options?.origin ?? 'autofill-address',
-      overwritePolicy: options?.overwritePolicy ?? 'preserve-user-edits',
-      ...options,
-    });
+    return this.enrichmentEngine.enrichFromAddressCandidate(candidate, options, this.getEnrichmentContext());
   }
 
-  /**
-   * Alias for enrichFromAddressCandidate.
-   */
   public enrichFromAddress(
     candidate: Partial<AddressCandidate>,
     options?: BatchSetOptions<T> & { explicitMap?: ExplicitAddressFieldMap },
@@ -600,39 +391,13 @@ export class FormManager<T extends Record<string, unknown>> {
     return this.enrichFromAddressCandidate(candidate, options);
   }
 
-  /**
-   * Enriches form fields from a PickedContact, decomposing name parts, mapping contact details,
-   * and populating embedded postal address fields.
-   */
   public enrichFromContact(
     contact: Partial<PickedContact>,
     options?: BatchSetOptions<T> & { explicitMap?: ExplicitContactFieldMap },
   ): BatchEnrichmentResult<T> {
-    let fieldMap = options?.explicitMap;
-    if (!fieldMap) {
-      const pseudoFields = Object.entries(this.config.fields).map(([name, conf]) => ({
-        id: name,
-        name,
-        label: (conf as FormFieldConfig).label || name,
-        type: ((conf as FormFieldConfig).type || 'text') as FieldType,
-        semanticIntent: (conf as FormFieldConfig).semanticIntent,
-        required: Boolean((conf as FormFieldConfig).required),
-        order: 0,
-      }));
-      fieldMap = ContactFieldMapper.inferFieldMap(pseudoFields as unknown as FormField[]);
-    }
-    const updates = ContactFieldMapper.contactToFormValues(contact, fieldMap) as Partial<T>;
-    return this.batchSetFieldValues(updates, {
-      origin: options?.origin ?? 'autofill-contact',
-      overwritePolicy: options?.overwritePolicy ?? 'preserve-user-edits',
-      ...options,
-    });
+    return this.enrichmentEngine.enrichFromContact(contact, options, this.getEnrichmentContext());
   }
 
-  /**
-   * Enriches form fields from freeform unstructured text (the "Ghost Form" pattern).
-   * Extracts candidate entities, filters by confidence threshold, and applies batch updates.
-   */
   public async enrichFromFreeformText(
     text: string,
     options?: BatchSetOptions<T> & {
@@ -640,124 +405,34 @@ export class FormManager<T extends Record<string, unknown>> {
       minConfidenceThreshold?: number;
     },
   ): Promise<BatchEnrichmentResult<T>> {
-    const extractor = options?.extractor ?? this.config.entityExtractor ?? new RegexRuleExtractorAdapter();
-    const threshold = options?.minConfidenceThreshold ?? 0.7;
-
-    const pseudoFields: FormField[] = Object.entries(this.config.fields).map(([name, conf]) => ({
-      id: name,
-      name,
-      label: (conf as FormFieldConfig).label || name,
-      type: ((conf as FormFieldConfig).type || 'text') as FieldType,
-      semanticIntent: (conf as FormFieldConfig).semanticIntent as SemanticIntent | undefined,
-      required: Boolean((conf as FormFieldConfig).required),
-      order: 0,
-    }));
-
-    const entities = await extractor.extractEntities({
-      text,
-      targetFields: pseudoFields,
-    });
-
-    const updates: Partial<T> = {};
-    for (const entity of entities) {
-      if (entity.confidence >= threshold && entity.field in this.config.fields) {
-        updates[entity.field as keyof T] = entity.value as T[keyof T];
-      }
-    }
-
-    return this.batchSetFieldValues(updates, {
-      origin: options?.origin ?? 'ghost-paste',
-      overwritePolicy: options?.overwritePolicy ?? 'preserve-user-edits',
-      ...options,
-    });
+    return this.enrichmentEngine.enrichFromFreeformText(text, options, this.getEnrichmentContext());
   }
 
   public validateField(field: keyof T): boolean {
-    const fieldConfig = this.config.fields[field];
-    if (!fieldConfig) return true;
-
-    // Hidden fields bypass validation completely and clear existing errors
-    if (!this.isFieldVisible(field)) {
-      if (this.fieldErrors[field]) {
-        delete this.fieldErrors[field];
-        this.syncErrorMap();
-      }
-      return true;
-    }
-
-    const value = this.tsForm.state.values[field];
-    const allValues = this.tsForm.state.values as Record<string, unknown>;
-
-    const isValueEmpty =
-      value === undefined ||
-      value === null ||
-      (typeof value === 'string' && value.trim() === '') ||
-      (Array.isArray(value) && value.length === 0);
-
-    if (fieldConfig.required && isValueEmpty) {
-      this.fieldErrors[field] = `${fieldConfig.label || String(field)} is required`;
-    } else if (fieldConfig.validators) {
-      let errorFound = false;
-      for (const validator of fieldConfig.validators) {
-        const result = validator(value, allValues);
-        if (!result.isValid) {
-          this.fieldErrors[field] = result.error;
-          errorFound = true;
-          break;
-        }
-      }
-      if (!errorFound) {
-        delete this.fieldErrors[field];
-      }
-    } else {
-      delete this.fieldErrors[field];
-    }
-
-    this.syncErrorMap();
-    const hasError = Boolean(this.fieldErrors[field]);
-
-    if (hasError && this.telemetry) {
-      const fieldConfig = this.config.fields[field];
-      const errorRule =
-        fieldConfig?.rules?.[0]?.type ??
-        (fieldConfig?.required && isValueEmpty ? 'required' : 'validation_failed');
-      this.telemetry.dispatch({
-        type: 'field_error',
-        formId: this.formId,
-        stepIndex: 0,
-        fieldName: String(field),
-        errorRule,
-        errorMessage: this.fieldErrors[field],
-        timestamp: Date.now(),
-      });
-    }
-
-    return !hasError;
+    return this.validationEngine.validateField(
+      field,
+      this.config,
+      this.tsForm,
+      this.fieldErrors,
+      (f) => this.isFieldVisible(f),
+      () => this.syncErrorMap(),
+      this.telemetry,
+      this.formId
+    );
   }
 
   public validate(): boolean {
-    let allValid = true;
-    for (const field in this.config.fields) {
-      if (this.isFieldVisible(field)) {
-        if (!this.validateField(field)) {
-          allValid = false;
-        }
-      } else {
-        delete this.fieldErrors[field];
-      }
-    }
-    this.syncErrorMap();
-    return allValid;
+    return this.validationEngine.validate(
+      this.config,
+      this.fieldErrors,
+      (f) => this.isFieldVisible(f),
+      (f) => this.validateField(f),
+      () => this.syncErrorMap()
+    );
   }
 
   private syncErrorMap() {
-    const store: any = (this.tsForm as any).baseStore ?? (this.tsForm as any).store;
-    if (store && store.setState) {
-      store.setState((prev: any) => ({
-        ...prev,
-        errorMap: { ...this.fieldErrors },
-      }));
-    }
+    this.validationEngine.syncErrorMap(this.tsForm, this.fieldErrors);
   }
 
   public async submit(options?: { skipValidation?: boolean }) {
@@ -791,7 +466,6 @@ export class FormManager<T extends Record<string, unknown>> {
         this.telemetry.flush?.();
       }
     } catch {
-      // Handled inside onSubmit callback
       if (this.telemetry) {
         this.telemetry.dispatch({
           type: 'form_submitted',
@@ -823,8 +497,8 @@ export class FormManager<T extends Record<string, unknown>> {
     this.touchedFields = {};
     this.submitError = null;
     this.submitSuccess = false;
+    this.enrichmentEngine.clearFieldOrigins();
     this.tsForm.reset();
     this.syncErrorMap();
   }
 }
-
