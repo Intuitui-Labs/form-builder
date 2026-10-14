@@ -156,11 +156,29 @@ The engine provides 16 built-in declarative validation rules executed synchronou
 *   [`BrowserGeolocationAdapter`](file:///c:/projects/packages/form-builder-engine/src/adapters/geo/BrowserGeolocationAdapter.ts): Acquires current GPS coordinates and reverse-geocodes to structured address fields.
 *   [`BrowserContactPickerAdapter`](file:///c:/projects/packages/form-builder-engine/src/adapters/geo/BrowserContactPickerAdapter.ts): Safe W3C Contact Picker API adapter with permission denial handling.
 
+### 5.4 Unstructured Entity Extraction & Ghost Forms
+*   [`IEntityExtractorPort`](file:///c:/projects/packages/form-builder-engine/src/ports/IEntityExtractorPort.ts): Ingests unorganized text blobs (emails, bios, receipts, signatures) and extracts typed form field values with confidence ranking.
+*   [`RegexRuleExtractorAdapter`](file:///c:/projects/packages/form-builder-engine/src/adapters/ai/RegexRuleExtractorAdapter.ts): 0 kB deterministic offline extractor for emails, phone numbers, postal codes, currencies, and names.
+*   [`CallbackLLMExtractorAdapter`](file:///c:/projects/packages/form-builder-engine/src/adapters/ai/CallbackLLMExtractorAdapter.ts): Connects any LLM with prototype pollution defenses, timeout isolation, and JSON fence extraction.
+*   [`CompositeEntityExtractorAdapter`](file:///c:/projects/packages/form-builder-engine/src/adapters/ai/CompositeEntityExtractorAdapter.ts): Chains local regex fast-paths with remote LLM fallbacks, merging the highest-confidence entity predictions.
+
+### 5.5 Tactile Sensory Micro-Feedback & Ergonomics
+*   [`IHapticFeedbackPort`](file:///c:/projects/packages/form-builder-engine/src/ports/IHapticFeedbackPort.ts): Physical sensory confirmation contract (`selection`, `light-click`, `medium-bump`, `success`, `warning`, `error`).
+*   [`NullHapticAdapter`](file:///c:/projects/packages/form-builder-engine/src/adapters/haptics/NullHapticAdapter.ts): Zero-overhead fallback for desktop browsers, testing, and SSR environments.
+*   [`WebVibrationAdapter`](file:///c:/projects/packages/form-builder-engine/src/adapters/haptics/WebVibrationAdapter.ts): Translates tactile patterns to `navigator.vibrate()` with 80ms main-thread throttling guards.
+*   [`ExpoHapticsAdapter`](file:///c:/projects/packages/form-builder-engine/src/adapters/haptics/ExpoHapticsAdapter.ts): Connects `@expo/haptics` for React Native/Expo mobile apps with bridge starvation throttling.
+
+### 5.6 Ambient Self-Shrinking Forms
+*   [`AmbientFieldCollapser`](file:///c:/projects/packages/form-builder-engine/src/affordance/AmbientFieldCollapser.ts): Groups related fields into clusters (e.g. address, personal info) and automatically collapses them into a confirmed summary card with 1-click editability once all fields are satisfied by ambient sources. Includes hostile focus defense that strictly prevents collapsing while an input has active user focus.
+
 ---
 
-## 6. Real-time Interactive Visualizations
+## 6. Real-time Interactive Visualizations & Safe Mathematical Computation
 
-The engine supports dynamic visual widgets embedded inside form pages or terminal summary screens:
+The engine supports dynamic visual widgets embedded inside form pages or terminal summary screens without external heavy charting dependencies:
+
+*   [`MathExpressionEvaluator`](file:///c:/projects/packages/form-builder-engine/src/core/MathExpressionEvaluator.ts): Safe, AST-free recursive descent math parser strictly avoiding `eval()` and `new Function()`. Includes zero-division guards, bounded exponentiation, function whitelisting (`min`, `max`, `round`, `abs`, `clamp`, `sqrt`, `floor`, `ceil`), and ternary logic (`? :`).
+*   [`VisualizationEngine`](file:///c:/projects/packages/form-builder-engine/src/analytics/VisualizationEngine.ts): Computes immediate layout states for gauges, proportional bars, cohort percentiles, and SVG projection curves.
 
 ```typescript
 export interface InteractiveVisualizationDescriptor {
