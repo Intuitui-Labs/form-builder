@@ -54,43 +54,21 @@ export interface FormConfig<T extends Record<string, unknown> = Record<string, u
   entityExtractor?: IEntityExtractorPort;
 }
 
-export type FormState<T extends Record<string, unknown>> = {
-  values: T;
-  errors: Partial<Record<keyof T, string>>;
-  touched: Partial<Record<keyof T, boolean>>;
-  isSubmitting: boolean;
-  isDirty: boolean;
-  isValid: boolean;
-  submitError: string | null;
-  submitSuccess: boolean;
+import type {
+  FormState,
+  OverwritePolicy,
+  BatchSetOptions,
+  FieldOriginInfo,
+  BatchEnrichmentResult,
+} from '../ports/index.js';
+
+export type {
+  FormState,
+  OverwritePolicy,
+  BatchSetOptions,
+  FieldOriginInfo,
+  BatchEnrichmentResult,
 };
-
-export type OverwritePolicy = 'always' | 'empty-only' | 'preserve-user-edits' | 'if-empty';
-
-export interface BatchSetOptions<T> {
-  overwritePolicy?: OverwritePolicy;
-  origin?: string;
-  skipNormalization?: boolean;
-  silent?: boolean;
-}
-
-export interface FieldOriginInfo {
-  origin: string;
-  timestamp: number;
-  previousValue?: unknown;
-}
-
-export interface BatchEnrichmentResult<T> {
-  appliedFields: Array<keyof T>;
-  appliedCount: number;
-  skippedFields: Array<{
-    field: keyof T;
-    reason: 'already_set' | 'user_edited';
-    currentValue: unknown;
-    attemptedValue: unknown;
-  }>;
-  rollback: () => Array<keyof T>;
-}
 
 function getInitialFieldValue(fieldConfig: { defaultValue?: unknown; type?: string }): unknown {
   if (fieldConfig.defaultValue !== undefined) {

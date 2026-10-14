@@ -1,27 +1,75 @@
 import type { FormResponse, FormSchema, FieldDefinition, ValidatorRule } from '../schema/FormSchema.js';
 import type { ValidationResult } from '../validation/ValidationEngine.js';
-import type {
-  FormState,
-  BatchSetOptions,
-  BatchEnrichmentResult,
-  FieldOriginInfo,
-  OverwritePolicy,
-} from '../manager/FormManager.js';
 
-export type {
-  BatchSetOptions,
-  BatchEnrichmentResult,
-  FieldOriginInfo,
-  OverwritePolicy,
+export type FormState<T extends Record<string, unknown> = Record<string, unknown>> = {
+  values: T;
+  errors: Partial<Record<keyof T, string>>;
+  touched: Partial<Record<keyof T, boolean>>;
+  isSubmitting: boolean;
+  isDirty: boolean;
+  isValid: boolean;
+  submitError: string | null;
+  submitSuccess: boolean;
 };
 
-export type {
-  AggregatedStats,
-  FormAnalytics,
-  FormStorage,
-  FormSync,
-  QRCodePort,
-} from '../adapters/interfaces.js';
+export type OverwritePolicy = 'always' | 'empty-only' | 'preserve-user-edits' | 'if-empty';
+
+export interface BatchSetOptions<T> {
+  overwritePolicy?: OverwritePolicy;
+  origin?: string;
+  skipNormalization?: boolean;
+  silent?: boolean;
+}
+
+export interface FieldOriginInfo {
+  origin: string;
+  timestamp: number;
+  previousValue?: unknown;
+}
+
+export interface BatchEnrichmentResult<T> {
+  appliedFields: Array<keyof T>;
+  appliedCount: number;
+  skippedFields: Array<{
+    field: keyof T;
+    reason: 'already_set' | 'user_edited';
+    currentValue: unknown;
+    attemptedValue: unknown;
+  }>;
+  rollback: () => Array<keyof T>;
+}
+
+export interface FormStorage {
+  save(form: FormSchema): Promise<void>;
+  load(id: string): Promise<FormSchema>;
+  list(tenantId: string): Promise<FormSchema[]>;
+  delete(id: string): Promise<void>;
+}
+
+export interface AggregatedStats {
+  fieldId: string;
+  label: string;
+  type: string;
+  totalResponses: number;
+  data: unknown;
+}
+
+export interface FormAnalytics {
+  record(formId: string, response: FormResponse): Promise<void>;
+  aggregate(formId: string): Promise<AggregatedStats[]>;
+  export(formId: string): Promise<string>;
+}
+
+export interface FormSync {
+  push(form: FormSchema): Promise<void>;
+  pull(since: Date): Promise<FormSchema[]>;
+  resolveConflict(local: FormSchema, remote: FormSchema): FormSchema;
+}
+
+export interface QRCodePort {
+  buildPublicFormUrl(slug: string): string;
+  buildQRCodeUrl(publicUrl: string): string;
+}
 
 /**
  * Inbound Port: Form Driver contract for headless presentation adapters

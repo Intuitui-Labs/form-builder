@@ -24,3 +24,9 @@ export {
   type FormScaffoldResult,
   type RuntimeManagerOptions,
 } from './FormScaffolder.js';
+
+export {
+  SearchGroundedFormCompiler,
+  type SearchGroundingContext,
+  type GroundedCompilationResult,
+} from './SearchGroundedFormCompiler.js';

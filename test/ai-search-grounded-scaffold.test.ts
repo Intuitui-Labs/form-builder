@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { FormScaffolder } from '../src/ai/FormScaffolder.js';
+import { SearchGroundedFormCompiler } from '../src/ai/SearchGroundedFormCompiler.js';
 import { PureSchemaAdapter } from '../src/schema/adapters/PureSchemaAdapter.js';
 import { lintFormSchema } from '../src/schema/SchemaLint.js';
 import { MultiStepFormManager } from '../src/manager/MultiStepFormManager.js';
@@ -155,6 +156,40 @@ describe('Live Search-Grounded AI Form Scaffolder (October 2026 Ladder)', () => 
     form.setFieldValue('human_oversight_headcount', 6);
     expect(manager.validateCurrentStep()).toBe(true);
 
+    manager.destroy();
+  });
+
+  it('compiles live web search grounding results directly into high-conformity form schema with gauge', () => {
+    const liveSearchSummary = `
+      When designing an AI compliance intake form for California AI regulations and the EU AI Act:
+      Part 1: Basic System Identification: System Name & Version, Business Owner / Project Lead, Provider vs Deployer Status.
+      Part 2: Geographic Scope: Target Users in European Union vs California residents (CPPA/SB 1000).
+      Part 3: High-Risk Classification & General-Purpose AI compute thresholds exceeding 10^26 FLOPS.
+      Part 4: Human Oversight Mechanisms: Operator headcount, human-in-the-loop responsibility.
+    `;
+
+    const result = SearchGroundedFormCompiler.compileFromSearchGrounding({
+      topic: 'California SB 1000 & EU AI Act Dual Compliance Intake',
+      temporalLadderTier: 'direct-month',
+      temporalAnchor: 'October 2026',
+      searchSummary: liveSearchSummary,
+      sourceCitations: ['https://kiteworks.com', 'https://mofo.com', 'https://agent-works.ai'],
+    });
+
+    expect(result.isValid).toBe(true);
+    expect(result.lintWarnings).toBe(0);
+    expect(result.grounding.fieldsCount).toBeGreaterThanOrEqual(6);
+    expect(result.grounding.hasAssessmentGauge).toBe(true);
+    expect(result.grounding.citations).toHaveLength(3);
+
+    // Verify manager execution
+    const manager = new MultiStepFormManager(result.schema);
+    const form = manager.getFormManager();
+    form.setFieldValue('ai_system_name', 'DeepSynth Enterprise');
+    form.setFieldValue('responsible_officer_name', 'Avery Chen');
+    form.setFieldValue('responsible_officer_email', 'avery@deepsynth.ai');
+    form.setFieldValue('compliance_hotline_phone', '+1 415 555 2671');
+    expect(manager.validateCurrentStep()).toBe(true);
     manager.destroy();
   });
 });
