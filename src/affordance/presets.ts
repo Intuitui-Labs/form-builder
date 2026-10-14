@@ -1,5 +1,6 @@
 import type {
   FormAffordanceConfig,
+  AddressAffordanceConfig,
   AffordancePreset,
   NavigationPolicy,
   ProgressPresentation,
@@ -13,6 +14,7 @@ export interface ResolvedAffordanceConfig {
   feedback: FeedbackAffordanceMode;
   allowSaveAndResumeLater: boolean;
   showPreSubmissionSummary: boolean;
+  addressAffordance?: AddressAffordanceConfig;
 }
 
 export const AFFORDANCE_PRESET_DEFAULTS: Record<
@@ -62,6 +64,7 @@ export function resolveAffordanceConfig(
         config?.allowSaveAndResumeLater ?? base.allowSaveAndResumeLater,
       showPreSubmissionSummary:
         config?.showPreSubmissionSummary ?? base.showPreSubmissionSummary,
+      addressAffordance: config?.addressAffordance,
     };
   }
 
@@ -72,5 +75,6 @@ export function resolveAffordanceConfig(
     feedback: config?.feedback ?? 'inline-validation',
     allowSaveAndResumeLater: config?.allowSaveAndResumeLater ?? false,
     showPreSubmissionSummary: config?.showPreSubmissionSummary ?? false,
+    addressAffordance: config?.addressAffordance,
   };
 }

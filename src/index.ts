@@ -9,3 +9,5 @@ export * from './adapters/index.js';
 export * from './affordance/index.js';
 export * from './persistence/index.js';
 export * from './focus/index.js';
+export * from './lint/index.js';
+export * from './ai/index.js';

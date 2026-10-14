@@ -1,3 +1,6 @@
+import type { Result } from '../core/Result.js';
+import type { TransportError } from '../core/DomainErrors.js';
+
 /**
  * Envelope containing a queued or submitted form response with idempotency metadata.
  */
@@ -8,6 +11,10 @@ export interface SubmissionEnvelope<T = Record<string, unknown>> {
   values: T;
   submittedAt: string;
   retryCount: number;
+  experimentMetadata?: {
+    experimentKey: string;
+    variantId: string;
+  };
 }
 
 /**
@@ -25,4 +32,12 @@ export interface SubmissionReceipt {
  */
 export interface ITransportPort<T = Record<string, unknown>> {
   submit(envelope: SubmissionEnvelope<T>): Promise<SubmissionReceipt>;
+}
+
+/**
+ * Hardened Outbound Port: Contract for transport adapters that return
+ * typed Result monads with classified retryability (e.g. 4xx client rejection vs 5xx server error).
+ */
+export interface IResilientTransportPort<T = Record<string, unknown>> extends ITransportPort<T> {
+  submitSafe(envelope: SubmissionEnvelope<T>): Promise<Result<SubmissionReceipt, TransportError>>;
 }

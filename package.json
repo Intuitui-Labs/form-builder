@@ -63,6 +63,16 @@
       "import": "./dist/adapters/index.js",
       "default": "./dist/adapters/index.js"
     },
+    "./adapters/geo": {
+      "types": "./dist/adapters/geo/index.d.ts",
+      "import": "./dist/adapters/geo/index.js",
+      "default": "./dist/adapters/geo/index.js"
+    },
+    "./adapters/effect": {
+      "types": "./dist/adapters/effect/index.d.ts",
+      "import": "./dist/adapters/effect/index.js",
+      "default": "./dist/adapters/effect/index.js"
+    },
     "./persistence": {
       "types": "./dist/persistence/index.d.ts",
       "import": "./dist/persistence/index.js",
@@ -72,6 +82,16 @@
       "types": "./dist/focus/index.d.ts",
       "import": "./dist/focus/index.js",
       "default": "./dist/focus/index.js"
+    },
+    "./lint": {
+      "types": "./dist/lint/index.d.ts",
+      "import": "./dist/lint/index.js",
+      "default": "./dist/lint/index.js"
+    },
+    "./ai": {
+      "types": "./dist/ai/index.d.ts",
+      "import": "./dist/ai/index.js",
+      "default": "./dist/ai/index.js"
     },
     "./*": {
 
@@ -92,9 +112,17 @@
     "test:matrix": "node scripts/run-matrix-test.mjs --all",
     "test:matrix:57": "node scripts/run-matrix-test.mjs --target=57",
     "test:matrix:58": "node scripts/run-matrix-test.mjs --target=58",
-    "expo:go": "pnpm --filter form-builder-engine-showcase run start:go",
-    "expo:tunnel": "pnpm --filter form-builder-engine-showcase run start:tunnel",
-    "expo:web": "pnpm --filter form-builder-engine-showcase run web",
+    "expo:latest": "pnpm --filter @intuitui-labs/showcase-latest run start",
+    "expo:latest:go": "pnpm --filter @intuitui-labs/showcase-latest run start:go",
+    "expo:latest:tunnel": "pnpm --filter @intuitui-labs/showcase-latest run start:tunnel",
+    "expo:latest:web": "pnpm --filter @intuitui-labs/showcase-latest run web",
+    "expo:next": "pnpm --filter @intuitui-labs/showcase-next run start",
+    "expo:next:dev": "pnpm --filter @intuitui-labs/showcase-next run start:dev",
+    "expo:next:web": "pnpm --filter @intuitui-labs/showcase-next run web",
+    "expo:go": "pnpm run expo:latest:go",
+    "expo:web": "pnpm run expo:latest:web",
+    "showcase:verify": "pnpm --filter @intuitui-labs/showcase-latest run verify",
+    "showcase:verify:next": "pnpm --filter @intuitui-labs/showcase-next run verify",
     "prepublishOnly": "pnpm run check-types && pnpm run test && pnpm run build"
   },
   "publishConfig": {
@@ -126,10 +154,19 @@
     "@tanstack/form-core": "^0.42.1",
     "zod": "^4.6.5"
   },
+  "peerDependencies": {
+    "effect": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "effect": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/node": "^26.6.3",
     "@typescript/native-preview": "^7.0.0-dev.20260707.2",
     "@vitest/coverage-v8": "^5.0.3",
+    "effect": "^4.0.3",
     "typescript": "7.0.2",
     "vitest": "^5.0.3"
   }

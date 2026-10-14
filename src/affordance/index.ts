@@ -5,4 +5,7 @@ export * from './adapters/NullRewardAdapter.js';
 export * from './adapters/PeerBenchmarkInsightAdapter.js';
 export * from './adapters/MemoryDraftStorageAdapter.js';
 export * from './adapters/LocalStorageDraftAdapter.js';
-
+export * from './AddressFieldMapper.js';
+export * from './NameParser.js';
+export * from './ContactFieldMapper.js';
+export * from './AmbientFieldCollapser.js';

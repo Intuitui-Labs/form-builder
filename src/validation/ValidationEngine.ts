@@ -12,7 +12,11 @@ export function applyRule(
   value: unknown,
   fieldName?: string,
   allValues?: Record<string, unknown>,
+  options?: { signal?: AbortSignal },
 ): ValidationResult {
+  if (options?.signal?.aborted) {
+    return { isValid: false, error: 'Validation aborted' };
+  }
   switch (rule.type) {
     case 'required': {
       const invalid =
@@ -61,7 +65,7 @@ export function applyRule(
           ? { isValid: true }
           : { isValid: false, error: rule.message || 'Invalid format' };
       } catch {
-        return { isValid: true };
+        return { isValid: false, error: rule.message || 'Malformed validation pattern' };
       }
     }
     case 'matchesField': {
@@ -94,7 +98,7 @@ export function applyRule(
           : { isValid: false, error: rule.message || `${fieldName || 'Field'} must be after ${rule.targetField}` };
       }
 
-      return { isValid: true };
+      return { isValid: false, error: rule.message || `${fieldName || 'Field'} cannot be compared with ${rule.targetField}` };
     }
     case 'lessThanField': {
       if (value === undefined || value === null || value === '') return { isValid: true };
@@ -119,7 +123,7 @@ export function applyRule(
           : { isValid: false, error: rule.message || `${fieldName || 'Field'} must be before ${rule.targetField}` };
       }
 
-      return { isValid: true };
+      return { isValid: false, error: rule.message || `${fieldName || 'Field'} cannot be compared with ${rule.targetField}` };
     }
     case 'requiredIfField': {
       const targetVal = allValues?.[rule.targetField];
@@ -177,6 +181,58 @@ export function applyRule(
       }
       return { isValid: true };
     }
+    case 'fileSize': {
+      if (value === undefined || value === null || value === '') return { isValid: true };
+      const items = Array.isArray(value) ? value : [value];
+      for (const item of items) {
+        if (item && typeof item === 'object' && 'size' in item) {
+          const size = Number((item as { size: unknown }).size);
+          if (!Number.isNaN(size) && size > rule.maxBytes) {
+            return {
+              isValid: false,
+              error: rule.message || `File size exceeds the limit of ${Math.round((rule.maxBytes / (1024 * 1024)) * 10) / 10} MB`,
+            };
+          }
+        }
+      }
+      return { isValid: true };
+    }
+    case 'fileType': {
+      if (value === undefined || value === null || value === '') return { isValid: true };
+      const items = Array.isArray(value) ? value : [value];
+      for (const item of items) {
+        if (item && typeof item === 'object') {
+          const mime = String((item as { mimeType?: unknown; type?: unknown }).mimeType || (item as { type?: unknown }).type || '');
+          if (mime) {
+            const matches = rule.allowedMimeTypes.some((pattern) => {
+              if (pattern.endsWith('/*')) {
+                const prefix = pattern.slice(0, -2);
+                return mime.startsWith(prefix);
+              }
+              return mime.toLowerCase() === pattern.toLowerCase();
+            });
+            if (!matches) {
+              return {
+                isValid: false,
+                error: rule.message || `File type ${mime} is not accepted. Allowed types: ${rule.allowedMimeTypes.join(', ')}`,
+              };
+            }
+          }
+        }
+      }
+      return { isValid: true };
+    }
+    case 'maxFiles': {
+      if (value === undefined || value === null || value === '') return { isValid: true };
+      const count = Array.isArray(value) ? value.length : 1;
+      if (count > rule.max) {
+        return {
+          isValid: false,
+          error: rule.message || `Maximum ${rule.max} file${rule.max === 1 ? '' : 's'} allowed`,
+        };
+      }
+      return { isValid: true };
+    }
     case 'custom':
       return { isValid: true };
   }
@@ -187,9 +243,13 @@ export function validateRules(
   value: unknown,
   fieldName?: string,
   allValues?: Record<string, unknown>,
+  options?: { signal?: AbortSignal },
 ): ValidationResult {
+  if (options?.signal?.aborted) {
+    return { isValid: false, error: 'Validation aborted' };
+  }
   for (const rule of rules) {
-    const result = applyRule(rule, value, fieldName, allValues);
+    const result = applyRule(rule, value, fieldName, allValues, options);
     if (!result.isValid) return result;
   }
   return { isValid: true };
@@ -265,7 +325,13 @@ export const ValidationEngine = {
     for (const page of schema.pages) {
       for (const field of page.fields) {
         // Skip purely visual layout elements
-        if (field.type === 'heading' || field.type === 'divider') {
+        if (
+          field.type === 'heading' ||
+          field.type === 'divider' ||
+          field.type === 'rich-text' ||
+          field.type === 'statement' ||
+          field.type === 'visualization'
+        ) {
           continue;
         }
 

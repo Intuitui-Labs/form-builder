@@ -8,4 +8,10 @@ export interface IDraftStoragePort {
   loadDraft(schemaId: string): Promise<FormDraftSnapshot | null> | FormDraftSnapshot | null;
   clearDraft(schemaId: string): Promise<void> | void;
   hasDraft(schemaId: string): Promise<boolean> | boolean;
+  scheduleAutoSave?(
+    snapshot: FormDraftSnapshot,
+    onSaved?: (snapshot: FormDraftSnapshot) => void,
+    onError?: (error: any) => void,
+  ): void;
+  flush?(): Promise<void> | void;
 }

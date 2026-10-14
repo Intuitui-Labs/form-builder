@@ -9,6 +9,14 @@ export type {
   ValidatorRule,
   SemanticIntent,
   NormalizerType,
+  MediaType,
+  MediaDescriptor,
+  VisualizationType,
+  VisualizationMetric,
+  InteractiveVisualizationDescriptor,
+  FormFieldOption,
+  PageRole,
+  ClarificationDescriptor,
 } from './FormSchema.js';
 
 export type {
@@ -48,6 +56,11 @@ export {
   FormPageSchemaZod,
   FormSettingsSchemaZod,
   FormSchemaZod,
+  MediaTypeSchemaZod,
+  MediaDescriptorSchemaZod,
+  VisualizationMetricSchemaZod,
+  VisualizationDescriptorSchemaZod,
+  FormFieldOptionSchemaZod,
   validateFormSchema,
   safeValidateFormSchema,
 } from './FormSchemaValidation.js';
@@ -60,13 +73,27 @@ export {
   setSchemaValidator,
   resetSchemaValidator,
 } from './SchemaValidatorRegistry.js';
+export {
+  buildSchemaGraph,
+  getReachablePageIds,
+  detectPageCycles,
+  detectFieldCycles,
+  extractConditionFieldNames,
+} from './SchemaGraph.js';
 
 export type {
-  ISchemaValidator,
-  SchemaValidationResult,
-  SchemaIssue,
-  StandardSchemaV1,
-  StandardSchemaV1Result,
-  StandardSchemaV1Issue,
-} from '../ports/index.js';
+  SchemaGraph,
+  SchemaGraphNode,
+  SchemaGraphEdge,
+  SchemaGraphEdgeType,
+} from './SchemaGraph.js';
+
+export { lintFormSchema } from './SchemaLint.js';
+
+export type {
+  SchemaLintIssue,
+  SchemaLintIssueCode,
+  SchemaLintSeverity,
+  SchemaLintResult,
+} from './SchemaLint.js';
 

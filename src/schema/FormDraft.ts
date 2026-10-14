@@ -15,4 +15,8 @@ export interface FormDraftSnapshot<T = Record<string, unknown>> {
   values: T;
   isSubmitted: boolean;
   redactedFields?: string[];
+  experimentLineage?: {
+    experimentKey: string;
+    variantId: string;
+  };
 }

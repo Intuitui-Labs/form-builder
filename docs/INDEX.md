@@ -27,8 +27,9 @@ Welcome to the technical documentation library for `@intuitui-labs/form-builder-
 
     *   [Headless Form Engine Architecture](./Core/form-engine-architecture.md) — UML Class layouts, structural interactions, and code integrations.
     *   [Testing Architecture & Evidence Specification](./testing.md) — Evidence levels, Vitest configuration, and verification contracts.
-    *   [Expo SDK 58 Readiness Guide](./EXPO_58_READINESS.md) — Dual-SDK (57/58) compatibility and CLI verification workflows.
+    *   [Expo SDK 58 Readiness & Dual-SDK Architecture Guide](./EXPO_58_READINESS.md) — Dual-SDK (57/58) compatibility, interactive showcase workspaces (`apps/showcase-latest` & `apps/showcase-next`), and CLI verification workflows.
 *   [Architecture Decision Records (ADRs)](./decisions/2026-06-12-transition-to-tanstack-form.md)
+    *   [2026-10-13: Hexagonal Experimentation & Feature Flagging Architecture](./decisions/2026-10-13-hexagonal-experimentation-and-feature-flags.md) — OpenFeature alignment, zero-dependency adapters, sticky locks, and defense against the 7 hostile traps of client-side form A/B testing.
     *   [2026-10-11: Headless-Only Scope for Embedded React Native & Deferring Canned UI / Cloud BaaS](./decisions/2026-10-11-headless-only-embedded-scope.md) — The rationale for maintaining pure headless separation of concerns and scoping out pre-baked UI components and direct BaaS SDKs.
     *   [2026-10-10: Enterprise Multi-Version Matrix Testing & Fixture Architecture](./decisions/2026-10-10-enterprise-matrix-testing-fixtures.md) — Transition from mutable single-folder showcases to parallel immutable fixtures and tarball pack-testing.
     *   [2026-06-12: Transition to TanStack Form & Multi-Step Wizard Support](./decisions/2026-06-12-transition-to-tanstack-form.md) — The rationale behind choosing TSF over RHF for headless, offline-first execution.

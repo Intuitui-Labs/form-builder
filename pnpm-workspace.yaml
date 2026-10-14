@@ -1,6 +1,7 @@
 packages:
   - '.'
-  - 'showcase'
+  - 'apps/*'
+  - 'fixtures/*'
 
 allowBuilds:
   esbuild: true

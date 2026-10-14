@@ -34,32 +34,47 @@ This guide documents the Expo SDK 58 upgrade path and dual-SDK testing strategy 
 When running projects on **Expo SDK 58 beta**:
 1. **App Store Expo Go Incompatibility**: The publicly distributed Expo Go app in the Apple App Store and Google Play Store only targets the current stable release (**SDK 57**). Attempting to load an SDK 58 project in standard Expo Go will fail due to native runtime mismatch.
 2. **The Expo CLI Way**:
-   * **Simulators / Emulators**: When you run `npx expo start` in the showcase directory and press `a` (Android) or `i` (iOS), the **Expo CLI automatically downloads and provisions the matching SDK 58 beta client** directly into the local simulator/emulator.
-   * **Web Browser**: Run `npx expo start --web` or `npx expo export --platform web`. The Metro bundler compiles cleanly with zero native dependencies.
+   * **Simulators / Emulators**: When you run `pnpm expo:next` (or `npx expo start` in `apps/showcase-next`) and press `a` (Android) or `i` (iOS), the **Expo CLI automatically downloads and provisions the matching SDK 58 beta client** directly into the local simulator/emulator.
+   * **Web Browser**: Run `pnpm expo:next:web` (or `npx expo export --platform web`). The Metro bundler compiles cleanly with zero native dependencies.
    * **Physical Devices**: On physical hardware, SDK 58 apps use Development Builds (`npx expo run:android` / `npx expo run:ios` or `eas build --profile development`) or EAS Go (`eas go`).
 
 ---
 
-## 3. Running Expo Go for Expo SDK 57 with pnpm
+## 3. Running Interactive Showcases with pnpm
 
-The showcase application is managed as a first-class hoisted workspace member in `pnpm-workspace.yaml`.
+Both showcase applications are managed as first-class hoisted workspace members in `pnpm-workspace.yaml`:
+* `apps/showcase-latest` (`@intuitui-labs/showcase-latest`): Expo SDK 57 (Stable)
+* `apps/showcase-next` (`@intuitui-labs/showcase-next`): Expo SDK 58 (Next / Beta)
 
-### 1. Launch Expo Go directly from root:
+### 1. Launch Expo Go for Expo SDK 57 (Latest):
 ```powershell
 pnpm expo:go
+# Or explicitly:
+pnpm expo:latest:go
 ```
-This executes `expo start --go` inside the `showcase` workspace, spins up Metro on port 8081, and prints the QR code to scan with your iOS or Android Expo Go client.
+This executes `expo start --go` inside the `apps/showcase-latest` workspace, spins up Metro on port 8081, and prints the QR code to scan with your iOS or Android Expo Go client.
 
-### 2. Launch Web Preview:
+### 2. Launch Web Preview (SDK 57 Latest):
 ```powershell
 pnpm expo:web
+# Or explicitly:
+pnpm expo:latest:web
+```
+
+### 3. Launch Expo SDK 58 (Next / Beta):
+```powershell
+# Web Preview
+pnpm expo:next:web
+
+# CLI Dev Server for Simulator / Dev Client
+pnpm expo:next:start
 ```
 
 ---
 
 ## 4. Headless Multi-Version Matrix Testing (CI & Local)
 
-To test the engine against both Expo SDK 57 and SDK 58 simultaneously without touching `showcase` dependencies or triggering network downloads:
+To test the engine against both Expo SDK 57 and SDK 58 simultaneously without launching interactive UI servers or triggering network downloads:
 
 ```powershell
 # Run zero-network smoke tests across both SDK 57 and SDK 58

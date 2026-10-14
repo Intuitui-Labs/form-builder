@@ -40,6 +40,8 @@ export function clearCustomValidators(): void {
   customValidators = {};
 }
 
+import type { ITelemetryPort } from '../ports/ITelemetryPort.js';
+
 export interface HydrationPayload {
   fields?: HydratedFieldDefinition[] | Record<string, HydratedFieldDefinition>;
   [key: string]: unknown;
@@ -47,6 +49,13 @@ export interface HydrationPayload {
 export interface HydrationOptions {
   schemaValidator?: ISchemaValidator;
   strict?: boolean;
+  telemetry?: ITelemetryPort;
+  formId?: string;
+  schemaVersion?: string;
+  experimentLineage?: {
+    experimentKey: string;
+    variantId: string;
+  };
 }
 
 export class FormHydrator {
@@ -112,6 +121,10 @@ export class FormHydrator {
     const config: FormConfig<T> = {
       fields: fields as FormConfig<T>['fields'],
       onSubmit,
+      telemetry: options?.telemetry,
+      formId: options?.formId,
+      schemaVersion: options?.schemaVersion,
+      experimentLineage: options?.experimentLineage,
     };
 
     return new FormManager<T>(config as FormConfig<T>);

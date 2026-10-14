@@ -23,6 +23,13 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
-showcase/
 .tarball/
 fixtures/*/node_modules/
+fixtures/*/.tmp-extract/
+
+# Apps Ephemeral Artifacts
+apps/*/.expo/
+apps/*/node_modules/
+apps/*/dist/
+apps/*/web-build/
+apps/*/*.tsbuildinfo

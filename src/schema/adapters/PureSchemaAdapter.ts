@@ -12,6 +12,12 @@ const VALID_FIELD_TYPES = new Set<FieldType>([
   'divider',
   'slider',
   'likert',
+  'rich-text',
+  'statement',
+  'file',
+  'image-capture',
+  'audio-record',
+  'visualization',
 ]);
 
 const FORBIDDEN_PROPERTY_NAMES = new Set(['__proto__', 'constructor', 'prototype']);
@@ -126,6 +132,8 @@ export class PureSchemaAdapter implements ISchemaValidator<FormSchema> {
     const normalizedPages: FormPage[] = (obj.pages as any[]).map((page) => ({
       id: String(page.id),
       title: page.title ? String(page.title) : undefined,
+      description: page.description ? String(page.description) : undefined,
+      media: page.media,
       fields: (page.fields as any[]).map((f) => ({
         id: String(f.id),
         name: String(f.name),
@@ -134,6 +142,7 @@ export class PureSchemaAdapter implements ISchemaValidator<FormSchema> {
         required: Boolean(f.required),
         placeholder: f.placeholder ? String(f.placeholder) : undefined,
         defaultValue: f.defaultValue,
+        content: f.content ? String(f.content) : undefined,
         options: Array.isArray(f.options) ? f.options : undefined,
         min: typeof f.min === 'number' ? f.min : undefined,
         max: typeof f.max === 'number' ? f.max : undefined,
@@ -143,6 +152,8 @@ export class PureSchemaAdapter implements ISchemaValidator<FormSchema> {
         visibleIf: f.visibleIf,
         clearValueOnHide: f.clearValueOnHide,
         rules: f.rules,
+        media: f.media,
+        visualization: f.visualization,
       })),
       conditions: page.conditions,
       jumpRules: page.jumpRules,

@@ -21,6 +21,15 @@ export type AffordancePreset =
   | 'academic-survey'
   | 'custom';
 
+export interface AddressAffordanceConfig {
+  mode?: 'single-line-unpacker' | 'postal-first-cascade' | 'standard-grouped';
+  overwritePolicy?: 'always' | 'empty-only' | 'preserve-user-edits';
+  enableDeviceLocation?: boolean;
+  enableContactPicker?: boolean;
+  highlightAutofilledFields?: boolean;
+  a11yAnnouncements?: boolean;
+}
+
 export interface FormAffordanceConfig {
   preset?: AffordancePreset;
   navigation?: NavigationPolicy;
@@ -28,6 +37,7 @@ export interface FormAffordanceConfig {
   feedback?: FeedbackAffordanceMode;
   allowSaveAndResumeLater?: boolean;
   showPreSubmissionSummary?: boolean;
+  addressAffordance?: AddressAffordanceConfig;
 }
 
 export type StepStatus = 'completed' | 'current' | 'locked' | 'unvisited' | 'skipped';

@@ -8,7 +8,57 @@ export type FieldType =
   | 'heading'
   | 'divider'
   | 'slider'
-  | 'likert';
+  | 'likert'
+  | 'rich-text'
+  | 'statement'
+  | 'file'
+  | 'image-capture'
+  | 'audio-record'
+  | 'visualization';
+
+export type MediaType = 'image' | 'gif' | 'video' | 'audio' | 'embed' | 'lottie';
+
+export interface MediaDescriptor {
+  type: MediaType;
+  url: string;
+  alt: string;
+  caption?: string;
+  posterUrl?: string;
+  aspectRatio?: '16:9' | '4:3' | '1:1' | '21:9' | string;
+  autoPlay?: boolean;
+  loop?: boolean;
+  muted?: boolean;
+  transcriptionUrl?: string;
+  lazyLoad?: boolean;
+}
+
+export type VisualizationType = 'gauge' | 'bar' | 'line' | 'comparison' | 'projection';
+
+export interface VisualizationMetric {
+  label: string;
+  value: number | string;
+  target?: number;
+  unit?: string;
+}
+
+export interface InteractiveVisualizationDescriptor {
+  visualizationType: VisualizationType;
+  title: string;
+  description?: string;
+  metrics: VisualizationMetric[];
+  computedFrom?: string[];
+  formula?: string;
+  dataFallback: { label: string; value: string | number }[];
+}
+
+export interface FormFieldOption {
+  label: string;
+  value: string;
+  description?: string;
+  imageSrc?: string;
+  gifSrc?: string;
+  badge?: string;
+}
 
 export type ValidatorRule =
   | { type: 'required'; message?: string }
@@ -25,7 +75,10 @@ export type ValidatorRule =
   | { type: 'requiredIfField'; targetField: string; operator: 'equals' | 'notEquals' | 'contains' | 'present'; value?: unknown; message?: string }
   | { type: 'luhn'; message?: string }
   | { type: 'cardExpiry'; message?: string }
-  | { type: 'passwordStrength'; minScore?: number; message?: string };
+  | { type: 'passwordStrength'; minScore?: number; message?: string }
+  | { type: 'fileSize'; maxBytes: number; message?: string }
+  | { type: 'fileType'; allowedMimeTypes: string[]; message?: string }
+  | { type: 'maxFiles'; max: number; message?: string };
 
 import type { Condition, PageJumpRule } from './FormBranching.js';
 
@@ -51,9 +104,13 @@ export type SemanticIntent =
   // Personal & Identity
   | 'name-full'
   | 'name-given'
+  | 'name-middle'
   | 'name-family'
+  | 'name-prefix'
+  | 'name-suffix'
   | 'contact-email'
   | 'contact-phone'
+  | 'organization-name'
   | 'birth-date'
   | 'identity-tax-id';
 
@@ -65,7 +122,8 @@ export interface FormField {
   required: boolean;
   placeholder?: string;
   defaultValue?: unknown;
-  options?: { label: string; value: string }[];
+  content?: string;
+  options?: FormFieldOption[];
   min?: number;
   max?: number;
   scaleType?: 'emoji' | 'numeric';
@@ -94,11 +152,23 @@ export interface FormField {
   dependsOn?: string[];
   normalizer?: NormalizerType | ((value: unknown) => unknown);
   normalizeOn?: 'blur' | 'change';
+  media?: MediaDescriptor;
+  visualization?: InteractiveVisualizationDescriptor;
   computed?: {
     expression?: string;
     fn?: (values: Record<string, unknown>) => unknown;
     dependsOn?: string[];
   };
+  clarification?: ClarificationDescriptor;
+}
+
+export type PageRole = 'cover' | 'standard' | 'summary' | 'terminal';
+
+export interface ClarificationDescriptor {
+  title?: string;
+  body: string;
+  media?: MediaDescriptor;
+  defaultExpanded?: boolean;
 }
 
 export type NormalizerType =
@@ -117,7 +187,8 @@ export interface FieldDefinition {
   placeholder?: string;
   required?: boolean;
   defaultValue?: unknown;
-  options?: { label: string; value: string }[];
+  content?: string;
+  options?: FormFieldOption[];
   min?: number;
   max?: number;
   scaleType?: 'emoji' | 'numeric';
@@ -130,15 +201,23 @@ export interface FieldDefinition {
   formatMask?: string;
   autoFocus?: boolean;
   rules?: ValidatorRule[];
+  media?: MediaDescriptor;
+  visualization?: InteractiveVisualizationDescriptor;
+  clarification?: ClarificationDescriptor;
 }
 
 export interface FormPage {
   id: string;
   title?: string;
+  description?: string;
+  role?: PageRole;
+  badge?: string;
+  estimatedTime?: string;
   fields: FormField[];
   conditions?: unknown[];
   jumpRules?: PageJumpRule[];
   defaultNextPageId?: string;
+  media?: MediaDescriptor;
 }
 
 import type { FormAffordanceConfig } from './FormAffordance.js';
@@ -172,4 +251,5 @@ export interface FormResponse {
   tenantId: string;
   data: Record<string, unknown>;
   submittedAt: string;
+  metadata?: Record<string, unknown>;
 }

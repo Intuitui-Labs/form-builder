@@ -37,10 +37,10 @@
 
 The engine is intentionally **headless**, allowing you to bring your own design system or native components. 
 
-Below is the engine driving our live **React Native & Expo SDK 57/58 Showcase** (`showcase/`), managing multi-page intake, dynamic branching, localized validation boundaries, and instant offline recovery:
+Below is the engine driving our live **React Native & Expo Showcases** ([`apps/showcase-latest`](apps/showcase-latest) & [`apps/showcase-next`](apps/showcase-next)), managing multi-page intake, dynamic branching, localized validation boundaries, and instant offline recovery:
 
 <p align="center">
-  <img src="showcase/artifacts/final-preview.png" alt="React Native & Expo Form Engine Showcase" width="420" />
+  <img src="apps/showcase-latest/artifacts/final-preview.png" alt="React Native & Expo Form Engine Showcase" width="420" />
 </p>
 
 ### Try the Live Showcase on Your Device
@@ -201,38 +201,37 @@ Fields react in real-time, and wizard steps jump dynamically based on answers:
 
 ---
 
-### 3. Hexagonal Offline-First Persistence & Outbox Queue
-Connect your host app's existing storage (MMKV, AsyncStorage, Expo SQLite) without bundle bloat:
+### 3. Domain-Grouped Architecture & Effect-TS v4 Resilience
+Structure subsystem configuration cleanly via first-class domain namespaces:
 
 ```typescript
 import { MultiStepFormManager } from '@intuitui-labs/form-builder-engine';
-import type { IStoragePort, INetworkStatusPort } from '@intuitui-labs/form-builder-engine/ports';
-import NetInfo from '@react-native-community/netinfo';
-import { MMKV } from 'react-native-mmkv';
+import { createEffectEnvironment } from '@intuitui-labs/form-builder-engine/adapters/effect';
+import { DeterministicHashExperimentAdapter } from '@intuitui-labs/form-builder-engine/adapters';
 
-const mmkv = new MMKV();
-
-// 1. Host storage adapter (zero external dependencies in engine)
-const storage: IStoragePort = {
-  getItem: (key) => mmkv.getString(key) ?? null,
-  setItem: (key, val) => mmkv.set(key, val),
-  removeItem: (key) => mmkv.delete(key),
-};
-
-// 2. Host network monitor
-const networkStatus: INetworkStatusPort = {
-  isOnline: async () => (await NetInfo.fetch()).isConnected ?? true,
-  subscribe: (cb) => NetInfo.addEventListener((s) => cb(s.isConnected ?? true)),
-};
-
-// 3. Initialize manager with debounced drafts & outbox
 const manager = new MultiStepFormManager(schema, handleSubmit, {
-  storage,
-  networkStatus,
-  autoSaveDraft: true,
-  draftDebounceMs: 500,
-  autoRestoreDraft: false, // Prompt user via manager.restoreDraft()
-  enableOutbox: true,      // 14-day TTL, 50-item limit, auto-reconnect flush
+  // Resilience Domain: Hexagonal persistence, outbox queue & Effect v4 runtime
+  resilience: {
+    ...createEffectEnvironment({ storageType: 'localStorage', timeoutMs: 10000 }),
+    enableOutbox: true,
+    autoSaveDraft: true,
+    draftDebounceMs: 500,
+  },
+
+  // Experience Domain: Affordances, telemetry, velocity estimation & A/B testing
+  experience: {
+    affordanceConfig: {
+      preset: 'frictionless-onboarding',
+      progress: 'weighted-velocity',
+      navigation: 'visited-only',
+    },
+    sessionId: 'session_user_42',
+  },
+
+  // Security Domain: Sanitization, attachments, and schema validation
+  security: {
+    validateSchemaOnMount: true,
+  },
 });
 ```
 
@@ -251,14 +250,6 @@ const { persistence } = manager.getAffordanceState();
 Replace mechanical `Step 1 of 5` bars with cognitive effort weighting, velocity time estimation, and reciprocal rewards:
 
 ```typescript
-const manager = new MultiStepFormManager(schema, handleSubmit, {
-  affordanceConfig: {
-    preset: 'frictionless-onboarding',
-    progress: 'weighted-velocity', // Cognitive effort & time estimation
-    navigation: 'visited-only',    // Allow random access to completed steps
-  },
-});
-
 const { progress, breadcrumbs } = manager.getAffordanceState();
 console.log(progress.percentage); // e.g. 35
 console.log(progress.estimatedTimeRemainingText); // "~2 min remaining"
@@ -268,59 +259,55 @@ console.log(progress.estimatedTimeRemainingText); // "~2 min remaining"
 
 ## 📦 Tree-Shakable Subpath Exports
 
-Import only the exact modules your platform requires:
+Import only the exact modules your platform requires with zero bundle leakage:
 
 | Subpath | Description |
 | :--- | :--- |
 | `@intuitui-labs/form-builder-engine` | Root export: `FormManager`, `MultiStepFormManager`, `ConditionEvaluator`. |
 | `@intuitui-labs/form-builder-engine/schema` | Schema definitions, `ComparisonOperator`, `visibleIf`, `jumpRules`, `FormDraftSnapshot`. |
-| `@intuitui-labs/form-builder-engine/ports` | Hexagonal port contracts: `IStoragePort`, `INetworkStatusPort`, `ITransportPort`, `ISchemaValidator`. |
-| `@intuitui-labs/form-builder-engine/adapters` | Built-in adapters: `MemoryStorageAdapter`, `WebStorageAdapter`, `CallbackTransportAdapter`. |
+| `@intuitui-labs/form-builder-engine/ports` | Hexagonal port contracts: `IStoragePort`, `INetworkStatusPort`, `ITransportPort`, `IFormLifecyclePort`, `IExperimentPort`. |
+| `@intuitui-labs/form-builder-engine/adapters` | Built-in adapters: `MemoryStorageAdapter`, `WebStorageAdapter`, `DeterministicHashExperimentAdapter`, etc. |
+| `@intuitui-labs/form-builder-engine/adapters/effect` | Tier 2 Enterprise Resilience: Effect-TS v4 storage adapter, outbox transport, and `createEffectEnvironment`. |
 | `@intuitui-labs/form-builder-engine/persistence` | Persistence engine: `DraftManager`, `OfflineOutboxQueue`. |
 | `@intuitui-labs/form-builder-engine/affordance` | Affordance engine: `WeightedFieldProgressAdapter`, `LinearStepProgressAdapter`, presets. |
 | `@intuitui-labs/form-builder-engine/validation` | `ValidationEngine`, `applyRule`. |
-| `@intuitui-labs/form-builder-engine/hydration` | `FormHydrator`, custom validator registry. |
-| `@intuitui-labs/form-builder-engine/analytics` | Telemetry funnels, response aggregators, CSV/Excel export. |
+| `@intuitui-labs/form-builder-engine/hydration` | `FormHydrator`, `ExperimentFormHydrator`, custom validator registry. |
+| `@intuitui-labs/form-builder-engine/analytics` | Telemetry funnels, response aggregators, CSV/Excel export, `BatchingTelemetryAdapter`. |
+| `@intuitui-labs/form-builder-engine/ai` | Natural language schema compiler and Monte Carlo persona fuzzer. |
+| `@intuitui-labs/form-builder-engine/lint` | Form schema heuristic auditor (`SchemaLint`) and cycle detector (`SchemaGraph`). |
 | `@intuitui-labs/form-builder-engine/codegen` | Dynamic static React & Zod code exporter. |
 
 ---
 
-## 🛠️ Development & Quality Gates
+## 📱 Interactive Expo Showcases
 
-The engine uses strict TypeScript compilation and Vitest 5:
+The repository includes side-by-side interactive demo applications in [`apps/`](apps) to test the engine on real mobile and web runtimes:
+
+| Showcase | Path | Expo SDK | Target Environment | Command |
+| :--- | :--- | :--- | :--- | :--- |
+| **Latest (Stable)** | [`apps/showcase-latest`](apps/showcase-latest) | **SDK 57** (RN 0.86 / React 19.2) | Public Expo Go (App Store / Play Store) & Web | `pnpm expo:latest:go`<br/>`pnpm expo:latest:web` |
+| **Next (Beta)** | [`apps/showcase-next`](apps/showcase-next) | **SDK 58** (RN 0.88 / React 19.3) | Expo CLI / Simulators, Dev Client & Web | `pnpm expo:next:start`<br/>`pnpm expo:next:web` |
 
 ```bash
-# Strict TypeScript Typecheck
-pnpm run check-types
+# Launch Expo Go for SDK 57 (QR code on LAN)
+pnpm expo:go
 
-# Full Unit Test Matrix (98 Tests)
-pnpm test
+# Launch Web Preview (SDK 57)
+pnpm expo:web
 
-# Dual-SDK Native Matrix Pipeline (Expo SDK 57 & 58 Fixtures)
-pnpm test:matrix
+# Launch SDK 58 Next preview
+pnpm expo:next:web
 
-# Compile Production Distribution Bundle
-pnpm run build
+# Verify showcase apps (typecheck, tests, expo-doctor)
+pnpm showcase:verify
 ```
 
 ---
 
-## 🗺️ Architectural Roadmap
-See our full [Enterprise Form Platform Architecture & Evolution Roadmap](docs/architecture/enterprise-form-platform-roadmap.md) and [ADR 2026-10-11: Headless-Only Scope for Embedded React Native](docs/decisions/2026-10-11-headless-only-embedded-scope.md):
-* **Pillar I**: Dynamic conditional branching & jump rules &rarr; **✅ Shipped & Verified**
-* **Pillar III / Phase 2**: Hexagonal offline-first persistence & outbox sync &rarr; **✅ Shipped & Verified**
-* **Pillar II (Drop-in UI)** & **Pillar IV (BaaS Connectors)**: Scoped out to preserve zero bundle bloat and 100% host design system ownership &rarr; **✅ Formally Decided in ADR**
+## 📚 Documentation & Contributing
 
----
-
-## 📚 Technical Documentation Library
-* [ADR: Headless-Only Scope for Embedded React Native](docs/decisions/2026-10-11-headless-only-embedded-scope.md)
-* [Form UX Heuristics, Common Pitfalls & Engine Alignment Audit](docs/architecture/form-ux-heuristics-and-pitfalls-audit.md)
-* [Conditional Branching Architecture](docs/architecture/conditional-branching-and-jump-logic.md)
-* [Offline-First Persistence & Outbox Queue](docs/architecture/offline-first-persistence-and-outbox.md)
-* [Meaningful Progress & Rewardification Architecture](docs/architecture/meaningful-progress-and-rewardification.md)
-* [Enterprise Multi-Version Matrix Testing Strategy](docs/architecture/multi-version-testing-strategy.md)
-* [Documentation SOP](docs/docs-sop.md)
+* **Architecture & Guides**: Explore the [Technical Documentation Library](docs/) for deep dives into conditional branching, offline persistence, and behavioral heuristics.
+* **Contributing**: See [CONTRIBUTING.md](CONTRIBUTING.md) for local environment setup, dual-SDK matrix test execution, and quality gates.
 
 ---
 

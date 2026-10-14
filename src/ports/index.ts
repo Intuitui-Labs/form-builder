@@ -1,6 +1,19 @@
 import type { FormResponse, FormSchema, FieldDefinition, ValidatorRule } from '../schema/FormSchema.js';
 import type { ValidationResult } from '../validation/ValidationEngine.js';
-import type { FormState } from '../manager/FormManager.js';
+import type {
+  FormState,
+  BatchSetOptions,
+  BatchEnrichmentResult,
+  FieldOriginInfo,
+  OverwritePolicy,
+} from '../manager/FormManager.js';
+
+export type {
+  BatchSetOptions,
+  BatchEnrichmentResult,
+  FieldOriginInfo,
+  OverwritePolicy,
+};
 
 export type {
   AggregatedStats,
@@ -15,7 +28,10 @@ export type {
  */
 export interface IFormManager<T extends Record<string, unknown> = Record<string, unknown>> {
   getState(): FormState<T>;
-  setFieldValue<K extends keyof T>(field: K, value: T[K]): void;
+  setFieldValue<K extends keyof T>(field: K, value: T[K], options?: { skipNormalization?: boolean; origin?: string }): void;
+  batchSetFieldValues(updates: Partial<T>, options?: BatchSetOptions<T>): BatchEnrichmentResult<T>;
+  revertEnrichedFields(fields?: Array<keyof T>): Array<keyof T>;
+  getFieldOrigin<K extends keyof T>(field: K): FieldOriginInfo | undefined;
   validateField(field: keyof T): boolean;
   validate(): boolean;
   submit(options?: { skipValidation?: boolean }): Promise<void>;
@@ -113,6 +129,7 @@ export type {
 
 export type {
   IStoragePort,
+  IResilientStoragePort,
 } from './IStoragePort.js';
 
 export type {
@@ -121,8 +138,60 @@ export type {
 
 export type {
   ITransportPort,
+  IResilientTransportPort,
   SubmissionEnvelope,
   SubmissionReceipt,
 } from './ITransportPort.js';
+
+export type {
+  IExperimentPort,
+  ExperimentContext,
+  FlagResolutionDetails,
+  ResolutionReason,
+} from './IExperimentPort.js';
+
+export type {
+  ITelemetryPort,
+  FormTelemetryEvent,
+  BaseTelemetryEvent,
+} from './ITelemetryPort.js';
+
+export type {
+  AttachmentPointer,
+  AttachmentUploadStatus,
+  AttachmentUploadState,
+  IAttachmentStoragePort,
+  IAttachmentUploadPort,
+} from './IAttachmentPort.js';
+
+export type {
+  ISanitizerPort,
+} from './ISanitizerPort.js';
+
+export type {
+  IFormLifecyclePort,
+} from './IFormLifecyclePort.js';
+
+export type {
+  AddressCandidate,
+  AddressSearchOptions,
+  ReverseGeocodeOptions,
+  PostalCodeLookupOptions,
+  IAddressAutofillPort,
+  ContactPickerAddress,
+  PickedContact,
+  IContactPickerPort,
+} from './IAddressAutofillPort.js';
+
+export type {
+  ExtractedEntity,
+  ExtractionOptions,
+  IEntityExtractorPort,
+} from './IEntityExtractorPort.js';
+
+export type {
+  HapticFeedbackPattern,
+  IHapticFeedbackPort,
+} from './IHapticFeedbackPort.js';
 
 
