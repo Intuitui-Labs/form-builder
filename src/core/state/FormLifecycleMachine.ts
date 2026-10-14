@@ -277,11 +277,41 @@ export class FormLifecycleMachine<T extends Record<string, unknown>>
       }
 
       case 'STEP_JUMP': {
+        const nextCompleted = new Set(ctx.completedStepIndices);
+        if (event.prunedStepIndices && event.prunedStepIndices.length > 0) {
+          for (const pruned of event.prunedStepIndices) {
+            nextCompleted.delete(pruned);
+          }
+        }
+
+        const nextLineage = new Map<number, Set<number>>();
+        for (const [k, v] of ctx.branchLineage.entries()) {
+          nextLineage.set(k, new Set(v));
+        }
+        const nextTargetHistory = new Map(ctx.branchTargetHistory);
+
+        if (event.branchFromIndex !== undefined) {
+          if (event.prunedStepIndices && event.prunedStepIndices.length > 0) {
+            nextLineage.delete(event.branchFromIndex);
+          }
+          nextTargetHistory.set(event.branchFromIndex, event.targetIndex);
+          const lineageSet = nextLineage.get(event.branchFromIndex) ?? new Set<number>();
+          lineageSet.add(event.targetIndex);
+          nextLineage.set(event.branchFromIndex, lineageSet);
+        }
+
+        // Clean step history of any pruned steps
+        const prunedSet = new Set(event.prunedStepIndices ?? []);
+        const filteredHistory = ctx.stepHistory.filter((step) => !prunedSet.has(step));
+
         return {
           ...ctx,
           phase: 'idle',
           activeStepIndex: event.targetIndex,
-          stepHistory: [...ctx.stepHistory, event.targetIndex],
+          stepHistory: [...filteredHistory, event.targetIndex],
+          completedStepIndices: nextCompleted,
+          branchLineage: nextLineage,
+          branchTargetHistory: nextTargetHistory,
         };
       }
 

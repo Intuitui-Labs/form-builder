@@ -29,7 +29,12 @@ export type FormLifecycleEvent<T = Record<string, unknown>> =
       prunedStepIndices?: number[];
     }
   | { type: 'STEP_PREV'; targetIndex?: number }
-  | { type: 'STEP_JUMP'; targetIndex: number }
+  | {
+      type: 'STEP_JUMP';
+      targetIndex: number;
+      branchFromIndex?: number;
+      prunedStepIndices?: number[];
+    }
   | { type: 'COMPLETE_STEPS'; stepIndices: number[] }
   | { type: 'SUBMIT_START' }
   | { type: 'SUBMIT_SUCCESS'; receiptId?: string }

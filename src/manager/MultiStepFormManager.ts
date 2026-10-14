@@ -59,7 +59,19 @@ import {
 } from '../adapters/index.js';
 import { DraftManager } from '../persistence/DraftManager.js';
 import { OfflineOutboxQueue, type OutboxSyncStatus } from '../persistence/OfflineOutboxQueue.js';
-import { evaluateCondition } from '../core/ConditionEvaluator.js';
+import { evaluateCondition, evaluatePredicate } from '../core/ConditionEvaluator.js';
+import type {
+  PeekBranchStatus,
+  BranchPrerequisite,
+  DiscardedFieldInfo,
+  BranchSwitchImpact,
+  BranchSwitchOptions,
+  BranchSwitchResult,
+  Condition,
+  ConditionPredicate,
+  CompoundCondition,
+  PageJumpRule,
+} from '../schema/FormBranching.js';
 import { resolveSemanticIntent } from '../core/SemanticIntentResolver.js';
 import { PaymentCardHelper } from '../core/PaymentCardHelper.js';
 import { PasswordEntropyEstimator } from '../core/PasswordEntropyEstimator.js';
@@ -734,6 +746,334 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
     const idx = this.getInspectedPageIndex();
     const raw = this.schema.pages[idx]!;
     return this.sanitizePage(raw);
+  }
+
+  private extractConditionPredicates(condition: Condition): ConditionPredicate[] {
+    if (!condition) return [];
+    if ('field' in condition && typeof (condition as ConditionPredicate).field === 'string') {
+      return [condition as ConditionPredicate];
+    }
+    if ('predicates' in condition && Array.isArray((condition as CompoundCondition).predicates)) {
+      return (condition as CompoundCondition).predicates.flatMap((p) => this.extractConditionPredicates(p));
+    }
+    return [];
+  }
+
+  /**
+   * Classifies any step index relative to the active branch path.
+   */
+  public getPeekBranchStatus(pageIndex: number): PeekBranchStatus {
+    if (pageIndex < 0 || pageIndex >= this.schema.pages.length) {
+      return 'unreachable';
+    }
+    const current = this.getCurrentPageIndex();
+    if (pageIndex === current) {
+      return 'current';
+    }
+    const history = this.getStepHistory();
+    if (history.includes(pageIndex)) {
+      return 'visited';
+    }
+    const projectedPath = this.getProjectedPath();
+    if (projectedPath.includes(pageIndex)) {
+      return 'active-path';
+    }
+
+    // Check if the page is reachable via any jump rule, defaultNextPageId, or linear sequence in the schema
+    const targetId = this.schema.pages[pageIndex]?.id;
+    let hasIncomingEdge = false;
+    for (let i = 0; i < this.schema.pages.length; i++) {
+      if (i === pageIndex) continue;
+      const p = this.schema.pages[i]!;
+      if (p.jumpRules?.some((r) => r.targetPageId === targetId)) {
+        hasIncomingEdge = true;
+        break;
+      }
+      if (p.defaultNextPageId === targetId) {
+        hasIncomingEdge = true;
+        break;
+      }
+      if (i + 1 === pageIndex && (!p.jumpRules || p.jumpRules.length === 0) && !p.defaultNextPageId) {
+        hasIncomingEdge = true;
+        break;
+      }
+    }
+
+    return hasIncomingEdge ? 'conditional-branch' : 'unreachable';
+  }
+
+  /**
+   * Comprehensive inspection of a peeked step, analyzing branch prerequisites,
+   * data loss impact if diverted, and generating human/accessible spoken narrative.
+   */
+  public explainPeekStep(targetIndex: number = this.getInspectedPageIndex()): BranchSwitchImpact {
+    const defaultInvalid: BranchSwitchImpact = {
+      targetPageIndex: targetIndex,
+      targetPageId: '',
+      targetPageTitle: '',
+      status: 'unreachable',
+      isConditional: false,
+      isActivePath: false,
+      divergentFromStepIndex: null,
+      divergentFromStepTitle: null,
+      prerequisites: [],
+      prunedStepIndices: [],
+      prunedFields: [],
+      hasDataLoss: false,
+      spokenExplanation: 'Target step does not exist in this form schema.',
+      canSwitch: false,
+    };
+
+    if (targetIndex < 0 || targetIndex >= this.schema.pages.length) {
+      return defaultInvalid;
+    }
+
+    const targetPage = this.schema.pages[targetIndex]!;
+    const status = this.getPeekBranchStatus(targetIndex);
+    const isActivePath = status === 'current' || status === 'visited' || status === 'active-path';
+    const isConditional = status === 'conditional-branch';
+    const values = this.formManager.getState().values as Record<string, unknown>;
+
+    // 1. Locate incoming rules and identify divergent ancestor step & prerequisites
+    const prerequisites: BranchPrerequisite[] = [];
+    let divergentFromStepIndex: number | null = null;
+    let divergentFromStepTitle: string | null = null;
+
+    // Scan for direct jumpRules targeting this page
+    for (let i = 0; i < this.schema.pages.length; i++) {
+      const page = this.schema.pages[i]!;
+      const matchingRule = page.jumpRules?.find((r) => r.targetPageId === targetPage.id);
+      if (matchingRule) {
+        divergentFromStepIndex = i;
+        divergentFromStepTitle = page.title ?? `Step ${i + 1}`;
+        const preds = this.extractConditionPredicates(matchingRule.condition);
+        for (const pred of preds) {
+          const fieldDef = this.schema.pages.flatMap((p) => p.fields).find((f) => f.name === pred.field);
+          const currentValue = values[pred.field];
+          const satisfied = evaluatePredicate(pred, values);
+          prerequisites.push({
+            field: pred.field,
+            fieldLabel: fieldDef?.label ?? pred.field,
+            operator: pred.operator,
+            expectedValue: pred.value,
+            currentValue,
+            satisfied,
+          });
+        }
+        break;
+      }
+    }
+
+    // If no direct jump rule, check defaultNextPageId or fallback
+    if (divergentFromStepIndex === null) {
+      for (let i = 0; i < this.schema.pages.length; i++) {
+        const page = this.schema.pages[i]!;
+        if (page.defaultNextPageId === targetPage.id) {
+          divergentFromStepIndex = i;
+          divergentFromStepTitle = page.title ?? `Step ${i + 1}`;
+          break;
+        }
+      }
+    }
+
+    // 2. Calculate discarded downstream steps and fields
+    const prunedStepIndices: number[] = [];
+    const prunedFields: DiscardedFieldInfo[] = [];
+
+    if (isConditional) {
+      const history = this.getStepHistory();
+      const currentIdx = this.getCurrentPageIndex();
+      // Steps visited after the divergence point that are not the target or divergent step
+      const visitedSteps = Array.from(new Set([...history, currentIdx]));
+      const divIdx = divergentFromStepIndex ?? 0;
+
+      for (const stepIdx of visitedSteps) {
+        if (stepIdx > divIdx && stepIdx !== targetIndex) {
+          prunedStepIndices.push(stepIdx);
+          const page = this.schema.pages[stepIdx];
+          if (page) {
+            for (const f of page.fields) {
+              const val = values[f.name];
+              if (val !== undefined && val !== null && val !== '') {
+                prunedFields.push({
+                  name: f.name,
+                  label: f.label ?? f.name,
+                  value: val,
+                  stepIndex: stepIdx,
+                  stepTitle: page.title ?? `Step ${stepIdx + 1}`,
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    const hasDataLoss = prunedFields.length > 0;
+
+    // 3. Construct spoken / accessible explanation
+    let spokenExplanation = '';
+    const title = targetPage.title ?? `Step ${targetIndex + 1}`;
+    switch (status) {
+      case 'current':
+        spokenExplanation = `You are currently viewing Step ${targetIndex + 1}: ${title}.`;
+        break;
+      case 'visited':
+        spokenExplanation = `Step ${targetIndex + 1}: ${title} was already completed. You can safely return here at any time.`;
+        break;
+      case 'active-path':
+        spokenExplanation = `Step ${targetIndex + 1}: ${title} is on your active path. Complete your current step to advance here.`;
+        break;
+      case 'conditional-branch': {
+        const prereqStrings = prerequisites.map(
+          (p) => `${p.fieldLabel || p.field} must be '${p.expectedValue}' (currently '${p.currentValue ?? 'unset'}')`
+        );
+        const prereqSummary = prereqStrings.length > 0 ? ` Requires: ${prereqStrings.join('; ')}.` : '';
+        const lossSummary = hasDataLoss
+          ? ` Switching to this branch will discard ${prunedFields.length} answered field(s) across ${prunedStepIndices.length} step(s): ${prunedFields.map((f) => f.label).join(', ')}.`
+          : ' You can switch to this branch with zero data loss.';
+        spokenExplanation = `Step ${targetIndex + 1}: ${title} is an alternate conditional branch.${prereqSummary}${lossSummary}`;
+        break;
+      }
+      case 'unreachable':
+        spokenExplanation = `Step ${targetIndex + 1}: ${title} is not reachable under the current form schema.`;
+        break;
+    }
+
+    return {
+      targetPageIndex: targetIndex,
+      targetPageId: targetPage.id,
+      targetPageTitle: title,
+      status,
+      isConditional,
+      isActivePath,
+      divergentFromStepIndex,
+      divergentFromStepTitle,
+      prerequisites,
+      prunedStepIndices,
+      prunedFields,
+      hasDataLoss,
+      spokenExplanation,
+      canSwitch: status !== 'unreachable' && status !== 'current',
+    };
+  }
+
+  /**
+   * Evaluates the impact of switching branches without mutating state.
+   */
+  public previewBranchSwitch(targetPageIndex: number = this.getInspectedPageIndex()): BranchSwitchImpact {
+    return this.explainPeekStep(targetPageIndex);
+  }
+
+  /**
+   * Atomically transitions the active step to targetPageIndex, optionally satisfying branch
+   * prerequisites, pruning abandoned downstream data, and cleaning up attachments with full rollback resilience.
+   */
+  public confirmBranchSwitch(
+    targetPageIndex: number = this.getInspectedPageIndex(),
+    options?: BranchSwitchOptions
+  ): BranchSwitchResult {
+    const impact = this.explainPeekStep(targetPageIndex);
+    const currentIndex = this.getCurrentPageIndex();
+
+    if (!impact.canSwitch) {
+      return {
+        success: false,
+        error: `Cannot switch to step ${targetPageIndex} with status '${impact.status}'`,
+        newActiveIndex: currentIndex,
+      };
+    }
+
+    // Atomic Snapshot for Rollback
+    const valuesSnapshot = { ...this.formManager.getState().values };
+
+    try {
+      // 1. Auto-satisfy branch prerequisites if enabled (default true)
+      if (options?.autoSatisfyPrerequisites !== false && impact.prerequisites.length > 0) {
+        for (const prereq of impact.prerequisites) {
+          if (!prereq.satisfied && prereq.expectedValue !== undefined) {
+            this.formManager.setFieldValue(prereq.field as any, prereq.expectedValue as any);
+          }
+        }
+      }
+
+      // 2. Prune abandoned downstream steps & fields
+      for (const stepIdx of impact.prunedStepIndices) {
+        const page = this.schema.pages[stepIdx];
+        if (page) {
+          for (const f of page.fields) {
+            const oldVal = (this.formManager.getState().values as Record<string, unknown>)[f.name];
+            if (oldVal && typeof oldVal === 'object' && 'localUri' in oldVal) {
+              const ptr = oldVal as AttachmentPointer;
+              this.onAttachmentPruned?.(f.name, ptr);
+              if (this.attachmentStorage && ptr.id) {
+                this.attachmentStorage.deleteLocal(ptr.id).catch(() => {});
+              }
+            }
+            this.formManager.setFieldValue(f.name as any, (f.defaultValue ?? '') as any);
+          }
+        }
+      }
+
+      // 3. Atomically update lifecycle kernel
+      const transition = this.lifecyclePort.send({
+        type: 'STEP_JUMP',
+        targetIndex: targetPageIndex,
+        branchFromIndex: impact.divergentFromStepIndex ?? undefined,
+        prunedStepIndices: impact.prunedStepIndices.length > 0 ? impact.prunedStepIndices : undefined,
+      });
+
+      if (!transition.accepted) {
+        throw new Error('Lifecycle kernel rejected transition to branch step');
+      }
+
+      // Exit peek mode
+      this.inspectedPageIndex = null;
+
+      // Auto-save draft if enabled
+      if (this.autoSaveDraft) {
+        this.saveDraft();
+      }
+
+      // Dispatch telemetry event
+      if (this.telemetry) {
+        this.telemetry.dispatch({
+          type: 'branch_switched' as any,
+          formId: this.schema.id,
+          fromStep: currentIndex,
+          targetStep: targetPageIndex,
+          divergentFromStep: impact.divergentFromStepIndex,
+          prunedFieldsCount: impact.prunedFields.length,
+          timestamp: Date.now(),
+        });
+      }
+
+      this.hapticPort?.trigger('selection');
+      this.notify();
+
+      return {
+        success: true,
+        newActiveIndex: targetPageIndex,
+      };
+    } catch (err) {
+      // Rollback to snapshot
+      for (const [k, v] of Object.entries(valuesSnapshot)) {
+        this.formManager.setFieldValue(k as any, v as any);
+      }
+      return {
+        success: false,
+        error: String(err),
+        rollbackApplied: true,
+        newActiveIndex: currentIndex,
+      };
+    }
+  }
+
+  /**
+   * Cancels any pending branch switch and returns viewport to active editing step.
+   */
+  public cancelBranchSwitch(): void {
+    this.stopPeeking();
   }
 
   public getStepHistory(): number[] {

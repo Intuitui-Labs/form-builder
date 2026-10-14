@@ -38,6 +38,12 @@ export type {
   Condition,
   FieldVisibilityRule,
   PageJumpRule,
+  PeekBranchStatus,
+  BranchPrerequisite,
+  DiscardedFieldInfo,
+  BranchSwitchImpact,
+  BranchSwitchOptions,
+  BranchSwitchResult,
 } from './FormBranching.js';
 
 export type {

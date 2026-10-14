@@ -11,7 +11,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaskTokenizer } from '@intuitui-labs/form-builder-engine';
-import { CountryDialRegistry, type CountryDialItem } from '@intuitui-labs/form-builder-engine';
+import { CountryDialRegistry, type CountryDialItem, type BranchSwitchImpact } from '@intuitui-labs/form-builder-engine';
 import { colors, radii } from '../theme';
 
 export type DisplayField = {
@@ -187,11 +187,15 @@ export function PeekNoticeBar({
   totalSteps,
   stepTitle,
   onReturn,
+  impact,
+  onSwitchBranch,
 }: {
   stepIndex: number;
   totalSteps: number;
   stepTitle: string;
   onReturn: () => void;
+  impact?: BranchSwitchImpact | null;
+  onSwitchBranch?: () => void;
 }) {
   return (
     <View style={styles.peekNotice}>
@@ -199,13 +203,38 @@ export function PeekNoticeBar({
         <View style={styles.peekBadgeRow}>
           <Text style={styles.peekNoticeBadge}>👁️ PEEK PREVIEW</Text>
           <Text style={styles.peekReadOnlyTag}>READ-ONLY</Text>
+          {impact?.isConditional ? (
+            <Text style={styles.peekBranchTag}>🌿 ALTERNATE BRANCH</Text>
+          ) : impact?.isActivePath ? (
+            <Text style={styles.peekActivePathTag}>⏩ ACTIVE TRAJECTORY</Text>
+          ) : null}
         </View>
         <Text style={styles.peekNoticeTitle}>Step {stepIndex + 1} of {totalSteps}: {stepTitle}</Text>
-        <Text style={styles.peekNoticeDesc}>Inspect future questions. Values are protected until validation passes.</Text>
+        {impact?.prerequisites && impact.prerequisites.length > 0 ? (
+          <Text style={styles.peekPrereqText}>
+            ⚡ Prerequisite: {impact.prerequisites.map((p) => `${p.fieldLabel || p.field} = ${p.expectedValue} (current: ${String(p.currentValue ?? 'unset')})`).join('; ')}
+          </Text>
+        ) : null}
+        <Text style={styles.peekNoticeDesc}>
+          {impact?.spokenExplanation ?? 'Inspect future questions. Values are protected until validation passes.'}
+        </Text>
       </View>
-      <Pressable onPress={onReturn} style={styles.peekNoticeBtn}>
-        <Text style={styles.peekNoticeBtnText}>Back to active step</Text>
-      </Pressable>
+      <View style={styles.peekActionsRow}>
+        {impact?.canSwitch && onSwitchBranch ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={onSwitchBranch}
+            style={[styles.peekSwitchBtn, impact.hasDataLoss ? styles.peekSwitchBtnWarning : null]}
+          >
+            <Text style={styles.peekSwitchBtnText}>
+              {impact.hasDataLoss ? 'Switch branch ⚠️' : 'Switch branch →'}
+            </Text>
+          </Pressable>
+        ) : null}
+        <Pressable accessibilityRole="button" onPress={onReturn} style={styles.peekNoticeBtn}>
+          <Text style={styles.peekNoticeBtnText}>Return to step</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -873,15 +902,22 @@ const styles = StyleSheet.create({
   progressLabelActive: { color: colors.violet },
   progressTrack: { height: 3, borderRadius: 2, backgroundColor: colors.slateSoft, overflow: 'hidden' },
   progressFill: { height: 3, borderRadius: 2, backgroundColor: colors.violet },
-  peekNotice: { backgroundColor: '#FFFBEB', borderColor: '#FDE68A', borderWidth: 1, borderRadius: 14, padding: 12, marginBottom: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  peekNoticeLeft: { flex: 1, marginRight: 10 },
-  peekBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 },
+  peekNotice: { backgroundColor: '#FFFBEB', borderColor: '#FDE68A', borderWidth: 1, borderRadius: 14, padding: 12, marginBottom: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  peekNoticeLeft: { flex: 1 },
+  peekBadgeRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 4 },
   peekNoticeBadge: { fontSize: 9, fontWeight: '800', color: '#B45309' },
   peekReadOnlyTag: { fontSize: 8, fontWeight: '800', color: '#92400E', backgroundColor: '#FEF3C7', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 },
+  peekBranchTag: { fontSize: 8, fontWeight: '800', color: '#047857', backgroundColor: '#D1FAE5', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 },
+  peekActivePathTag: { fontSize: 8, fontWeight: '800', color: '#4338CA', backgroundColor: '#E0E7FF', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 },
   peekNoticeTitle: { fontSize: 12, fontWeight: '800', color: colors.ink },
-  peekNoticeDesc: { fontSize: 10, color: '#92400E', marginTop: 2 },
-  peekNoticeBtn: { backgroundColor: '#F59E0B', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
-  peekNoticeBtnText: { color: '#FFFFFF', fontSize: 11, fontWeight: '800' },
+  peekPrereqText: { fontSize: 10, fontWeight: '700', color: '#B45309', marginTop: 3 },
+  peekNoticeDesc: { fontSize: 10, color: '#92400E', marginTop: 3, lineHeight: 14 },
+  peekActionsRow: { flexDirection: 'column', gap: 6, alignItems: 'stretch' },
+  peekNoticeBtn: { backgroundColor: '#F59E0B', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, alignItems: 'center' },
+  peekNoticeBtnText: { color: '#FFFFFF', fontSize: 10, fontWeight: '800' },
+  peekSwitchBtn: { backgroundColor: colors.violet, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, alignItems: 'center' },
+  peekSwitchBtnWarning: { backgroundColor: '#E11D48' },
+  peekSwitchBtnText: { color: '#FFFFFF', fontSize: 10, fontWeight: '800' },
   coverCard: { paddingVertical: 14, alignItems: 'flex-start' },
   coverBadgeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: 12 },
   coverBadge: { backgroundColor: colors.violetSoft, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
-import { MultiStepFormManager, type FormState } from '@intuitui-labs/form-builder-engine';
+import { MultiStepFormManager, type FormState, type BranchSwitchImpact } from '@intuitui-labs/form-builder-engine';
 import {
   ActionButton,
   AppPage,
@@ -42,12 +42,15 @@ export default function BuilderScreen() {
   const [isPeeking, setIsPeeking] = useState(() => manager.isPeeking());
   const [inspectedIndex, setInspectedIndex] = useState(() => manager.getInspectedPageIndex());
 
+  const [confirmWarning, setConfirmWarning] = useState<BranchSwitchImpact | null>(null);
+
   useEffect(() => {
     setFormState(form.getState());
     setStepIndex(manager.getCurrentPageIndex());
     setIsPeeking(manager.isPeeking());
     setInspectedIndex(manager.getInspectedPageIndex());
     setReceipt(null);
+    setConfirmWarning(null);
 
     const unsubscribeForm = form.subscribe(setFormState);
     const unsubscribeSteps = manager.subscribe((current) => {
@@ -62,6 +65,20 @@ export default function BuilderScreen() {
       manager.destroy();
     };
   }, [form, manager]);
+
+  const branchImpact = useMemo(() => {
+    if (!isPeeking) return null;
+    return manager.explainPeekStep(inspectedIndex);
+  }, [isPeeking, inspectedIndex, formState.values, manager]);
+
+  const handleSwitchBranch = () => {
+    if (!branchImpact) return;
+    if (branchImpact.hasDataLoss) {
+      setConfirmWarning(branchImpact);
+    } else {
+      manager.confirmBranchSwitch(inspectedIndex, { autoSatisfyPrerequisites: true });
+    }
+  };
 
   const stepNames = currentMeta.schema.pages.map((p) => p.title ?? 'Step');
   const inspectedPage = manager.getInspectedPage();
@@ -206,8 +223,43 @@ export default function BuilderScreen() {
                 stepIndex={inspectedIndex}
                 totalSteps={stepNames.length}
                 stepTitle={inspectedPage?.title ?? `Step ${inspectedIndex + 1}`}
-                onReturn={() => manager.stopPeeking()}
+                impact={branchImpact}
+                onSwitchBranch={handleSwitchBranch}
+                onReturn={() => {
+                  setConfirmWarning(null);
+                  manager.stopPeeking();
+                }}
               />
+            ) : null}
+
+            {confirmWarning ? (
+              <View style={styles.dataLossCard}>
+                <Text style={styles.dataLossTitle}>⚠️ Branch Switch Confirmation & Data Loss</Text>
+                <Text style={styles.dataLossDesc}>
+                  Switching to "{confirmWarning.targetPageTitle}" diverges from your active path. Progress on {confirmWarning.prunedFields.length} answered field(s) will be discarded:
+                </Text>
+                {confirmWarning.prunedFields.map((f) => (
+                  <Text key={f.name} style={styles.dataLossItem}>
+                    • <Text style={{ fontWeight: '700' }}>{f.label}</Text>: "{String(f.value)}"
+                  </Text>
+                ))}
+                <View style={styles.dataLossActions}>
+                  <ActionButton
+                    label="Confirm & Discard Data"
+                    compact
+                    onPress={() => {
+                      manager.confirmBranchSwitch(confirmWarning.targetPageIndex, { autoSatisfyPrerequisites: true });
+                      setConfirmWarning(null);
+                    }}
+                  />
+                  <ActionButton
+                    label="Cancel & Keep Progress"
+                    secondary
+                    compact
+                    onPress={() => setConfirmWarning(null)}
+                  />
+                </View>
+              </View>
             ) : null}
 
             {inspectedPage?.role === 'cover' ? (
@@ -333,4 +385,9 @@ const styles = StyleSheet.create({
   noteBody: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 2 },
   supportStrip: { paddingHorizontal: 3, paddingBottom: 16 },
   supportTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  dataLossCard: { backgroundColor: '#FFF1F2', borderColor: '#FECDD3', borderWidth: 1, borderRadius: 14, padding: 14, marginBottom: 14 },
+  dataLossTitle: { fontSize: 13, fontWeight: '800', color: '#BE123C', marginBottom: 4 },
+  dataLossDesc: { fontSize: 11, color: '#9F1239', lineHeight: 16, marginBottom: 8 },
+  dataLossItem: { fontSize: 11, color: '#881337', marginBottom: 3, paddingLeft: 4 },
+  dataLossActions: { flexDirection: 'row', gap: 8, marginTop: 10 },
 });

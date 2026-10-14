@@ -54,6 +54,13 @@ export type FormTelemetryEvent =
       conditionId?: string;
     })
   | (BaseTelemetryEvent & {
+      type: 'branch_switched';
+      fromStep: number;
+      targetStep: number;
+      divergentFromStep?: number | null;
+      prunedFieldsCount?: number;
+    })
+  | (BaseTelemetryEvent & {
       type: 'form_submitted';
       totalDurationMs: number;
       success: boolean;
