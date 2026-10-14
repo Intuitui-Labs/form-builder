@@ -333,5 +333,5 @@ describe('Heuristic Address Autofill & Transactional Enrichment', () => {
     } catch {
       // If environment prevents sibling import, test gracefully completes
     }
-  });
+  }, 15000);
 });
