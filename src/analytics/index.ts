@@ -6,8 +6,13 @@ export type {
   MetricGauge,
   DistributionChart,
   VisualizationReport,
-} from './AnalyticsEngine.js';
+} from './types.js';
 export { AnalyticsEngine } from './AnalyticsEngine.js';
+export { ResponseAggregator } from './ResponseAggregator.js';
+export { SpreadsheetExporter } from './SpreadsheetExporter.js';
+export { FunnelAnalyzer } from './FunnelAnalyzer.js';
+export { FrictionAnalyzer } from './FrictionAnalyzer.js';
+export { VisualizationReportGenerator } from './VisualizationReportGenerator.js';
 export {
   VisualizationEngine,
   type ComputedVisualizationState,
