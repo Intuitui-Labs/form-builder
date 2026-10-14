@@ -39,6 +39,7 @@ import type {
   BatchSetOptions,
   BatchEnrichmentResult,
   FieldOriginInfo,
+  ISpeechSynthesisPort,
 } from '../ports/index.js';
 import type { IEntityExtractorPort } from '../ports/IEntityExtractorPort.js';
 import type { IHapticFeedbackPort } from '../ports/IHapticFeedbackPort.js';
@@ -104,6 +105,7 @@ export interface FormExperienceOptions {
   progressStrategy?: IProgressStrategyPort | ProgressCalculatorFunction;
   sessionId?: string;
   hapticFeedback?: IHapticFeedbackPort;
+  speechSynthesis?: ISpeechSynthesisPort;
 }
 
 export interface FormSecurityOptions {
@@ -120,28 +122,6 @@ export interface MultiStepFormOptions<T extends Record<string, unknown> = Record
   experience?: FormExperienceOptions;
   security?: FormSecurityOptions;
   lifecyclePort?: IFormLifecyclePort<T>;
-
-  // Backward Compatible Flat Aliases
-  schemaValidator?: ISchemaValidator<FormSchema>;
-  validateSchemaOnMount?: boolean;
-  affordanceConfig?: FormAffordanceConfig;
-  progressStrategy?: IProgressStrategyPort | ProgressCalculatorFunction;
-  rewardEngine?: IRewardEnginePort;
-  feedbackNotifier?: IFeedbackNotifierPort;
-  draftStorage?: IDraftStoragePort;
-  autoSaveDraft?: boolean;
-  storage?: IStoragePort;
-  networkStatus?: INetworkStatusPort;
-  transport?: ITransportPort;
-  telemetry?: ITelemetryPort;
-  autoRestoreDraft?: boolean;
-  draftDebounceMs?: number;
-  enableOutbox?: boolean;
-  attachmentStorage?: IAttachmentStoragePort;
-  onAttachmentPruned?: (field: string, pointer: AttachmentPointer) => void;
-  sanitizer?: ISanitizerPort;
-  sessionId?: string;
-  hapticFeedback?: IHapticFeedbackPort;
 }
 
 export class MultiStepFormManager<T extends Record<string, unknown>> {
@@ -185,6 +165,7 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
   private inspectedPageIndex: number | null = null;
   private sanitizer: ISanitizerPort;
   private hapticPort?: IHapticFeedbackPort;
+  private speechSynthesisPort?: ISpeechSynthesisPort;
 
   constructor(
     schema: FormSchema,
@@ -195,16 +176,16 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
     const expOpt = options?.experience;
     const secOpt = options?.security;
 
-    const schemaValidator = secOpt?.schemaValidator ?? options?.schemaValidator;
-    const validateSchemaOnMount = secOpt?.validateSchemaOnMount ?? options?.validateSchemaOnMount;
+    const schemaValidator = secOpt?.schemaValidator;
+    const validateSchemaOnMount = secOpt?.validateSchemaOnMount;
     if (validateSchemaOnMount && schemaValidator) {
       schemaValidator.validate(schema);
     }
 
     this.schema = schema;
-    this.sessionId = expOpt?.sessionId ?? options?.sessionId ?? `sess_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    this.sessionId = expOpt?.sessionId ?? `sess_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 
-    const rawTelemetry = expOpt?.telemetry ?? options?.telemetry;
+    const rawTelemetry = expOpt?.telemetry;
     if (rawTelemetry) {
       const origTelemetry = rawTelemetry;
       const sessId = this.sessionId;
@@ -219,10 +200,11 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
         flush: origTelemetry.flush ? () => origTelemetry.flush?.() : undefined,
       };
     }
-    this.attachmentStorage = secOpt?.attachmentStorage ?? options?.attachmentStorage;
-    this.onAttachmentPruned = secOpt?.onAttachmentPruned ?? options?.onAttachmentPruned;
-    this.sanitizer = secOpt?.sanitizer ?? options?.sanitizer ?? new DefaultSanitizer();
-    this.hapticPort = expOpt?.hapticFeedback ?? options?.hapticFeedback;
+    this.attachmentStorage = secOpt?.attachmentStorage;
+    this.onAttachmentPruned = secOpt?.onAttachmentPruned;
+    this.sanitizer = secOpt?.sanitizer ?? new DefaultSanitizer();
+    this.hapticPort = expOpt?.hapticFeedback;
+    this.speechSynthesisPort = expOpt?.speechSynthesis;
     this.formStartTime = Date.now();
     this.stepStartTime = Date.now();
 
@@ -252,14 +234,13 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
     // Resolve Affordance Policy
     const userConfig =
       expOpt?.affordanceConfig ||
-      options?.affordanceConfig ||
       schema.affordanceConfig ||
       schema.settings?.affordanceConfig;
 
     this.policy = resolveAffordanceConfig(userConfig);
 
     // Resolve Strategy & Ports
-    const progressStrategyOpt = expOpt?.progressStrategy ?? options?.progressStrategy;
+    const progressStrategyOpt = expOpt?.progressStrategy;
     if (typeof progressStrategyOpt === 'function') {
       const calcFn = progressStrategyOpt;
       this.progressStrategy = { calculateProgress: calcFn };
@@ -271,26 +252,26 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
       this.progressStrategy = new LinearStepProgressAdapter();
     }
 
-    this.rewardEngine = expOpt?.rewardEngine ?? options?.rewardEngine ?? new NullRewardAdapter();
-    this.feedbackNotifier = expOpt?.feedbackNotifier ?? options?.feedbackNotifier;
+    this.rewardEngine = expOpt?.rewardEngine ?? new NullRewardAdapter();
+    this.feedbackNotifier = expOpt?.feedbackNotifier;
 
     // Phase 2: Storage, Network & Outbox resolution
-    this.storagePort = resOpt?.storage ?? options?.storage ?? new MemoryStorageAdapter();
-    this.networkStatusPort = resOpt?.networkStatus ?? options?.networkStatus ?? new AlwaysOnlineNetworkAdapter();
-    this.transportPort = (resOpt?.transport ?? options?.transport ?? new CallbackTransportAdapter<T>(onSubmit)) as ITransportPort<T>;
-    this.enableOutbox = resOpt?.enableOutbox ?? options?.enableOutbox ?? true;
-    this.autoRestoreDraft = resOpt?.autoRestoreDraft ?? options?.autoRestoreDraft ?? false;
+    this.storagePort = resOpt?.storage ?? new MemoryStorageAdapter();
+    this.networkStatusPort = resOpt?.networkStatus ?? new AlwaysOnlineNetworkAdapter();
+    this.transportPort = (resOpt?.transport ?? new CallbackTransportAdapter<T>(onSubmit)) as ITransportPort<T>;
+    this.enableOutbox = resOpt?.enableOutbox ?? true;
+    this.autoRestoreDraft = resOpt?.autoRestoreDraft ?? false;
 
-    if (resOpt?.draftStorage ?? options?.draftStorage) {
-      this.draftStorage = (resOpt?.draftStorage ?? options?.draftStorage)!;
+    if (resOpt?.draftStorage) {
+      this.draftStorage = resOpt.draftStorage;
     } else {
       this.draftStorage = new DraftManager({
         storage: this.storagePort,
-        debounceMs: resOpt?.draftDebounceMs ?? options?.draftDebounceMs,
+        debounceMs: resOpt?.draftDebounceMs,
       });
     }
 
-    this.autoSaveDraft = resOpt?.autoSaveDraft ?? options?.autoSaveDraft ?? false;
+    this.autoSaveDraft = resOpt?.autoSaveDraft ?? false;
 
     const netPromise = this.networkStatusPort.isOnline();
     const initialOnline = typeof netPromise === 'boolean' ? netPromise : true;
@@ -1074,6 +1055,30 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
    */
   public cancelBranchSwitch(): void {
     this.stopPeeking();
+  }
+
+  /**
+   * Reads aloud the spoken narrative / explanation for the peeked or current step
+   * using the injected ISpeechSynthesisPort (accessible screen-reader affordance).
+   */
+  public speakPeekExplanation(targetIndex: number = this.getInspectedPageIndex()): void {
+    if (!this.speechSynthesisPort) return;
+    const impact = this.explainPeekStep(targetIndex);
+    this.speechSynthesisPort.speak(impact.spokenExplanation);
+  }
+
+  /**
+   * Immediately stops any active speech synthesis readout.
+   */
+  public stopSpeaking(): void {
+    this.speechSynthesisPort?.stop();
+  }
+
+  /**
+   * Returns whether speech synthesis is actively reading out form guidance.
+   */
+  public isSpeaking(): boolean {
+    return this.speechSynthesisPort ? this.speechSynthesisPort.isSpeaking() : false;
   }
 
   public getStepHistory(): number[] {
@@ -2253,6 +2258,20 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
       }
     }
     this.notify();
+  }
+
+  /**
+   * Returns whether the manager currently detects active internet connectivity.
+   */
+  public isOnline(): boolean {
+    return this.lifecyclePort.getContext().isOnline;
+  }
+
+  /**
+   * Returns the number of submissions currently buffered in the offline persistent outbox queue.
+   */
+  public getPendingOutboxCount(): number {
+    return this.lifecyclePort.getContext().pendingOutboxCount;
   }
 
   /**

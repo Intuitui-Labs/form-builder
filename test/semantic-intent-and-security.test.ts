@@ -252,7 +252,7 @@ describe('Semantic Intent Taxonomy & Zero-Knowledge Security', () => {
       const manager = new MultiStepFormManager(
         paymentSchema,
         () => {},
-        { draftStorage: storage }
+        { resilience: { draftStorage: storage } }
       );
 
       // Populate safe and sensitive values
@@ -290,12 +290,12 @@ describe('Semantic Intent Taxonomy & Zero-Knowledge Security', () => {
       expect((stored?.values as any).fullName).toBe('Ada Lovelace');
     });
 
-    it('restores draft safely without shaming user with premature validation errors on redacted fields', () => {
+    it('restores draft safely without shaming user with premature validation errors on redacted fields', async () => {
       const storage = new MemoryDraftStorageAdapter();
       const manager1 = new MultiStepFormManager(
         paymentSchema,
         () => {},
-        { draftStorage: storage }
+        { resilience: { draftStorage: storage } }
       );
 
       manager1.setFieldValue('fullName', 'Grace Hopper');
@@ -308,9 +308,9 @@ describe('Semantic Intent Taxonomy & Zero-Knowledge Security', () => {
       const manager2 = new MultiStepFormManager(
         paymentSchema,
         () => {},
-        { draftStorage: storage }
+        { resilience: { draftStorage: storage } }
       );
-      const restored = manager2.restoreDraft();
+      const restored = await manager2.restoreDraft();
       expect(restored).toBe(true);
 
       const state2 = manager2.getState();

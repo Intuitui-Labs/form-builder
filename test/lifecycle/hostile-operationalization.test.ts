@@ -106,8 +106,10 @@ describe('Hostile Operationalization & Resource Lifecycle', () => {
       TEST_SCHEMA,
       vi.fn(),
       {
-        networkStatus: mockNetwork,
-        enableOutbox: true,
+        resilience: {
+          networkStatus: mockNetwork,
+          enableOutbox: true,
+        },
       },
     );
 
@@ -141,9 +143,11 @@ describe('Hostile Operationalization & Resource Lifecycle', () => {
       TEST_SCHEMA,
       vi.fn(),
       {
-        storage,
-        autoSaveDraft: true,
-        draftDebounceMs: 50,
+        resilience: {
+          storage,
+          autoSaveDraft: true,
+          draftDebounceMs: 50,
+        },
       },
     );
 
@@ -185,7 +189,9 @@ describe('Hostile Operationalization & Resource Lifecycle', () => {
     expect(cleanedMarkdown).toBe('[Click](#) and [Data](#)');
 
     // 4. Manager getCurrentPage sanitizes rich-text field content
-    const manager = new MultiStepFormManager(TEST_SCHEMA, vi.fn(), { sanitizer });
+    const manager = new MultiStepFormManager(TEST_SCHEMA, vi.fn(), {
+      security: { sanitizer },
+    });
     const page = manager.getCurrentPage();
     const richField = page.fields.find((f) => f.name === 'info');
     expect(richField?.content).toBeDefined();
@@ -215,7 +221,9 @@ describe('Hostile Operationalization & Resource Lifecycle', () => {
         await submitPromise;
       },
       {
-        telemetry: mockTelemetry,
+        experience: {
+          telemetry: mockTelemetry,
+        },
       },
     );
 
@@ -262,7 +270,9 @@ describe('Hostile Operationalization & Resource Lifecycle', () => {
       TEST_SCHEMA,
       vi.fn(),
       {
-        telemetry: mockTelemetry,
+        experience: {
+          telemetry: mockTelemetry,
+        },
       },
     );
 

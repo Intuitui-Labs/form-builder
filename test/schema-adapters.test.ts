@@ -158,8 +158,10 @@ describe('Hexagonal Schema Validation Adapters', () => {
     it('MultiStepFormManager validates schema on mount when configured with schemaValidator', () => {
       const pureAdapter = new PureSchemaAdapter();
       const manager = new MultiStepFormManager(validSchemaPayload, () => {}, {
-        schemaValidator: pureAdapter,
-        validateSchemaOnMount: true,
+        security: {
+          schemaValidator: pureAdapter,
+          validateSchemaOnMount: true,
+        },
       });
 
       expect(manager.getTotalPages()).toBe(1);
@@ -168,8 +170,10 @@ describe('Hexagonal Schema Validation Adapters', () => {
       const invalid = { ...validSchemaPayload, pages: [] };
       expect(() => {
         new MultiStepFormManager(invalid as any, () => {}, {
-          schemaValidator: pureAdapter,
-          validateSchemaOnMount: true,
+          security: {
+            schemaValidator: pureAdapter,
+            validateSchemaOnMount: true,
+          },
         });
       }).toThrow();
     });

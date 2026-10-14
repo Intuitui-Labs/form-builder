@@ -169,9 +169,11 @@ Please click [here](javascript:void(document.location='http://evil.com')) for in
     };
 
     const manager = new MultiStepFormManager(branchFormSchema, () => {}, {
-      attachmentStorage: mockAttachmentStorage,
-      onAttachmentPruned: (field, pointer) => {
-        prunedEventHistory.push({ field, id: pointer.id });
+      security: {
+        attachmentStorage: mockAttachmentStorage,
+        onAttachmentPruned: (field, pointer) => {
+          prunedEventHistory.push({ field, id: pointer.id });
+        },
       },
     });
 

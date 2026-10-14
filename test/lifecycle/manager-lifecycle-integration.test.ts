@@ -70,7 +70,9 @@ describe('MultiStepFormManager & FormLifecycleMachine Integration', () => {
 
   it('records draft save and restore in lifecycle machine', async () => {
     const storage = new MemoryStorageAdapter();
-    const manager = new MultiStepFormManager(testSchema, () => {}, { storage });
+    const manager = new MultiStepFormManager(testSchema, () => {}, {
+      resilience: { storage },
+    });
 
     manager.getFormManager().setFieldValue('email', 'bob@example.com');
     const snapshot = manager.saveDraft();
@@ -81,7 +83,9 @@ describe('MultiStepFormManager & FormLifecycleMachine Integration', () => {
     expect(draftEvents.length).toBe(1);
 
     // New manager restoring draft
-    const manager2 = new MultiStepFormManager(testSchema, () => {}, { storage });
+    const manager2 = new MultiStepFormManager(testSchema, () => {}, {
+      resilience: { storage },
+    });
     await manager2.restoreDraft(snapshot);
 
     const audit2 = manager2.getLifecycleAuditTrail();
@@ -128,7 +132,9 @@ describe('MultiStepFormManager & FormLifecycleMachine Integration', () => {
 
   it('guarantees persistence affordance is projected directly from lifecycle context without shadow state', async () => {
     const storage = new MemoryStorageAdapter();
-    const manager = new MultiStepFormManager(testSchema, () => {}, { storage });
+    const manager = new MultiStepFormManager(testSchema, () => {}, {
+      resilience: { storage },
+    });
 
     const port = manager.getLifecyclePort();
     expect(manager.isHydrated()).toBe(true);

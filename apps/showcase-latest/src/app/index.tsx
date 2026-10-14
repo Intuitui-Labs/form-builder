@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Text, View, StyleSheet } from 'react-native';
-import { MultiStepFormManager, type FormState, type BranchSwitchImpact } from '@intuitui-labs/form-builder-engine';
+import { Text, View, StyleSheet, TextInput, Pressable } from 'react-native';
+import {
+  MultiStepFormManager,
+  WebSpeechAdapter,
+  SimulatedNetworkAdapter,
+  type FormState,
+  type BranchSwitchImpact,
+} from '@intuitui-labs/form-builder-engine';
+import {
+  SearchGroundedFormCompiler,
+  type GroundedCompilationResult,
+} from '@intuitui-labs/form-builder-engine/ai';
 import {
   ActionButton,
   AppPage,
@@ -16,24 +26,63 @@ import {
   Tag,
 } from '../components/EngineUi';
 import { SHOWCASE_CATALOG, type Values } from '../forms';
-import { colors } from '../theme';
+import { colors, radii } from '../theme';
+
+const AI_STUDIO_PRESETS = [
+  { label: 'SB 1047 AI Safety', prompt: 'California SB 1047 & Frontier AI Safety Intake' },
+  { label: 'HIPAA Telehealth', prompt: 'Clinical HIPAA Patient Intake with Telehealth Consent' },
+  { label: 'EV Fleet Carbon', prompt: 'Commercial EV Fleet Electrification & Low Carbon Fuel Standard' },
+  { label: 'Cloud Zero-Trust', prompt: 'FedRAMP High Baseline Cloud Security & Zero-Trust Certification' },
+];
 
 export default function BuilderScreen() {
   const [selectedFormId, setSelectedFormId] = useState<string>('launch-readiness');
   const [receipt, setReceipt] = useState<{ formId: string; values: Values } | null>(null);
+
+  // AI Scaffolder Studio State
+  const [aiPrompt, setAiPrompt] = useState('California SB 1047 & Frontier AI Safety Intake');
+  const [customStudioResult, setCustomStudioResult] = useState<GroundedCompilationResult | null>(null);
+
+  // Hexagonal Adapters
+  const speechAdapter = useMemo(() => new WebSpeechAdapter(), []);
+  const networkAdapter = useMemo(() => new SimulatedNetworkAdapter(true), []);
+
+  const [isOnline, setIsOnline] = useState(true);
+  const [pendingOutboxCount, setPendingOutboxCount] = useState(0);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isFlushingOutbox, setIsFlushingOutbox] = useState(false);
 
   const currentMeta = useMemo(
     () => SHOWCASE_CATALOG.find((item) => item.id === selectedFormId) ?? SHOWCASE_CATALOG[0]!,
     [selectedFormId],
   );
 
+  const activeSchema = useMemo(() => {
+    if (selectedFormId === 'ai-studio' && customStudioResult) {
+      return customStudioResult.schema;
+    }
+    return currentMeta.schema;
+  }, [selectedFormId, customStudioResult, currentMeta.schema]);
+
   const manager = useMemo(
     () =>
-      new MultiStepFormManager<Values>(currentMeta.schema, async (values) => {
-        await new Promise((resolve) => setTimeout(resolve, 450));
-        setReceipt({ formId: currentMeta.id, values });
-      }),
-    [currentMeta],
+      new MultiStepFormManager<Values>(
+        activeSchema,
+        async (values) => {
+          await new Promise((resolve) => setTimeout(resolve, 450));
+          setReceipt({ formId: currentMeta.id, values });
+        },
+        {
+          resilience: {
+            networkStatus: networkAdapter,
+            enableOutbox: true,
+          },
+          experience: {
+            speechSynthesis: speechAdapter,
+          },
+        },
+      ),
+    [activeSchema, currentMeta.id, networkAdapter, speechAdapter],
   );
 
   const form = manager.getFormManager();
@@ -49,6 +98,8 @@ export default function BuilderScreen() {
     setStepIndex(manager.getCurrentPageIndex());
     setIsPeeking(manager.isPeeking());
     setInspectedIndex(manager.getInspectedPageIndex());
+    setIsOnline(networkAdapter.isOnline());
+    setPendingOutboxCount(manager.getPendingOutboxCount());
     setReceipt(null);
     setConfirmWarning(null);
 
@@ -57,14 +108,23 @@ export default function BuilderScreen() {
       setStepIndex(current.getCurrentPageIndex());
       setIsPeeking(current.isPeeking());
       setInspectedIndex(current.getInspectedPageIndex());
+      setIsOnline(current.isOnline());
+      setPendingOutboxCount(current.getPendingOutboxCount());
+      setIsSpeaking(current.isSpeaking());
+    });
+
+    const unsubscribeNet = networkAdapter.subscribe((online) => {
+      setIsOnline(online);
     });
 
     return () => {
       unsubscribeForm();
       unsubscribeSteps();
+      unsubscribeNet();
+      manager.stopSpeaking();
       manager.destroy();
     };
-  }, [form, manager]);
+  }, [form, manager, networkAdapter]);
 
   const branchImpact = useMemo(() => {
     if (!isPeeking) return null;
@@ -80,7 +140,38 @@ export default function BuilderScreen() {
     }
   };
 
-  const stepNames = currentMeta.schema.pages.map((p) => p.title ?? 'Step');
+  const handleToggleSpeak = () => {
+    if (manager.isSpeaking()) {
+      manager.stopSpeaking();
+      setIsSpeaking(false);
+    } else {
+      manager.speakPeekExplanation(inspectedIndex);
+      setIsSpeaking(true);
+    }
+  };
+
+  const handleToggleNetwork = () => {
+    networkAdapter.toggle();
+  };
+
+  const handleFlushOutbox = async () => {
+    setIsFlushingOutbox(true);
+    try {
+      await manager.flushOutbox();
+      setPendingOutboxCount(manager.getPendingOutboxCount());
+    } finally {
+      setIsFlushingOutbox(false);
+    }
+  };
+
+  const handleSynthesizePrompt = (promptText: string = aiPrompt) => {
+    const result = SearchGroundedFormCompiler.compileFromPrompt(promptText);
+    setCustomStudioResult(result);
+    setReceipt(null);
+    setConfirmWarning(null);
+  };
+
+  const stepNames = activeSchema.pages.map((p) => p.title ?? 'Step');
   const inspectedPage = manager.getInspectedPage();
   const visibleFields = manager.getVisibleFields(inspectedIndex);
 
@@ -117,13 +208,16 @@ export default function BuilderScreen() {
     manager.pruneHiddenFieldValues();
   };
 
-  const moveForward = () => {
+  const moveForward = async () => {
     if (isPeeking) {
+      manager.stopSpeaking();
+      setIsSpeaking(false);
       manager.stopPeeking();
       return;
     }
     if (manager.isLastStep()) {
-      void manager.submit();
+      await manager.submit();
+      setPendingOutboxCount(manager.getPendingOutboxCount());
     } else {
       manager.nextStep();
     }
@@ -133,11 +227,15 @@ export default function BuilderScreen() {
     form.reset();
     manager.goToStep(0);
     manager.stopPeeking();
+    manager.stopSpeaking();
+    setIsSpeaking(false);
     setReceipt(null);
   };
 
   const handleDomainSelect = (id: string) => {
     if (id !== selectedFormId) {
+      manager.stopSpeaking();
+      setIsSpeaking(false);
       setSelectedFormId(id);
       setReceipt(null);
     }
@@ -148,14 +246,108 @@ export default function BuilderScreen() {
       <BrandHeader
         eyebrow="Multi-Domain Form Engine Showcase"
         title="Schema-Driven Native Forms"
-        subtitle="Experience 6 diverse domain forms testing rich-text markdown, dynamic visibleIf conditions, branching jumpRules, Luhn algorithms, and heuristic autofill."
+        subtitle="Experience diverse domain forms testing rich-text markdown, dynamic visibleIf conditions, branching jumpRules, speech synthesis, and offline-first DLQ outbox."
       />
+
+      {/* Resilience Offline & DLQ Status Strip */}
+      <View style={styles.resilienceStrip}>
+        <View style={styles.resilienceStatus}>
+          <View style={[styles.networkDot, isOnline ? styles.networkDotOnline : styles.networkDotOffline]} />
+          <Text style={styles.networkStatusText}>
+            {isOnline ? 'DIRECT NETWORK (Online)' : 'OFFLINE MODE (Enqueuing to DLQ)'}
+          </Text>
+        </View>
+        <View style={styles.resilienceActions}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={handleToggleNetwork}
+            style={[styles.resilienceBtn, !isOnline ? styles.resilienceBtnActive : null]}
+          >
+            <Text style={styles.resilienceBtnText}>
+              {isOnline ? '📡 Simulate Offline' : '🟢 Go Online'}
+            </Text>
+          </Pressable>
+          {pendingOutboxCount > 0 ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={handleFlushOutbox}
+              disabled={isFlushingOutbox || !isOnline}
+              style={[
+                styles.drainBtn,
+                !isOnline ? styles.drainBtnDisabled : null,
+              ]}
+            >
+              <Text style={styles.drainBtnText}>
+                {isFlushingOutbox ? '⚡ Draining…' : `⚡ Drain Outbox (${pendingOutboxCount})`}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
 
       <DomainPicker
         domains={SHOWCASE_CATALOG}
         selectedId={selectedFormId}
         onSelect={handleDomainSelect}
       />
+
+      {/* AI Scaffolder Studio Interactive Bar */}
+      {selectedFormId === 'ai-studio' ? (
+        <View style={styles.aiStudioCard}>
+          <View style={styles.aiStudioHeader}>
+            <Text style={styles.aiStudioTitle}>✨ Real-Time Search-Grounded AI Compiler</Text>
+            <Tag tone="teal">2026 GROUNDED</Tag>
+          </View>
+          <Text style={styles.aiStudioSubtitle}>
+            Type any statutory, technical, or regulatory prompt to synthesize multi-step forms with dynamic cognitive chunking and assessment gauges:
+          </Text>
+
+          <View style={styles.promptInputRow}>
+            <TextInput
+              style={styles.promptInput}
+              value={aiPrompt}
+              onChangeText={setAiPrompt}
+              placeholder="e.g. California SB 1047 AI Safety Assessment"
+              placeholderTextColor={colors.muted}
+            />
+            <Pressable
+              accessibilityRole="button"
+              style={styles.synthesizeBtn}
+              onPress={() => handleSynthesizePrompt(aiPrompt)}
+            >
+              <Text style={styles.synthesizeBtnText}>✨ Synthesize</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.presetRow}>
+            <Text style={styles.presetLabel}>Presets:</Text>
+            {AI_STUDIO_PRESETS.map((p) => (
+              <Pressable
+                key={p.label}
+                accessibilityRole="button"
+                style={[styles.presetChip, aiPrompt === p.prompt ? styles.presetChipActive : null]}
+                onPress={() => {
+                  setAiPrompt(p.prompt);
+                  handleSynthesizePrompt(p.prompt);
+                }}
+              >
+                <Text style={[styles.presetChipText, aiPrompt === p.prompt ? styles.presetChipTextActive : null]}>
+                  {p.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          {customStudioResult ? (
+            <View style={styles.groundingMeta}>
+              <Text style={styles.groundingMetaTitle}>Grounding Lineage:</Text>
+              <Text style={styles.groundingMetaText}>
+                Topic: <Text style={{ fontWeight: '700' }}>{customStudioResult.grounding.topic}</Text> · Anchor: {customStudioResult.grounding.temporalAnchor} · {customStudioResult.grounding.fieldsCount} Fields across {customStudioResult.grounding.pagesCount} Steps · Gauges: {customStudioResult.grounding.hasAssessmentGauge ? 'Active' : 'None'}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
 
       <Panel>
         <View style={styles.topLine}>
@@ -211,6 +403,8 @@ export default function BuilderScreen() {
               inspectedIndex={inspectedIndex}
               onStepPress={(idx) => {
                 if (idx === stepIndex) {
+                  manager.stopSpeaking();
+                  setIsSpeaking(false);
                   manager.stopPeeking();
                 } else {
                   manager.peekStep(idx);
@@ -225,7 +419,11 @@ export default function BuilderScreen() {
                 stepTitle={inspectedPage?.title ?? `Step ${inspectedIndex + 1}`}
                 impact={branchImpact}
                 onSwitchBranch={handleSwitchBranch}
+                onSpeak={handleToggleSpeak}
+                isSpeaking={isSpeaking}
                 onReturn={() => {
+                  manager.stopSpeaking();
+                  setIsSpeaking(false);
                   setConfirmWarning(null);
                   manager.stopPeeking();
                 }}
@@ -302,7 +500,11 @@ export default function BuilderScreen() {
                     <View style={{ flex: 1 }}>
                       <ActionButton
                         label="Return to Active Step"
-                        onPress={() => manager.stopPeeking()}
+                        onPress={() => {
+                          manager.stopSpeaking();
+                          setIsSpeaking(false);
+                          manager.stopPeeking();
+                        }}
                       />
                     </View>
                   ) : (
@@ -314,7 +516,7 @@ export default function BuilderScreen() {
                       ) : null}
                       <View style={styles.forwardButton}>
                         <ActionButton
-                          label={formState.isSubmitting ? 'Validating…' : manager.isLastStep() ? 'Submit completed form' : 'Continue'}
+                          label={formState.isSubmitting ? 'Validating…' : manager.isLastStep() ? (isOnline ? 'Submit completed form' : 'Queue to Offline Outbox') : 'Continue'}
                           disabled={formState.isSubmitting}
                           onPress={moveForward}
                         />
@@ -324,8 +526,10 @@ export default function BuilderScreen() {
                 </View>
                 <Text style={styles.formFootnote}>
                   {isPeeking
-                    ? 'Inspection mode: Tap any step above to peek ahead without losing your progress.'
-                    : 'Simulation mode: All validations and transitions run locally.'}
+                    ? 'Inspection mode: Tap 🔊 Speak for voice explanation or tap any step to peek ahead.'
+                    : isOnline
+                    ? 'Connected: All transitions & validations execute locally with real-time feedback.'
+                    : 'Offline active: Submissions are securely buffered in outbox DLQ until reconnected.'}
                 </Text>
               </>
             )}
@@ -390,4 +594,101 @@ const styles = StyleSheet.create({
   dataLossDesc: { fontSize: 11, color: '#9F1239', lineHeight: 16, marginBottom: 8 },
   dataLossItem: { fontSize: 11, color: '#881337', marginBottom: 3, paddingLeft: 4 },
   dataLossActions: { flexDirection: 'row', gap: 8, marginTop: 10 },
+
+  // Resilience & Outbox Status
+  resilienceStrip: {
+    backgroundColor: '#FFFFFF',
+    borderColor: colors.line,
+    borderWidth: 1,
+    borderRadius: radii.medium,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000000',
+    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+  },
+  resilienceStatus: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  networkDot: { width: 8, height: 8, borderRadius: 4 },
+  networkDotOnline: { backgroundColor: colors.teal },
+  networkDotOffline: { backgroundColor: '#F59E0B' },
+  networkStatusText: { fontSize: 11, fontWeight: '700', color: colors.ink },
+  resilienceActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  resilienceBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: colors.slateSoft,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  resilienceBtnActive: { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' },
+  resilienceBtnText: { fontSize: 11, fontWeight: '700', color: colors.ink },
+  drainBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: colors.violet,
+  },
+  drainBtnDisabled: { opacity: 0.5 },
+  drainBtnText: { fontSize: 11, fontWeight: '800', color: '#FFFFFF' },
+
+  // AI Studio Prompt Bar
+  aiStudioCard: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+    borderWidth: 1,
+    borderRadius: radii.large,
+    padding: 14,
+    marginBottom: 14,
+  },
+  aiStudioHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  aiStudioTitle: { fontSize: 13, fontWeight: '800', color: colors.ink },
+  aiStudioSubtitle: { fontSize: 11, color: colors.muted, lineHeight: 16, marginBottom: 10 },
+  promptInputRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+  promptInput: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radii.small,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 12,
+    color: colors.ink,
+  },
+  synthesizeBtn: {
+    backgroundColor: colors.ink,
+    borderRadius: radii.small,
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  synthesizeBtnText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
+  presetRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
+  presetLabel: { fontSize: 11, fontWeight: '700', color: colors.faint, marginRight: 2 },
+  presetChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  presetChipActive: { backgroundColor: colors.violetSoft, borderColor: colors.violet },
+  presetChipText: { fontSize: 10, fontWeight: '700', color: colors.muted },
+  presetChipTextActive: { color: colors.violet },
+  groundingMeta: {
+    backgroundColor: '#EEF2FF',
+    borderRadius: 8,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#E0E7FF',
+  },
+  groundingMetaTitle: { fontSize: 10, fontWeight: '800', color: '#4338CA', marginBottom: 2 },
+  groundingMetaText: { fontSize: 10, color: '#3730A3', lineHeight: 14 },
 });

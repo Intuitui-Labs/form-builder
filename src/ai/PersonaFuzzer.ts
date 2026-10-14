@@ -102,7 +102,7 @@ export async function runPersonaFuzzSimulation(
 
     const memoryStorage = new MemoryStorageAdapter();
     const manager = new MultiStepFormManager(schema, () => {}, {
-      storage: memoryStorage,
+      resilience: { storage: memoryStorage },
     });
 
     const stepsVisited: string[] = [];

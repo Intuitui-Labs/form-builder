@@ -6,6 +6,7 @@ import {
   detectFieldCycles,
   extractConditionFieldNames,
 } from './SchemaGraph.js';
+import { calculateFieldQuantumDensity } from '../ports/ISpatialAffordancePort.js';
 
 export type SchemaLintIssueCode =
   | 'ORPHAN_PAGE'
@@ -20,6 +21,8 @@ export type SchemaLintIssueCode =
   | 'MISSING_PRIVACY_RATIONALE'
   | 'MISSING_SEMANTIC_INTENT'
   | 'COGNITIVE_OVERLOAD_STEP'
+  | 'SPATIAL_DENSITY_EXCEEDED'
+  | 'GESTALT_PROXIMITY_COLLAPSE'
   | 'EMPTY_PAGE';
 
 export type SchemaLintSeverity = 'error' | 'warning' | 'info';
@@ -119,6 +122,42 @@ export function lintFormSchema(schema: FormSchema): SchemaLintResult {
         targetType: 'page',
         heuristicSource: 'Baymard Institute / Nielsen Norman Group Cognitive Load Heuristics',
         suggestion: 'Consider splitting this step into multiple progressive steps.',
+      });
+    }
+
+    // Spatial Density Heuristic (Quantum Density Units > 16)
+    const pageQdu = calculateFieldQuantumDensity(page.fields ?? []);
+    if (pageQdu > 16) {
+      issues.push({
+        code: 'SPATIAL_DENSITY_EXCEEDED',
+        severity: 'warning',
+        message: `Page "${page.id}" spatial density (${pageQdu} QDU) exceeds comfortable capacity (16 QDU). Dense fields, stacked options, and text hotspots eat the spacious feel.`,
+        targetId: page.id,
+        targetType: 'page',
+        heuristicSource: 'Intuitui Labs Spatial Affordance & Gestalt Architecture Engine',
+        suggestion: 'Consider splitting this step into progressive disclosure sub-steps or applying ambient field collapsing.',
+      });
+    }
+
+    // Gestalt Proximity Collapse Heuristic: Multiple high-mass fields without visual rhythm/headings
+    const highMassFields = (page.fields ?? []).filter(
+      (f) =>
+        f.type === 'visualization' ||
+        f.type === 'file' ||
+        f.type === 'image-capture' ||
+        f.type === 'audio-record' ||
+        f.type === 'rich-text'
+    );
+    const headingCount = (page.fields ?? []).filter((f) => f.type === 'heading' || f.type === 'divider').length;
+    if (highMassFields.length >= 2 && headingCount === 0 && page.fields.length > 4) {
+      issues.push({
+        code: 'GESTALT_PROXIMITY_COLLAPSE',
+        severity: 'info',
+        message: `Page "${page.id}" groups ${highMassFields.length} high-mass complex fields without visual rhythm or section dividers.`,
+        targetId: page.id,
+        targetType: 'page',
+        heuristicSource: 'Gestalt Law of Enclosure & Spatial Rhythm',
+        suggestion: 'Introduce card wrappers, section dividers, or headings to establish clear visual grouping.',
       });
     }
   }

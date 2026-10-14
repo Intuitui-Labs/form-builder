@@ -21,10 +21,10 @@ import {
 describe('Showcase 6-Domain Form Architectures', () => {
   const adapter = new PureSchemaAdapter();
 
-  it('contains exactly 6 uniquely targeted domain archetypes in SHOWCASE_CATALOG', () => {
-    expect(SHOWCASE_CATALOG).toHaveLength(6);
+  it('contains exactly 7 uniquely targeted domain archetypes in SHOWCASE_CATALOG', () => {
+    expect(SHOWCASE_CATALOG).toHaveLength(7);
     const domains = SHOWCASE_CATALOG.map((c) => c.domain);
-    expect(domains).toEqual(['Product Ops', 'HealthTech', 'FinTech', 'DevSecOps', 'People Ops', 'AI FinTech']);
+    expect(domains).toEqual(['Product Ops', 'HealthTech', 'FinTech', 'DevSecOps', 'People Ops', 'AI FinTech', 'AI Studio']);
   });
 
   describe('Domain 1: Product Ops (Launch Readiness Review)', () => {

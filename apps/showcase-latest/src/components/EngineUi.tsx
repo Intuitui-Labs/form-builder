@@ -189,6 +189,8 @@ export function PeekNoticeBar({
   onReturn,
   impact,
   onSwitchBranch,
+  onSpeak,
+  isSpeaking,
 }: {
   stepIndex: number;
   totalSteps: number;
@@ -196,6 +198,8 @@ export function PeekNoticeBar({
   onReturn: () => void;
   impact?: BranchSwitchImpact | null;
   onSwitchBranch?: () => void;
+  onSpeak?: () => void;
+  isSpeaking?: boolean;
 }) {
   return (
     <View style={styles.peekNotice}>
@@ -220,6 +224,11 @@ export function PeekNoticeBar({
         </Text>
       </View>
       <View style={styles.peekActionsRow}>
+        {onSpeak ? (
+          <Pressable accessibilityRole="button" onPress={onSpeak} style={styles.peekSpeakBtn}>
+            <Text style={styles.peekNoticeBtnText}>{isSpeaking ? '⏹️ Stop' : '🔊 Speak'}</Text>
+          </Pressable>
+        ) : null}
         {impact?.canSwitch && onSwitchBranch ? (
           <Pressable
             accessibilityRole="button"
@@ -913,6 +922,7 @@ const styles = StyleSheet.create({
   peekPrereqText: { fontSize: 10, fontWeight: '700', color: '#B45309', marginTop: 3 },
   peekNoticeDesc: { fontSize: 10, color: '#92400E', marginTop: 3, lineHeight: 14 },
   peekActionsRow: { flexDirection: 'column', gap: 6, alignItems: 'stretch' },
+  peekSpeakBtn: { backgroundColor: '#4F46E5', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, alignItems: 'center' },
   peekNoticeBtn: { backgroundColor: '#F59E0B', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, alignItems: 'center' },
   peekNoticeBtnText: { color: '#FFFFFF', fontSize: 10, fontWeight: '800' },
   peekSwitchBtn: { backgroundColor: colors.violet, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, alignItems: 'center' },

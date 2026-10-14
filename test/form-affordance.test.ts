@@ -112,7 +112,9 @@ describe('Form Affordance, Meaningful Progress & Rewardification Architecture', 
           threePageSchema,
           () => {},
           {
-            affordanceConfig: { preset: 'academic-survey', navigation: 'strict-linear' },
+            experience: {
+              affordanceConfig: { preset: 'academic-survey', navigation: 'strict-linear' },
+            },
           }
         );
 
@@ -147,7 +149,9 @@ describe('Form Affordance, Meaningful Progress & Rewardification Architecture', 
           threePageSchema,
           () => {},
           {
-            affordanceConfig: { preset: 'enterprise-compliance' }, // default visited-only
+            experience: {
+              affordanceConfig: { preset: 'enterprise-compliance' }, // default visited-only
+            },
           }
         );
 
@@ -173,7 +177,9 @@ describe('Form Affordance, Meaningful Progress & Rewardification Architecture', 
           threePageSchema,
           () => {},
           {
-            affordanceConfig: { navigation: 'random-access-open' },
+            experience: {
+              affordanceConfig: { navigation: 'random-access-open' },
+            },
           }
         );
 
@@ -251,8 +257,10 @@ describe('Form Affordance, Meaningful Progress & Rewardification Architecture', 
         threePageSchema,
         () => {},
         {
-          rewardEngine: benchmarkAdapter,
-          affordanceConfig: { feedback: 'reciprocal-insights' },
+          experience: {
+            rewardEngine: benchmarkAdapter,
+            affordanceConfig: { feedback: 'reciprocal-insights' },
+          },
         }
       );
 
@@ -286,7 +294,9 @@ describe('Form Affordance, Meaningful Progress & Rewardification Architecture', 
         threePageSchema,
         () => {},
         {
-          affordanceConfig: { preset: 'enterprise-compliance' },
+          experience: {
+            affordanceConfig: { preset: 'enterprise-compliance' },
+          },
         }
       );
 

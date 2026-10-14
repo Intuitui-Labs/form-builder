@@ -298,7 +298,7 @@ describe('MultiStepFormManager Integration with Host Ports & Affordances', () =>
     };
 
     const manager = new MultiStepFormManager(schema, vi.fn(), {
-      storage: hostStorage,
+      resilience: { storage: hostStorage },
     });
 
     manager.getFormManager().setFieldValue('email', 'lead@acme.com');
@@ -309,7 +309,7 @@ describe('MultiStepFormManager Integration with Host Ports & Affordances', () =>
 
     // Create fresh manager with same host storage
     const freshManager = new MultiStepFormManager(schema, vi.fn(), {
-      storage: hostStorage,
+      resilience: { storage: hostStorage },
     });
 
     expect(await freshManager.hasSavedDraft()).toBe(true);
@@ -322,15 +322,17 @@ describe('MultiStepFormManager Integration with Host Ports & Affordances', () =>
 
     // 1. First session saves draft
     const session1 = new MultiStepFormManager(schema, vi.fn(), {
-      storage,
+      resilience: { storage },
     });
     session1.getFormManager().setFieldValue('email', 'auto@acme.com');
     session1.saveDraft();
 
     // 2. Second session mounts with autoRestoreDraft: true
     const session2 = new MultiStepFormManager(schema, vi.fn(), {
-      storage,
-      autoRestoreDraft: true,
+      resilience: {
+        storage,
+        autoRestoreDraft: true,
+      },
     });
 
     // Wait for mount check
@@ -350,8 +352,10 @@ describe('MultiStepFormManager Integration with Host Ports & Affordances', () =>
     const onSubmit = vi.fn();
 
     const manager = new MultiStepFormManager(schema, onSubmit, {
-      storage,
-      networkStatus: net,
+      resilience: {
+        storage,
+        networkStatus: net,
+      },
     });
 
     const affordance = manager.getAffordanceState();

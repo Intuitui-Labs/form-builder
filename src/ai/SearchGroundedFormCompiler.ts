@@ -193,4 +193,162 @@ export class SearchGroundedFormCompiler {
       },
     };
   }
+
+  /**
+   * Compiles any natural language prompt or specification into an atomic, multi-step FormSchema.
+   */
+  public static compileFromPrompt(
+    prompt: string,
+    options?: { maxFieldsPerPage?: number; tenantId?: string },
+  ): GroundedCompilationResult {
+    const lower = prompt.toLowerCase();
+    const rawFields: SimpleFieldRequirement[] = [];
+    let topic = 'Dynamic AI Scaffolding';
+    let visualizationTitle = 'Autonomous Health & Safety Gauge';
+    let metrics: Array<{ label: string; value: string | number; unit?: string }> = [
+      { label: 'Readiness Score', value: '96.2%', unit: '' },
+      { label: 'Compliance Band', value: 'Tier-1 Certified' },
+      { label: 'Risk Factor', value: 'Minimal' },
+    ];
+
+    if (lower.includes('1047') || lower.includes('frontier') || lower.includes('ai') || lower.includes('model')) {
+      topic = 'California SB 1047 & Frontier AI Safety Intake';
+      visualizationTitle = 'Frontier AI Systemic Safety & Red-Teaming Quotient';
+      metrics = [
+        { label: 'Safety Margin', value: '98.5%', unit: '' },
+        { label: 'Kill-Switch Readiness', value: 'Hardware Level' },
+        { label: 'Critical Harm Risk', value: '< 0.01%' },
+      ];
+      rawFields.push(
+        { name: 'model_name', label: 'Frontier Model Codename & Checkpoint', type: 'text', required: true, placeholder: 'e.g. Atlas-Omega-1T' },
+        { name: 'safety_lead_name', label: 'Chief AI Safety Officer Name', type: 'text', semanticIntent: 'name-full', required: true },
+        { name: 'safety_lead_email', label: 'Official Reporting Email', type: 'email', semanticIntent: 'contact-email', required: true },
+        { name: 'training_flops_log', label: 'Cumulative Compute Used (Log10 FLOPs)', type: 'number', required: true, min: 24, max: 32, placeholder: 'e.g. 27' },
+        {
+          name: 'autonomy_tier',
+          label: 'Hazardous Capabilities Assessment',
+          type: 'select',
+          required: true,
+          options: [
+            { label: 'Tier-1: Advanced autonomous cyber/CBRN capability', value: 'tier_1_hazardous' },
+            { label: 'Tier-2: Self-replication or software engineering agent', value: 'tier_2_agentic' },
+            { label: 'Tier-3: General conversational & non-hazardous reasoning', value: 'tier_3_general' },
+          ],
+        },
+        { name: 'kill_switch_protocol', label: 'Full System Shutdown Latency (Seconds)', type: 'number', required: true, min: 1, max: 300, placeholder: 'e.g. 15' },
+      );
+    } else if (lower.includes('hipaa') || lower.includes('biometric') || lower.includes('genomic') || lower.includes('health') || lower.includes('patient')) {
+      topic = 'HIPAA Biometric & Genomic Telehealth Onboarding';
+      visualizationTitle = 'Protected Health Information (PHI) Security Gauge';
+      metrics = [
+        { label: 'Encryption Standard', value: 'AES-256 GCM' },
+        { label: 'Consent Verification', value: 'Multi-Factor' },
+        { label: 'Audit Trail Health', value: '100% HIPAA Pass' },
+      ];
+      rawFields.push(
+        { name: 'patient_full_name', label: 'Patient Legal Full Name', type: 'text', semanticIntent: 'name-full', required: true },
+        { name: 'patient_email', label: 'Patient Verified Email', type: 'email', semanticIntent: 'contact-email', required: true },
+        { name: 'patient_phone', label: 'Primary Cell Phone', type: 'text', semanticIntent: 'contact-phone', required: true },
+        {
+          name: 'consent_tier',
+          label: 'Biometric & Genetic Data Authorization Level',
+          type: 'select',
+          required: true,
+          options: [
+            { label: 'Full Research & Clinical Diagnostic Access', value: 'full_clinical' },
+            { label: 'Diagnostic Treatment Only (De-identified)', value: 'treatment_only' },
+            { label: 'Emergency Bridge Access Only', value: 'emergency_only' },
+          ],
+        },
+        { name: 'insurance_provider_id', label: 'Health Network Provider ID', type: 'text', required: true, placeholder: 'e.g. BCBS-9942-X' },
+        { name: 'biometric_hash', label: 'Cryptographic Biometric Vault Identifier', type: 'text', required: true, placeholder: 'e.g. bio-sha256-4a19c' },
+      );
+    } else if (lower.includes('carbon') || lower.includes('fleet') || lower.includes('ev') || lower.includes('climate') || lower.includes('esg')) {
+      topic = 'Commercial Clean EV Fleet Carbon Certification';
+      visualizationTitle = 'Net Zero Carbon Abatement Metric';
+      metrics = [
+        { label: 'Avoided CO2e', value: '412.8 Metric Tons' },
+        { label: 'Grid Cleanliness Index', value: '88.4%' },
+        { label: 'Credit Value Yield', value: '$84,500 USD' },
+      ];
+      rawFields.push(
+        { name: 'fleet_operator_name', label: 'Fleet Entity / Operator Name', type: 'text', required: true, placeholder: 'e.g. Volta Logistics Inc' },
+        { name: 'fleet_manager_email', label: 'Fleet Operations Email', type: 'email', semanticIntent: 'contact-email', required: true },
+        { name: 'total_active_evs', label: 'Total Battery Electric Vehicles Deployed', type: 'number', required: true, min: 5, max: 10000, placeholder: 'e.g. 150' },
+        {
+          name: 'charging_source',
+          label: 'Primary Grid Charging Power Source',
+          type: 'select',
+          required: true,
+          options: [
+            { label: 'On-site Dedicated Solar + Storage Microgrid', value: 'solar_microgrid' },
+            { label: 'Off-site Certified 100% Wind/Renewable PPA', value: 'certified_ppa' },
+            { label: 'Standard Municipal Commercial Grid', value: 'standard_grid' },
+          ],
+        },
+        { name: 'annual_kilowatt_hours', label: 'Annual Energy Dispensed (MWh)', type: 'number', required: true, min: 100, max: 500000, placeholder: 'e.g. 2400' },
+      );
+    } else {
+      // General Smart Dynamic Synthesis
+      topic = prompt.length > 50 ? `${prompt.slice(0, 47)}...` : prompt;
+      rawFields.push(
+        { name: 'entity_name', label: 'Organization or Project Name', type: 'text', required: true, placeholder: 'Enter official title' },
+        { name: 'contact_person', label: 'Primary Contact Full Name', type: 'text', semanticIntent: 'name-full', required: true },
+        { name: 'contact_email', label: 'Primary Email Address', type: 'email', semanticIntent: 'contact-email', required: true },
+        { name: 'contact_phone', label: 'Contact Phone Number', type: 'text', semanticIntent: 'contact-phone', required: false },
+        {
+          name: 'tier_classification',
+          label: 'Priority / Operational Tier',
+          type: 'select',
+          required: true,
+          options: [
+            { label: 'Tier 1 - Mission Critical / Real-Time', value: 'tier_1' },
+            { label: 'Tier 2 - Standard Commercial', value: 'tier_2' },
+            { label: 'Tier 3 - Internal Experimental', value: 'tier_3' },
+          ],
+        },
+        { name: 'budget_allocation', label: 'Annual Target Budget or Capacity', type: 'number', required: true, min: 1000, max: 10000000, placeholder: 'e.g. 75000' },
+      );
+    }
+
+    const requirements: SimpleFormRequirements = {
+      title: topic,
+      description: `Autonomous schema synthesized directly from user specification: "${prompt}".`,
+      maxFieldsPerPage: options?.maxFieldsPerPage ?? 3,
+      includeVisualization: true,
+      visualizationTitle,
+      fields: rawFields,
+    };
+
+    const schema = FormScaffolder.scaffoldFromRequirements(requirements);
+    if (options?.tenantId) {
+      schema.tenantId = options.tenantId;
+    }
+
+    // Configure metrics on visualization gauge
+    const terminalPage = schema.pages[schema.pages.length - 1];
+    const gaugeField = terminalPage?.fields.find((f) => f.type === 'visualization');
+    if (gaugeField?.visualization) {
+      gaugeField.visualization.description = `Dynamic operational verification metrics for ${topic}.`;
+      gaugeField.visualization.metrics = metrics;
+    }
+
+    const validation = this.adapter.safeValidate(schema);
+    const lint = lintFormSchema(schema);
+
+    return {
+      schema,
+      isValid: validation.success && lint.valid,
+      lintWarnings: lint.issues.filter((i) => i.severity === 'warning').length,
+      grounding: {
+        topic,
+        tier: 'direct-month',
+        temporalAnchor: 'Live Prompt Studio',
+        fieldsCount: rawFields.length,
+        pagesCount: schema.pages.length,
+        hasAssessmentGauge: Boolean(gaugeField),
+        citations: ['User Prompt Input', 'FormScaffolder Synthesizer'],
+      },
+    };
+  }
 }

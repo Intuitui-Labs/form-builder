@@ -242,4 +242,22 @@ export type {
   IHapticFeedbackPort,
 } from './IHapticFeedbackPort.js';
 
+export type {
+  ISpeechSynthesisPort,
+  SpeechOptions,
+} from './ISpeechSynthesisPort.js';
+
+export {
+  NoopSpatialAffordanceAdapter,
+  calculateFieldQuantumDensity,
+  evaluateGestaltProximity,
+} from './ISpatialAffordancePort.js';
+
+export type {
+  ISpatialAffordancePort,
+  ContainerSpatialProfile,
+  SpatialBudgetEvaluation,
+  SpatialDensityMode,
+} from './ISpatialAffordancePort.js';
+
 

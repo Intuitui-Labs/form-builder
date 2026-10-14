@@ -104,7 +104,7 @@ describe('Draft Persistence & Multi-Path Session Resume', () => {
     const manager = new MultiStepFormManager(
       branchingSchema,
       () => {},
-      { draftStorage: storage }
+      { resilience: { draftStorage: storage } }
     );
 
     // Fill role as developer
@@ -131,7 +131,7 @@ describe('Draft Persistence & Multi-Path Session Resume', () => {
     const manager1 = new MultiStepFormManager(
       branchingSchema,
       () => {},
-      { draftStorage: storage }
+      { resilience: { draftStorage: storage } }
     );
 
     manager1.getFormManager().setFieldValue('role', 'developer');
@@ -143,7 +143,7 @@ describe('Draft Persistence & Multi-Path Session Resume', () => {
     const manager2 = new MultiStepFormManager(
       branchingSchema,
       () => {},
-      { draftStorage: storage }
+      { resilience: { draftStorage: storage } }
     );
 
     expect(manager2.getCurrentPageIndex()).toBe(0);
@@ -168,7 +168,7 @@ describe('Draft Persistence & Multi-Path Session Resume', () => {
     const manager1 = new MultiStepFormManager(
       branchingSchema,
       () => {},
-      { draftStorage: storage }
+      { resilience: { draftStorage: storage } }
     );
 
     // Go down developer path
@@ -184,7 +184,7 @@ describe('Draft Persistence & Multi-Path Session Resume', () => {
     const manager2 = new MultiStepFormManager(
       branchingSchema,
       () => {},
-      { draftStorage: storage }
+      { resilience: { draftStorage: storage } }
     );
     manager2.restoreDraft();
     expect(manager2.getCurrentPageIndex()).toBe(4);
@@ -214,8 +214,10 @@ describe('Draft Persistence & Multi-Path Session Resume', () => {
       branchingSchema,
       () => {},
       {
-        draftStorage: storage,
-        autoSaveDraft: true,
+        resilience: {
+          draftStorage: storage,
+          autoSaveDraft: true,
+        },
       }
     );
 
@@ -247,8 +249,10 @@ describe('Draft Persistence & Multi-Path Session Resume', () => {
       branchingSchema,
       submitSpy,
       {
-        draftStorage: storage,
-        autoSaveDraft: true,
+        resilience: {
+          draftStorage: storage,
+          autoSaveDraft: true,
+        },
       }
     );
 
@@ -274,8 +278,10 @@ describe('Draft Persistence & Multi-Path Session Resume', () => {
       branchingSchema,
       () => {},
       {
-        affordanceConfig: {
-          allowSaveAndResumeLater: true,
+        experience: {
+          affordanceConfig: {
+            allowSaveAndResumeLater: true,
+          },
         },
       }
     );
@@ -317,7 +323,7 @@ describe('Draft Persistence & Multi-Path Session Resume', () => {
     const manager = new MultiStepFormManager(
       branchingSchema,
       () => {},
-      { draftStorage: storage }
+      { resilience: { draftStorage: storage } }
     );
 
     const badSnapshot: FormDraftSnapshot = {
@@ -345,8 +351,10 @@ describe('Draft Persistence & Multi-Path Session Resume', () => {
       branchingSchema,
       failingSubmit,
       {
-        draftStorage: storage,
-        autoSaveDraft: true,
+        resilience: {
+          draftStorage: storage,
+          autoSaveDraft: true,
+        },
       }
     );
 

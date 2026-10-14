@@ -234,7 +234,10 @@ export class ExperimentFormHydrator {
     if (isMultiStep) {
       const mergedMultiStepOptions: MultiStepFormOptions<T> = {
         ...multiStepOptions,
-        telemetry: options.telemetry ?? multiStepOptions?.telemetry,
+        experience: {
+          ...multiStepOptions?.experience,
+          telemetry: options.telemetry ?? multiStepOptions?.experience?.telemetry,
+        },
       };
       manager = new MultiStepFormManager<T>(resolvedSchema, onSubmit, mergedMultiStepOptions);
     } else {

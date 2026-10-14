@@ -87,7 +87,7 @@ describe('Hardened Edge-Cases: Reactivity, Idempotency, Branching Horizon & Ergo
       };
 
       const manager = new MultiStepFormManager(rewardSchema, () => {}, {
-        rewardEngine,
+        experience: { rewardEngine },
       });
 
       // 1. Advance Step 0 -> Step 1 (triggers reward)

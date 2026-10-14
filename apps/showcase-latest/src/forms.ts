@@ -3,6 +3,7 @@ import type {
   FormResponse,
   FormSchema,
 } from '@intuitui-labs/form-builder-engine';
+import { SearchGroundedFormCompiler } from '@intuitui-labs/form-builder-engine/ai';
 import type { HydratedFieldDefinition } from '@intuitui-labs/form-builder-engine/hydration';
 import { registerCustomValidator } from '@intuitui-labs/form-builder-engine/hydration';
 
@@ -1169,6 +1170,30 @@ export const SHOWCASE_CATALOG: ShowcaseFormMeta[] = [
     ],
     schema: AI_MORTGAGE_SCHEMA,
     samples: AI_MORTGAGE_SAMPLES,
+  },
+  {
+    id: 'ai-studio',
+    title: 'Live AI Form Scaffolder Studio',
+    domain: 'AI Studio',
+    badge: 'Prompt Compiler',
+    icon: '⚡',
+    headline: 'Real-Time Grounded Prompt Compiler',
+    description: 'Type any natural language regulatory prompt or select a 2026 preset to dynamically synthesize a full multi-step form with live assessment gauges.',
+    capabilities: [
+      'Prompt-to-schema dynamic compiler',
+      'Multi-step cognitive chunking',
+      'SemanticIntent auto-mapping',
+      'Dynamic assessment gauge synthesis',
+    ],
+    schema: SearchGroundedFormCompiler.compileFromPrompt('California SB 1047 & Frontier AI Safety Intake').schema,
+    samples: {
+      model_name: 'Atlas-Omega-1T',
+      safety_lead_name: 'Dr. Sarah Connor',
+      safety_lead_email: 'safety@skynet-defense.org',
+      training_flops_log: 27,
+      autonomy_tier: 'tier_1_hazardous',
+      kill_switch_protocol: 15,
+    },
   },
 ];
 

@@ -9,6 +9,7 @@ export { StandardStorageAdapter, type StandardStorageOptions } from './storage/S
 // Network status adapters
 export { AlwaysOnlineNetworkAdapter } from './network/AlwaysOnlineNetworkAdapter.js';
 export { WebNetworkStatusAdapter } from './network/WebNetworkStatusAdapter.js';
+export { SimulatedNetworkAdapter } from './network/SimulatedNetworkAdapter.js';
 
 // Transport adapters
 export { CallbackTransportAdapter } from './transport/CallbackTransportAdapter.js';
@@ -42,3 +43,9 @@ export { CompositeEntityExtractorAdapter } from './ai/CompositeEntityExtractorAd
 export { NullHapticAdapter } from './haptics/NullHapticAdapter.js';
 export { WebVibrationAdapter, type WebVibrationOptions } from './haptics/WebVibrationAdapter.js';
 export { ExpoHapticsAdapter, type ExpoHapticsOptions, type ExpoHapticsModule } from './haptics/ExpoHapticsAdapter.js';
+
+// Speech Synthesis adapters ("Speak Peek")
+export { WebSpeechAdapter, NullSpeechAdapter } from './speech/WebSpeechAdapter.js';
+
+// Spatial Affordance adapters
+export { SpatialAffordanceAdapter, type SpatialAffordanceAdapterOptions } from './spatial/index.js';

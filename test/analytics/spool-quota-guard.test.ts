@@ -75,8 +75,10 @@ describe('Telemetry Spool Quota Guard & Session Continuity', () => {
     };
 
     const manager = new MultiStepFormManager(schema, () => {}, {
-      telemetry,
-      sessionId: 'custom_session_42',
+      experience: {
+        telemetry,
+        sessionId: 'custom_session_42',
+      },
     });
 
     expect(manager.getSessionId()).toBe('custom_session_42');

@@ -48,7 +48,7 @@ describe('MultiStepFormManager Telemetry Lifecycle Integration', () => {
     const telemetry = new MemoryTelemetryAdapter();
 
     new MultiStepFormManager(testSchema, vi.fn(), {
-      telemetry,
+      experience: { telemetry },
     });
 
     const events = telemetry.getEvents();
@@ -73,7 +73,7 @@ describe('MultiStepFormManager Telemetry Lifecycle Integration', () => {
   it('records field_error when validation fails during step progression', async () => {
     const telemetry = new MemoryTelemetryAdapter();
     const manager = new MultiStepFormManager(testSchema, vi.fn(), {
-      telemetry,
+      experience: { telemetry },
     });
 
     // Attempt to proceed without filling required email
@@ -94,7 +94,7 @@ describe('MultiStepFormManager Telemetry Lifecycle Integration', () => {
   it('records step_completed and new step_viewed when successfully moving to next step', async () => {
     const telemetry = new MemoryTelemetryAdapter();
     const manager = new MultiStepFormManager(testSchema, vi.fn(), {
-      telemetry,
+      experience: { telemetry },
     });
 
     manager.setFieldValue('email' as any, 'valid@example.com');
@@ -130,7 +130,7 @@ describe('MultiStepFormManager Telemetry Lifecycle Integration', () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
 
     const manager = new MultiStepFormManager(testSchema, onSubmit, {
-      telemetry,
+      experience: { telemetry },
     });
 
     manager.setFieldValue('email' as any, 'valid@example.com');
@@ -155,7 +155,7 @@ describe('MultiStepFormManager Telemetry Lifecycle Integration', () => {
   it('preserves Zero-PII compliance: field focus, blur, and errors never leak sensitive values', () => {
     const telemetry = new MemoryTelemetryAdapter();
     const manager = new MultiStepFormManager(testSchema, vi.fn(), {
-      telemetry,
+      experience: { telemetry },
     });
 
     const secret = 'super_secret_pii@financial.bank';
