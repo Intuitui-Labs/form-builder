@@ -31,6 +31,9 @@ jobs:
           node-version: 22
           cache: 'pnpm'
 
+      - name: Prepare build directory
+        run: mkdir -p dist
+
       - name: Install Monorepo Dependencies
         run: pnpm install --frozen-lockfile
 
