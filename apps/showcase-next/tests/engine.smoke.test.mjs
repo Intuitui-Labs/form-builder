@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  AnalyticsEngine,
   FormManager,
   MultiStepFormManager,
   ValidationEngine,
   applyRule,
 } from '@intuitui-labs/form-builder-engine';
+import { AnalyticsEngine } from '@intuitui-labs/form-builder-engine/analytics';
 import {
   FormHydrator,
   clearCustomValidators,

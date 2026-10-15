@@ -2,12 +2,15 @@ import { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable, TextInput } from 'react-native';
 import {
   ExperimentFormHydrator,
+  type FormSchema,
+  type FormTelemetryEvent,
+  type ExperimentContext,
+} from '@intuitui-labs/form-builder-engine';
+import {
   DeterministicHashExperimentAdapter,
   CallbackExperimentAdapter,
   MemoryTelemetryAdapter,
-  type FormSchema,
-  type FormTelemetryEvent,
-} from '@intuitui-labs/form-builder-engine';
+} from '@intuitui-labs/form-builder-engine/adapters';
 import {
   AppPage,
   BrandHeader,
@@ -58,7 +61,7 @@ export default function ExperimentsScreen() {
 
   const telemetry = useMemo(() => {
     return new MemoryTelemetryAdapter({
-      onEvent: (evt) => {
+      onEvent: (evt: FormTelemetryEvent) => {
         setTelemetryEvents((prev) => [evt, ...prev.slice(0, 19)]);
       },
     });
@@ -86,7 +89,8 @@ export default function ExperimentsScreen() {
       },
       defaultVariant: 'control',
       experimentPort: new CallbackExperimentAdapter({
-        getVariant: (k, c, fallback) => experimentAdapter.getVariant(k, c, fallback),
+        getVariant: <T,>(k: string, c: ExperimentContext, fallback: T): T =>
+          experimentAdapter.getVariant(k, c, fallback as any) as unknown as T,
         trackExposure: (_k, v) => {
           setStatusText(`Exposure tracked for variant "${v}" (QA override: ${manualVariant !== 'hash' ? 'YES' : 'NO'})`);
         },

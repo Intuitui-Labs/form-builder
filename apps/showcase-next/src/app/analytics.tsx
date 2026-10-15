@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Pressable, Text, View, StyleSheet } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import { AnalyticsEngine, type FormTelemetryEvent } from '@intuitui-labs/form-builder-engine';
+import { AnalyticsEngine } from '@intuitui-labs/form-builder-engine/analytics';
+import type { FormTelemetryEvent } from '@intuitui-labs/form-builder-engine';
 import { ActionButton, AppPage, BrandHeader, CodeBlock, Notice, Panel, SectionHeading, Tag } from '../components/EngineUi';
 import { ANALYTICS_FIELDS, ANALYTICS_RESPONSES } from '../forms';
 import { colors } from '../theme';

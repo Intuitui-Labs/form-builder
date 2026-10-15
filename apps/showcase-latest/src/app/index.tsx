@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Text, View, StyleSheet, TextInput, Pressable } from 'react-native';
+import { Text, View, StyleSheet, TextInput, Pressable, Modal, ActivityIndicator } from 'react-native';
 import {
   MultiStepFormManager,
-  WebSpeechAdapter,
-  SimulatedNetworkAdapter,
   type FormState,
   type BranchSwitchImpact,
 } from '@intuitui-labs/form-builder-engine';
+import {
+  WebSpeechAdapter,
+  SimulatedNetworkAdapter,
+  SimulatedBatteryAdapter,
+} from '@intuitui-labs/form-builder-engine/adapters';
 import {
   SearchGroundedFormCompiler,
   type GroundedCompilationResult,
@@ -35,6 +38,21 @@ const AI_STUDIO_PRESETS = [
   { label: 'Cloud Zero-Trust', prompt: 'FedRAMP High Baseline Cloud Security & Zero-Trust Certification' },
 ];
 
+const GHOST_SAMPLE_TEXTS = [
+  {
+    label: 'AI Frontier Lab Note',
+    text: 'Applicant Dr. Alex Morgan, reachable at alex.morgan@frontier-safety.org or (415) 890-4321. Headquartered at 500 Howard Street, Suite 400, San Francisco CA 94105. System compute capacity is 150000 FLOPS with enterprise governance tier.',
+  },
+  {
+    label: 'HIPAA Patient Note',
+    text: 'Patient: Eleanor Vance. Primary contact: eleanor.vance@soundcare.org, tel: (617) 555-0199. Address: 742 Evergreen Terrace, Boston, MA 02108, United States.',
+  },
+  {
+    label: 'EV Commercial Fleet',
+    text: 'Fleet Operator: Marcus Vance Taylor (m.taylor@greenlogistics.io, 512-555-0143). Operating out of 100 Silicon Vista Blvd, Austin, TX 78701. Target delivery: 45 commercial electric delivery vans.',
+  },
+];
+
 export default function BuilderScreen() {
   const [selectedFormId, setSelectedFormId] = useState<string>('launch-readiness');
   const [receipt, setReceipt] = useState<{ formId: string; values: Values } | null>(null);
@@ -46,11 +64,25 @@ export default function BuilderScreen() {
   // Hexagonal Adapters
   const speechAdapter = useMemo(() => new WebSpeechAdapter(), []);
   const networkAdapter = useMemo(() => new SimulatedNetworkAdapter(true), []);
+  const batteryAdapter = useMemo(
+    () => new SimulatedBatteryAdapter({ initialLevel: 0.85, initialCharging: true, initialLowPowerMode: false }),
+    [],
+  );
 
   const [isOnline, setIsOnline] = useState(true);
+  const [batteryLevel, setBatteryLevel] = useState(0.85);
+  const [isCharging, setIsCharging] = useState(true);
+  const [isLowPowerMode, setIsLowPowerMode] = useState(false);
   const [pendingOutboxCount, setPendingOutboxCount] = useState(0);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isFlushingOutbox, setIsFlushingOutbox] = useState(false);
+
+  // Ghost Form Ingestion State
+  const [isGhostModalOpen, setIsGhostModalOpen] = useState(false);
+  const [ghostInputText, setGhostInputText] = useState(GHOST_SAMPLE_TEXTS[0]!.text);
+  const [ghostRollback, setGhostRollback] = useState<(() => void) | null>(null);
+  const [ghostBannerMsg, setGhostBannerMsg] = useState<string | null>(null);
+  const [isExtractingGhost, setIsExtractingGhost] = useState(false);
 
   const currentMeta = useMemo(
     () => SHOWCASE_CATALOG.find((item) => item.id === selectedFormId) ?? SHOWCASE_CATALOG[0]!,
@@ -75,6 +107,7 @@ export default function BuilderScreen() {
         {
           resilience: {
             networkStatus: networkAdapter,
+            batteryStatus: batteryAdapter,
             enableOutbox: true,
           },
           experience: {
@@ -82,7 +115,7 @@ export default function BuilderScreen() {
           },
         },
       ),
-    [activeSchema, currentMeta.id, networkAdapter, speechAdapter],
+    [activeSchema, currentMeta.id, networkAdapter, batteryAdapter, speechAdapter],
   );
 
   const form = manager.getFormManager();
@@ -113,7 +146,7 @@ export default function BuilderScreen() {
       setIsSpeaking(current.isSpeaking());
     });
 
-    const unsubscribeNet = networkAdapter.subscribe((online) => {
+    const unsubscribeNet = networkAdapter.subscribe((online: boolean) => {
       setIsOnline(online);
     });
 
@@ -154,13 +187,61 @@ export default function BuilderScreen() {
     networkAdapter.toggle();
   };
 
-  const handleFlushOutbox = async () => {
+  const toggleBatteryCondition = () => {
+    if (batteryLevel > 0.15) {
+      // Drop to 12% discharging (triggers critical power conservation)
+      batteryAdapter.setBatteryStatus({ level: 0.12, charging: false, lowPowerMode: false });
+      setBatteryLevel(0.12);
+      setIsCharging(false);
+      setIsLowPowerMode(false);
+    } else {
+      // Restore to 85% AC charging
+      batteryAdapter.setBatteryStatus({ level: 0.85, charging: true, lowPowerMode: false });
+      setBatteryLevel(0.85);
+      setIsCharging(true);
+      setIsLowPowerMode(false);
+    }
+  };
+
+  const isBatteryThrottled = !isCharging && (batteryLevel <= 0.15 || isLowPowerMode);
+
+  const handleFlushOutbox = async (force = false) => {
     setIsFlushingOutbox(true);
     try {
-      await manager.flushOutbox();
+      await manager.flushOutbox(force);
       setPendingOutboxCount(manager.getPendingOutboxCount());
     } finally {
       setIsFlushingOutbox(false);
+    }
+  };
+
+  const handleApplyGhost = async () => {
+    if (!ghostInputText.trim()) return;
+    setIsExtractingGhost(true);
+    try {
+      const result = await manager.enrichFromFreeformText(ghostInputText, {
+        overwritePolicy: 'preserve-user-edits',
+      });
+      if (result.appliedCount > 0) {
+        setGhostRollback(() => () => {
+          result.rollback();
+          manager.pruneHiddenFieldValues();
+        });
+        setGhostBannerMsg(
+          `Extracted & mapped ${result.appliedCount} field(s) (${result.appliedFields.join(', ')}). ${
+            result.skippedFields.length > 0
+              ? `${result.skippedFields.length} user-edited field(s) preserved.`
+              : ''
+          }`,
+        );
+        setIsGhostModalOpen(false);
+      } else {
+        setGhostBannerMsg('No matching fields detected in the unstructured snippet.');
+      }
+    } catch (err: any) {
+      setGhostBannerMsg(`Extraction failed: ${err.message || String(err)}`);
+    } finally {
+      setIsExtractingGhost(false);
     }
   };
 
@@ -251,12 +332,40 @@ export default function BuilderScreen() {
 
       {/* Resilience Offline & DLQ Status Strip */}
       <View style={styles.resilienceStrip}>
-        <View style={styles.resilienceStatus}>
-          <View style={[styles.networkDot, isOnline ? styles.networkDotOnline : styles.networkDotOffline]} />
-          <Text style={styles.networkStatusText}>
-            {isOnline ? 'DIRECT NETWORK (Online)' : 'OFFLINE MODE (Enqueuing to DLQ)'}
-          </Text>
+        <View style={styles.resilienceStatusCol}>
+          <View style={styles.resilienceStatus}>
+            <View style={[styles.networkDot, isOnline ? styles.networkDotOnline : styles.networkDotOffline]} />
+            <Text style={styles.networkStatusText}>
+              {isOnline ? 'DIRECT NETWORK (Online)' : 'OFFLINE MODE (Enqueuing to DLQ)'}
+            </Text>
+          </View>
+          <View style={styles.batteryStatusRow}>
+            <View
+              style={[
+                styles.batteryDot,
+                isBatteryThrottled
+                  ? styles.batteryDotThrottled
+                  : isCharging
+                  ? styles.batteryDotCharging
+                  : styles.batteryDotNormal,
+              ]}
+            />
+            <Text
+              style={[
+                styles.batteryStatusText,
+                isBatteryThrottled ? styles.batteryStatusTextThrottled : null,
+              ]}
+            >
+              {isCharging ? '⚡' : '🔋'} {Math.round(batteryLevel * 100)}%{' '}
+              {isCharging
+                ? 'AC Power'
+                : isBatteryThrottled
+                ? 'CRITICAL (Outbox Paused)'
+                : 'Discharging'}
+            </Text>
+          </View>
         </View>
+
         <View style={styles.resilienceActions}>
           <Pressable
             accessibilityRole="button"
@@ -267,20 +376,44 @@ export default function BuilderScreen() {
               {isOnline ? '📡 Simulate Offline' : '🟢 Go Online'}
             </Text>
           </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={toggleBatteryCondition}
+            style={[styles.resilienceBtn, isBatteryThrottled ? styles.resilienceBtnThrottled : null]}
+          >
+            <Text style={styles.resilienceBtnText}>
+              {batteryLevel <= 0.15 ? '🔋 Restore 85%' : '🪫 Simulate 12%'}
+            </Text>
+          </Pressable>
+
           {pendingOutboxCount > 0 ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={handleFlushOutbox}
-              disabled={isFlushingOutbox || !isOnline}
-              style={[
-                styles.drainBtn,
-                !isOnline ? styles.drainBtnDisabled : null,
-              ]}
-            >
-              <Text style={styles.drainBtnText}>
-                {isFlushingOutbox ? '⚡ Draining…' : `⚡ Drain Outbox (${pendingOutboxCount})`}
-              </Text>
-            </Pressable>
+            <View style={styles.outboxButtonCluster}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => handleFlushOutbox(false)}
+                disabled={isFlushingOutbox || !isOnline || isBatteryThrottled}
+                style={[
+                  styles.drainBtn,
+                  (!isOnline || isBatteryThrottled) ? styles.drainBtnDisabled : null,
+                ]}
+              >
+                <Text style={styles.drainBtnText}>
+                  {isFlushingOutbox ? '⚡ Draining…' : `⚡ Drain (${pendingOutboxCount})`}
+                </Text>
+              </Pressable>
+
+              {isBatteryThrottled && isOnline ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => handleFlushOutbox(true)}
+                  disabled={isFlushingOutbox}
+                  style={styles.forceSyncBtn}
+                >
+                  <Text style={styles.forceSyncBtnText}>⚡ Force Sync</Text>
+                </Pressable>
+              ) : null}
+            </View>
           ) : null}
         </View>
       </View>
@@ -390,10 +523,44 @@ export default function BuilderScreen() {
           </View>
         ) : (
           <>
+            {ghostRollback ? (
+              <View style={styles.ghostBannerCard}>
+                <View style={styles.ghostBannerHeader}>
+                  <Text style={styles.ghostBannerTitle}>👻 Ghost Autofill Applied</Text>
+                  <Tag tone="teal">HEURISTIC REVERSIBLE</Tag>
+                </View>
+                <Text style={styles.ghostBannerDesc}>{ghostBannerMsg}</Text>
+                <View style={styles.ghostBannerActions}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => {
+                      if (ghostRollback) ghostRollback();
+                      setGhostRollback(null);
+                      setGhostBannerMsg(null);
+                    }}
+                    style={styles.ghostRollbackBtn}
+                  >
+                    <Text style={styles.ghostRollbackBtnText}>↩ Undo / Rollback</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => {
+                      setGhostRollback(null);
+                      setGhostBannerMsg(null);
+                    }}
+                    style={styles.ghostKeepBtn}
+                  >
+                    <Text style={styles.ghostKeepBtnText}>Keep Changes ✓</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
+
             <AutofillToolbar
               onAutofillAddress={handleAutofillAddress}
               onAutofillContact={handleAutofillContact}
               onAutofillSample={loadSample}
+              onAutofillGhost={() => setIsGhostModalOpen(true)}
               activeOrigin={formState.isDirty ? 'active session' : undefined}
             />
 
@@ -554,6 +721,77 @@ export default function BuilderScreen() {
           ))}
         </View>
       </View>
+
+      {/* Ghost Form Freeform Ingestion Modal */}
+      <Modal
+        visible={isGhostModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsGhostModalOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.ghostModalCard}>
+            <View style={styles.ghostModalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.ghostModalTitle}>👻 Unstructured Ghost Form Ingestion</Text>
+                <Text style={styles.ghostModalSub}>
+                  Paste raw unformatted text, emails, or clinical summaries. The heuristic NLP engine extracts and maps target fields with 1-click transactional rollback.
+                </Text>
+              </View>
+              <Pressable onPress={() => setIsGhostModalOpen(false)} style={styles.modalCloseBtn}>
+                <Text style={styles.modalCloseText}>×</Text>
+              </Pressable>
+            </View>
+
+            <Text style={styles.ghostModalSectionLabel}>Quick Sample Snippets</Text>
+            <View style={styles.ghostSampleRow}>
+              {GHOST_SAMPLE_TEXTS.map((sample) => (
+                <Pressable
+                  key={sample.label}
+                  onPress={() => setGhostInputText(sample.text)}
+                  style={[
+                    styles.ghostSampleChip,
+                    ghostInputText === sample.text ? styles.ghostSampleChipActive : null,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.ghostSampleChipText,
+                      ghostInputText === sample.text ? styles.ghostSampleChipTextActive : null,
+                    ]}
+                  >
+                    {sample.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Text style={styles.ghostModalSectionLabel}>Freeform Unstructured Text</Text>
+            <TextInput
+              style={styles.ghostTextInput}
+              multiline
+              numberOfLines={4}
+              value={ghostInputText}
+              onChangeText={setGhostInputText}
+              placeholder="Paste raw conversation, emails, notes, or address details..."
+              placeholderTextColor={colors.muted}
+            />
+
+            <View style={styles.ghostModalActions}>
+              <ActionButton
+                label="Cancel"
+                secondary
+                onPress={() => setIsGhostModalOpen(false)}
+              />
+              <ActionButton
+                label={isExtractingGhost ? 'Extracting…' : '✨ Extract & Populate Form'}
+                disabled={isExtractingGhost || !ghostInputText.trim()}
+                onPress={handleApplyGhost}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </AppPage>
   );
 }
@@ -691,4 +929,128 @@ const styles = StyleSheet.create({
   },
   groundingMetaTitle: { fontSize: 10, fontWeight: '800', color: '#4338CA', marginBottom: 2 },
   groundingMetaText: { fontSize: 10, color: '#3730A3', lineHeight: 14 },
+
+  // Battery Status Styles
+  resilienceStatusCol: { gap: 4 },
+  batteryStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  batteryDot: { width: 7, height: 7, borderRadius: 3.5 },
+  batteryDotNormal: { backgroundColor: colors.teal },
+  batteryDotCharging: { backgroundColor: '#10B981' },
+  batteryDotThrottled: { backgroundColor: '#EF4444' },
+  batteryStatusText: { fontSize: 10, fontWeight: '700', color: colors.muted },
+  batteryStatusTextThrottled: { color: '#DC2626' },
+  resilienceBtnThrottled: { backgroundColor: '#FEE2E2', borderColor: '#FECACA' },
+  outboxButtonCluster: { flexDirection: 'row', gap: 6, alignItems: 'center' },
+  forceSyncBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#EF4444',
+  },
+  forceSyncBtnText: { fontSize: 11, fontWeight: '800', color: '#FFFFFF' },
+
+  // Ghost Autofill Banner Card
+  ghostBannerCard: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: radii.medium,
+    padding: 12,
+    marginBottom: 12,
+  },
+  ghostBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  ghostBannerTitle: { fontSize: 13, fontWeight: '800', color: '#166534' },
+  ghostBannerDesc: { fontSize: 11, color: '#15803D', lineHeight: 16, marginBottom: 8 },
+  ghostBannerActions: { flexDirection: 'row', gap: 8 },
+  ghostRollbackBtn: {
+    backgroundColor: '#DC2626',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  ghostRollbackBtnText: { color: '#FFFFFF', fontSize: 11, fontWeight: '800' },
+  ghostKeepBtn: {
+    backgroundColor: '#16A34A',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  ghostKeepBtnText: { color: '#FFFFFF', fontSize: 11, fontWeight: '800' },
+
+  // Ghost Ingestion Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  ghostModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: radii.large,
+    padding: 18,
+    width: '100%',
+    maxWidth: 540,
+    shadowColor: '#000000',
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 24,
+  },
+  ghostModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    gap: 12,
+  },
+  ghostModalTitle: { fontSize: 16, fontWeight: '800', color: colors.ink, marginBottom: 4 },
+  ghostModalSub: { fontSize: 11, color: colors.muted, lineHeight: 16 },
+  modalCloseBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.slateSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCloseText: { fontSize: 18, fontWeight: '600', color: colors.ink },
+  ghostModalSectionLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.ink,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  ghostSampleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
+  ghostSampleChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: colors.slateSoft,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  ghostSampleChipActive: { backgroundColor: colors.tealSoft, borderColor: colors.teal },
+  ghostSampleChipText: { fontSize: 10, fontWeight: '700', color: colors.muted },
+  ghostSampleChipTextActive: { color: colors.teal, fontWeight: '800' },
+  ghostTextInput: {
+    backgroundColor: colors.canvas,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radii.small,
+    padding: 12,
+    fontSize: 12,
+    color: colors.ink,
+    minHeight: 90,
+    textAlignVertical: 'top',
+    marginBottom: 14,
+  },
+  ghostModalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
 });

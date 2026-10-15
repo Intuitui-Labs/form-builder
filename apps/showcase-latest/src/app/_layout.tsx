@@ -18,9 +18,11 @@ export default function RootLayout() {
         },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Multi-step' }} />
+      <Tabs.Screen name="index" options={{ title: 'Forms' }} />
+      <Tabs.Screen name="quiz" options={{ title: 'Quiz 🎯' }} />
+      <Tabs.Screen name="studio" options={{ title: 'Studio 🛠️' }} />
       <Tabs.Screen name="experiments" options={{ title: 'A/B Flags' }} />
-      <Tabs.Screen name="hydration" options={{ title: 'JSON hydrate' }} />
+      <Tabs.Screen name="hydration" options={{ title: 'JSON' }} />
       <Tabs.Screen name="analytics" options={{ title: 'Telemetry' }} />
       <Tabs.Screen name="compatibility" options={{ title: 'Notes' }} />
     </Tabs>

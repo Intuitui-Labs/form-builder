@@ -804,11 +804,13 @@ export function AutofillToolbar({
   onAutofillAddress,
   onAutofillContact,
   onAutofillSample,
+  onAutofillGhost,
   activeOrigin,
 }: {
   onAutofillAddress: () => void;
   onAutofillContact: () => void;
   onAutofillSample?: () => void;
+  onAutofillGhost?: () => void;
   activeOrigin?: string;
 }) {
   return (
@@ -837,6 +839,18 @@ export function AutofillToolbar({
           <Text style={styles.autofillBtnIcon}>📇</Text>
           <Text style={styles.autofillBtnText}>Contact Info</Text>
         </Pressable>
+
+        {onAutofillGhost ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Extract fields from freeform unstructured text"
+            onPress={onAutofillGhost}
+            style={({ pressed }) => [styles.autofillBtn, styles.autofillBtnSample, pressed && styles.autofillBtnPressed]}
+          >
+            <Text style={styles.autofillBtnIcon}>👻</Text>
+            <Text style={[styles.autofillBtnText, styles.autofillBtnTextSample]}>Freeform Text</Text>
+          </Pressable>
+        ) : null}
 
         {onAutofillSample ? (
           <Pressable

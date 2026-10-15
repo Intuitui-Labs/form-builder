@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { Text, View, StyleSheet, TextInput, Pressable } from 'react-native';
 import {
   MultiStepFormManager,
-  WebSpeechAdapter,
-  SimulatedNetworkAdapter,
   type FormState,
   type BranchSwitchImpact,
 } from '@intuitui-labs/form-builder-engine';
+import {
+  WebSpeechAdapter,
+  SimulatedNetworkAdapter,
+} from '@intuitui-labs/form-builder-engine/adapters';
 import {
   SearchGroundedFormCompiler,
   type GroundedCompilationResult,
@@ -113,7 +115,7 @@ export default function BuilderScreen() {
       setIsSpeaking(current.isSpeaking());
     });
 
-    const unsubscribeNet = networkAdapter.subscribe((online) => {
+    const unsubscribeNet = networkAdapter.subscribe((online: boolean) => {
       setIsOnline(online);
     });
 
