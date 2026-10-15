@@ -30,11 +30,14 @@ export interface FieldVisibilityRule {
   clearValueOnHide?: boolean; // Defaults to true to avoid stale hidden data
 }
 
+import type { ScoreCondition } from '../assessment/branching.js';
+
 /**
- * Page-level dynamic jump rule for branching wizards
+ * Page-level dynamic jump rule for branching wizards and adaptive quizzes
  */
 export interface PageJumpRule {
-  condition: Condition;
+  condition?: Condition;
+  scoreCondition?: ScoreCondition;
   targetPageId: string; // ID of the next page to transition to
 }
 

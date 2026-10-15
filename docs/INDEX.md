@@ -2,7 +2,7 @@
 title: "Documentation Directory Index"
 status: "active"
 created: 2026-06-12
-updated: 2026-10-10
+updated: 2026-10-15
 author: "Naveen"
 scribe: "Antigravity"
 tags: [index, index-map]
@@ -23,6 +23,7 @@ Welcome to the technical documentation library for `@intuitui-labs/form-builder-
     *   [Enterprise Multi-Version Matrix Testing Strategy](./architecture/multi-version-testing-strategy.md) — Modern monorepo fixture, tarball packaging, and CI matrix testing architecture for cross-SDK verification.
     *   [Form UX Heuristics, Common Pitfalls & Engine Alignment Audit](./architecture/form-ux-heuristics-and-pitfalls-audit.md) — Comprehensive Baymard Institute, Nielsen Norman Group, and WCAG 1.3.5 heuristics audit, mobile keyboard traps, and engine alignment matrix.
     *   [Enterprise Mobile Form Seams & React 19 / React Native 0.86–0.88 Architecture](./architecture/enterprise-mobile-form-seams-and-react-19.md) — React 19 ref cleanup protocols, `forwardRef` deprecation, Fabric host handles, and the 5 Universal Architectural Seams for mobile forms.
+    *   [LLM Agent Mechanics & The Headless Form Engine](./architecture/ai-agent-engine-mechanics-and-aci.md) — How LLM agents physically operate, dual programmatic vs. runtime generative modalities, Agent-Computer Interfaces (ACI), comparative analogical landscape, and hostile operationalization.
 *   [Core Documentation](./Core/form-engine-architecture.md)
 
     *   [Headless Form Engine Architecture](./Core/form-engine-architecture.md) — UML Class layouts, structural interactions, and code integrations.
@@ -39,7 +40,19 @@ Welcome to the technical documentation library for `@intuitui-labs/form-builder-
 
 ## Changelog
 
-### [1.4.0] - 2026-10-11
+### [0.2.0] - 2026-10-15
+#### Added
+*   **AI Agent-Computer Interface (ACI) & Studio Copilot Architecture**:
+    *   `AiStudioCopilotDispatcher` supporting transactional single-step undo batching, pre-flight stale target rejection, and auto-salvaging `'prune-and-continue'` mode with structured diagnostic reflection.
+    *   `FormStudioStore` platform-aware history depth: 15 frames for constrained mobile runtimes, 50 frames for desktop/web.
+    *   Comprehensive architecture documentation: `docs/architecture/ai-agent-engine-mechanics-and-aci.md`.
+*   **Hexagonal Battery & Power-Aware Outbox Throttling**:
+    *   Outbound driven port `IBatteryStatusPort` and battery status models (`BatteryStatus`).
+    *   Battery adapters: `AlwaysFullBatteryAdapter`, `SimulatedBatteryAdapter`, and `WebBatteryAdapter` (W3C Battery Status API).
+    *   `OfflineOutboxQueue` battery conservation throttling background sync when device battery is $\le 15\%$ and discharging or in OS low-power mode, with manual force bypass (`flush(true)`).
+    *   Synchronous re-entrancy locking guard in `OfflineOutboxQueue.flush()`.
+
+### [0.1.4] - 2026-10-11
 #### Added
 *   **Pillar I: Conditional Branching & Dynamic Visibility Engine**:
     *   Zero-dependency pure TypeScript `ConditionEvaluator` supporting `equals`, `contains`, `greaterThan`, `lessThan`, `in`, `isEmpty`, and nested `AND`/`OR` compound expressions.
@@ -62,12 +75,12 @@ Welcome to the technical documentation library for `@intuitui-labs/form-builder-
 *   Implemented Levels 1–4 testing matrix, hexagonal ports (`src/ports/index.ts`), and Zod v4 structural schemas (`src/schema/FormSchemaValidation.ts`).
 *   Resolved submit regression and patched CVE-2024-57068 by upgrading `@tanstack/form-core` to `^0.42.1`.
 
-### [1.2.0] - 2026-06-20
+### [0.1.2] - 2026-06-20
 #### Added
 *   Added `ReactCodeGen.ts` to output copy-pasteable React Hook Form & Zod schema code templates.
 *   Added decision record documentation for dynamic codegen.
 
-### [1.1.0] - 2026-06-12
+### [0.1.1] - 2026-06-12
 #### Added
 *   Introduced `MultiStepFormManager.ts` state machine to coordinate step-by-step navigation, page layout extraction, and localized page-boundary validation checks.
 *   Exposed `MultiStepFormManager` exports in the core engine package index.

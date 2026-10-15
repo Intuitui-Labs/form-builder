@@ -260,4 +260,10 @@ export type {
   SpatialDensityMode,
 } from './ISpatialAffordancePort.js';
 
-
+export type { IAssessmentPort } from './IAssessmentPort.js';
+export type { BatteryStatus, IBatteryStatusPort } from './IBatteryStatusPort.js';
+export type {
+  IAdaptiveStepOraclePort,
+  AdaptiveStepContext,
+  AdaptiveOracleDecision,
+} from './IAdaptiveStepOraclePort.js';

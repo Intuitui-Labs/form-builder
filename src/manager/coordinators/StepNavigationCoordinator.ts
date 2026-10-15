@@ -61,8 +61,23 @@ export class StepNavigationCoordinator<T extends Record<string, unknown>> {
 
     // 1. Evaluate jumpRules
     if (page.jumpRules && page.jumpRules.length > 0) {
+      const assessmentEngine = this.ctx.getAssessmentEngine?.();
+      const assessmentState = assessmentEngine?.getState();
+
       for (const rule of page.jumpRules) {
-        if (evaluateCondition(rule.condition, values)) {
+        let conditionMatched = true;
+
+        if (rule.condition) {
+          conditionMatched = evaluateCondition(rule.condition, values);
+        }
+
+        if (conditionMatched && rule.scoreCondition) {
+          conditionMatched = assessmentEngine
+            ? assessmentEngine.evaluateScoreCondition(rule.scoreCondition)
+            : false;
+        }
+
+        if (conditionMatched && (rule.condition || rule.scoreCondition)) {
           const targetIndex = this.ctx.schema.pages.findIndex(
             (p) => p.id === rule.targetPageId
           );
@@ -313,6 +328,9 @@ export class StepNavigationCoordinator<T extends Record<string, unknown>> {
   }
 
   public prevStep(): boolean {
+    if (this.ctx.schema.governance?.navigation?.allowBack === false) {
+      return false;
+    }
     if (!this.ctx.lifecyclePort.can('STEP_PREV')) {
       if (this.ctx.telemetry) {
         this.ctx.telemetry.dispatch({

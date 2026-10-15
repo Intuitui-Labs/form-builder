@@ -1,5 +1,6 @@
 import type { IStoragePort } from '../ports/IStoragePort.js';
 import type { INetworkStatusPort } from '../ports/INetworkStatusPort.js';
+import type { IBatteryStatusPort } from '../ports/IBatteryStatusPort.js';
 import type {
   ITransportPort,
   IResilientTransportPort,
@@ -22,6 +23,9 @@ export interface OutboxQueueOptions<T = Record<string, unknown>> {
   storage?: IStoragePort;
   networkStatus?: INetworkStatusPort;
   transport?: ITransportPort<T>;
+  batteryStatus?: IBatteryStatusPort;
+  criticalBatteryThreshold?: number; // Default 0.15 (15%)
+  throttleOnLowPower?: boolean; // Default true
   storageKey?: string;
   maxQueueSize?: number; // Default 50 items
   ttlMs?: number; // Default 14 days
@@ -48,6 +52,9 @@ export class OfflineOutboxQueue<T = Record<string, unknown>> {
   private storage: IStoragePort;
   private networkStatus: INetworkStatusPort;
   private transport?: ITransportPort<T>;
+  private batteryStatus?: IBatteryStatusPort;
+  private criticalBatteryThreshold: number;
+  private throttleOnLowPower: boolean;
   private storageKey: string;
   private dlqKey: string;
   private lockKey: string;
@@ -67,6 +74,9 @@ export class OfflineOutboxQueue<T = Record<string, unknown>> {
     this.storage = options?.storage ?? new MemoryStorageAdapter();
     this.networkStatus = options?.networkStatus ?? new AlwaysOnlineNetworkAdapter();
     this.transport = options?.transport;
+    this.batteryStatus = options?.batteryStatus;
+    this.criticalBatteryThreshold = options?.criticalBatteryThreshold ?? 0.15;
+    this.throttleOnLowPower = options?.throttleOnLowPower ?? true;
     this.storageKey = options?.storageKey ?? 'intuitui_outbox_queue';
     this.dlqKey = `${this.storageKey}_dlq`;
     this.lockKey = `${this.storageKey}_flush_lock`;
@@ -209,9 +219,10 @@ export class OfflineOutboxQueue<T = Record<string, unknown>> {
     envelope: SubmissionEnvelope<T>,
   ): Promise<{ status: 'queued' | 'synced'; receipt?: SubmissionReceipt }> {
     const isOnline = await this.networkStatus.isOnline();
+    const isThrottled = await this.isBatteryThrottled();
 
-    // If online and transport exists, attempt immediate delivery first!
-    if (isOnline && this.transport) {
+    // If online, transport exists, and NOT throttled by battery, attempt immediate delivery first!
+    if (isOnline && this.transport && !isThrottled) {
       try {
         this.syncStatus = 'syncing';
         this.notify();
@@ -284,9 +295,23 @@ export class OfflineOutboxQueue<T = Record<string, unknown>> {
   }
 
   /**
-   * Flushes all queued submissions in FIFO order through the transport adapter.
+   * Checks whether background flush should be throttled due to critical battery depletion.
    */
-  public async flush(): Promise<number> {
+  public async isBatteryThrottled(): Promise<boolean> {
+    if (!this.batteryStatus || !this.throttleOnLowPower) return false;
+    try {
+      const battery = await this.batteryStatus.getBatteryStatus();
+      return !battery.charging && (battery.level <= this.criticalBatteryThreshold || !!battery.lowPowerMode);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Flushes all queued submissions in FIFO order through the transport adapter.
+   * If `force` is false, flush will be throttled if the device battery is critically low.
+   */
+  public async flush(force = false): Promise<number> {
     if (this.isFlushing || !this.transport) return 0;
     this.isFlushing = true;
 
@@ -294,6 +319,16 @@ export class OfflineOutboxQueue<T = Record<string, unknown>> {
     let deliveredCount = 0;
     const now = Date.now();
     try {
+      // Battery conservation: throttle background sync if battery is critical and discharging
+      if (!force) {
+        const throttled = await this.isBatteryThrottled();
+        if (throttled) {
+          this.syncStatus = 'offline-queued';
+          this.notify();
+          return 0;
+        }
+      }
+
       const isOnline = await this.networkStatus.isOnline();
       if (!isOnline) {
         this.syncStatus = 'offline-queued';

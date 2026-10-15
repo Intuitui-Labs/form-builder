@@ -1,11 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
+import { MemoryTelemetryAdapter } from '../../src/adapters/index.js';
 import {
   FormManager,
   FormHydrator,
-  MemoryTelemetryAdapter,
   ExperimentFormHydrator,
   type FormSchema,
 } from '../../src/index.js';
+
 
 describe('FormManager & FormHydrator Telemetry Parity', () => {
   it('dispatches form_mounted, field_focused, and auto-calculates dwellMs on blurField', async () => {

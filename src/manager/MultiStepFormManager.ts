@@ -34,6 +34,8 @@ import type {
   BatchEnrichmentResult,
   FieldOriginInfo,
   ISpeechSynthesisPort,
+  IBatteryStatusPort,
+  IAdaptiveStepOraclePort,
 } from '../ports/index.js';
 import type { IEntityExtractorPort } from '../ports/IEntityExtractorPort.js';
 import type { IHapticFeedbackPort } from '../ports/IHapticFeedbackPort.js';
@@ -42,12 +44,10 @@ import { ContactFieldMapper, type ExplicitContactFieldMap } from '../affordance/
 import { FormLifecycleMachine } from '../core/state/FormLifecycleMachine.js';
 import type { FormLifecyclePhase, FormLifecycleEvent, FormLifecycleContext } from '../core/state/FormLifecycleTypes.js';
 import {
-  LinearStepProgressAdapter,
-  WeightedFieldProgressAdapter,
-  NullRewardAdapter,
   resolveAffordanceConfig,
   type ResolvedAffordanceConfig,
-} from '../adapters/index.js';
+} from '../affordance/presets.js';
+import { stepIndexProgress, silentReward } from './kernelDefaults.js';
 import { OfflineOutboxQueue } from '../persistence/OfflineOutboxQueue.js';
 import { evaluateCondition } from '../core/ConditionEvaluator.js';
 import type {
@@ -58,7 +58,10 @@ import type {
 } from '../schema/FormBranching.js';
 import { DefaultSanitizer } from '../core/DefaultSanitizer.js';
 import { NativeFocusController } from '../focus/NativeFocusController.js';
+import { evaluateStepAffordance, type StepAffordanceSnapshot } from '../governance/index.js';
 import { FormManager } from './FormManager.js';
+
+
 import {
   type MultiStepCoordinatorContext,
   StepNavigationCoordinator,
@@ -67,6 +70,8 @@ import {
   FormErgonomicsCoordinator,
   FormPersistenceCoordinator,
 } from './coordinators/index.js';
+import type { IAssessmentPort } from '../ports/IAssessmentPort.js';
+import type { AssessmentState } from '../assessment/types.js';
 
 export type ProgressCalculatorFunction = (
   context: StepProgressContext
@@ -76,6 +81,9 @@ export interface FormResilienceOptions<T = Record<string, unknown>> {
   storage?: IStoragePort;
   transport?: ITransportPort<T>;
   networkStatus?: INetworkStatusPort;
+  batteryStatus?: IBatteryStatusPort;
+  criticalBatteryThreshold?: number;
+  throttleOnLowPower?: boolean;
   draftStorage?: IDraftStoragePort;
   enableOutbox?: boolean;
   autoSaveDraft?: boolean;
@@ -92,6 +100,8 @@ export interface FormExperienceOptions {
   sessionId?: string;
   hapticFeedback?: IHapticFeedbackPort;
   speechSynthesis?: ISpeechSynthesisPort;
+  assessmentEngine?: IAssessmentPort;
+  adaptiveStepOracle?: IAdaptiveStepOraclePort;
 }
 
 export interface FormSecurityOptions {
@@ -130,6 +140,8 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
   private onAttachmentPruned?: (field: string, pointer: AttachmentPointer) => void;
   private sanitizer: ISanitizerPort;
   private hapticPort?: IHapticFeedbackPort;
+  private assessmentEngine?: IAssessmentPort;
+  private adaptiveStepOracle?: IAdaptiveStepOraclePort;
   private speechSynthesisPort?: ISpeechSynthesisPort;
 
   // Subsystem Coordinators
@@ -212,6 +224,9 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
     this.policy = resolveAffordanceConfig(userConfig);
 
     // Resolve Strategy & Ports
+    // Policy is a seam — the app passes the object; the kernel never constructs it.
+    // Weighted progress, custom rewards, etc. are built by the composition root (the app),
+    // not here on the default path. See kernelDefaults.ts for the shared singletons.
     let progressStrategy: IProgressStrategyPort;
     const progressStrategyOpt = expOpt?.progressStrategy;
     if (typeof progressStrategyOpt === 'function') {
@@ -219,16 +234,18 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
       progressStrategy = { calculateProgress: calcFn };
     } else if (progressStrategyOpt) {
       progressStrategy = progressStrategyOpt;
-    } else if (this.policy.progress === 'weighted-velocity') {
-      progressStrategy = new WeightedFieldProgressAdapter();
     } else {
-      progressStrategy = new LinearStepProgressAdapter();
+      progressStrategy = stepIndexProgress;
     }
 
-    const rewardEngine = expOpt?.rewardEngine ?? new NullRewardAdapter();
+    const rewardEngine = expOpt?.rewardEngine ?? silentReward;
     const feedbackNotifier = expOpt?.feedbackNotifier;
 
     this.autoSaveDraft = resOpt?.autoSaveDraft ?? false;
+
+    // Resolve Assessment Engine Seam (Injected by composition root, never constructed by kernel)
+    this.assessmentEngine = expOpt?.assessmentEngine;
+    this.adaptiveStepOracle = expOpt?.adaptiveStepOracle;
 
     // Flatten all fields across all pages to pass to FormHydrator
     const allFields = schema.pages.flatMap((page) => page.fields);
@@ -295,6 +312,7 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
       getOutboxQueue: () => this.persistenceCoordinator?.getOutboxQueue(),
       getOutboxSyncStatus: () => this.persistenceCoordinator?.getOutboxQueue()?.getSyncStatus() ?? 'idle',
       getOutboxLastSyncError: () => this.persistenceCoordinator?.getOutboxQueue()?.getLastSyncError() ?? this.lifecyclePort.getContext().lastError,
+      getAssessmentEngine: () => this.assessmentEngine,
     };
 
     // Instantiate modular coordinators
@@ -331,6 +349,13 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
             field: key as keyof T,
             value: val,
           });
+          if (this.assessmentEngine?.isInstantTiming()) {
+            try {
+              this.assessmentEngine.submitAnswer(key, val);
+            } catch {
+              // Outbound port failure must not crash field change handling
+            }
+          }
         }
       }
       if (this.autoSaveDraft && this.isHydrated()) {
@@ -380,9 +405,37 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
     return this.formManager.isFieldTouched(field);
   }
 
-  public setFieldValue<K extends keyof T>(field: K, value: T[K]): void {
+  public setFieldValue<K extends keyof T>(field: K, value: T[K]): boolean {
+    if (this.schema.governance?.interaction?.lockOnSelection) {
+      const affordance = this.getStepAffordance();
+      if (affordance.isStepLocked) {
+        return false;
+      }
+    }
     this.formManager.setFieldValue(field, value);
+    return true;
   }
+
+  public getStepAffordance(): StepAffordanceSnapshot {
+    const curIdx = this.getCurrentPageIndex();
+    const values = this.formManager.getState().values as Record<string, unknown>;
+    const visibleFields = this.getVisibleFields(curIdx);
+    const isStepAnswered = visibleFields.some(
+      (f) => values[f.name] !== undefined && values[f.name] !== ''
+    );
+    const isStepValid = this.validateCurrentStep();
+    const isSubmitting = this.lifecyclePort.getPhase() === 'submitting';
+
+    return evaluateStepAffordance({
+      governance: this.schema.governance,
+      stepIndex: curIdx,
+      totalSteps: this.getTotalPages(),
+      isStepValid,
+      isStepAnswered,
+      isSubmitting,
+    });
+  }
+
 
   // Enrichment Delegation
   public batchSetFieldValues(
@@ -462,6 +515,10 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
 
   public getFormManager(): FormManager<T> {
     return this.formManager;
+  }
+
+  public getSchema(): FormSchema {
+    return this.schema;
   }
 
   public getPages(): FormPage[] {
@@ -694,6 +751,155 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
     return this.navigationCoordinator.nextStep();
   }
 
+  /**
+   * Asynchronously advances to the next step, querying the IAdaptiveStepOraclePort (if configured)
+   * to dynamically inject follow-up pages, adapt difficulty, or re-route branches based on live AI reasoning.
+   */
+  public async nextStepAsync(): Promise<boolean> {
+    if (!this.navigationCoordinator.validateCurrentStep()) {
+      return this.navigationCoordinator.nextStep();
+    }
+
+    if (this.adaptiveStepOracle) {
+      try {
+        const curIdx = this.getCurrentPageIndex();
+        const curPage = this.getCurrentPage();
+        const values = this.getState().values as T;
+        const decision = await this.adaptiveStepOracle.evaluateNextStep({
+          completedPage: curPage,
+          completedPageIndex: curIdx,
+          currentValues: values,
+          stepHistory: this.getStepHistory(),
+          assessmentState: this.assessmentEngine?.getState(),
+        });
+
+        if (decision.action === 'inject_step') {
+          this.injectDynamicPage(decision.page, decision.options ?? { afterPageId: curPage.id });
+        } else if (decision.action === 'replace_branch') {
+          this.replaceDynamicBranch(decision.anchorPageId, decision.pages);
+        } else if (decision.action === 'terminate') {
+          if (decision.confirmationMessage && this.schema.settings) {
+            this.schema.settings.confirmationMessage = decision.confirmationMessage;
+          }
+          await this.submit();
+          return true;
+        }
+      } catch (err) {
+        // Oracle timeout or failure must not deadlock navigation - graceful fallback to standard DAG
+        if (this.telemetry) {
+          this.telemetry.dispatch({
+            type: 'transition_rejected',
+            formId: this.schema.id,
+            stepIndex: this.getCurrentPageIndex(),
+            action: 'ADAPTIVE_STEP_ORACLE_EVALUATION',
+            reason: (err as Error).message,
+            timestamp: Date.now(),
+          });
+        }
+      }
+    }
+
+    return this.navigationCoordinator.nextStep();
+  }
+
+  /**
+   * Injects a dynamically generated page at runtime without resetting existing form state.
+   */
+  public injectDynamicPage(
+    page: FormPage,
+    options?: { afterPageId?: string; insertIndex?: number }
+  ): boolean {
+    if (!page || !page.id || !Array.isArray(page.fields)) {
+      return false;
+    }
+
+    // Prevent duplicate page IDs
+    const existingIdx = this.schema.pages.findIndex((p) => p.id === page.id);
+    if (existingIdx !== -1) {
+      return false;
+    }
+
+    let insertAt = this.schema.pages.length;
+    if (options?.afterPageId) {
+      const anchorIdx = this.schema.pages.findIndex((p) => p.id === options.afterPageId);
+      if (anchorIdx !== -1) {
+        insertAt = anchorIdx + 1;
+      }
+    } else if (typeof options?.insertIndex === 'number') {
+      insertAt = Math.max(0, Math.min(this.schema.pages.length, options.insertIndex));
+    }
+
+    // Insert into schema
+    this.schema.pages.splice(insertAt, 0, page);
+
+    // Register all fields into formManager and assessmentEngine
+    for (const field of page.fields) {
+      this.formManager.registerField(field.name as any, {
+        label: field.label,
+        type: field.type,
+        placeholder: field.placeholder,
+        required: field.required,
+        defaultValue: field.defaultValue as any,
+        options: field.options,
+        min: field.min,
+        max: field.max,
+        rules: field.rules,
+        visibleIf: field.visibleIf,
+        clearValueOnHide: field.clearValueOnHide,
+        semanticIntent: field.semanticIntent,
+      });
+
+      if (field.rubric && this.assessmentEngine?.registerRubric) {
+        this.assessmentEngine.registerRubric(field.name, field.rubric);
+      }
+    }
+
+    this.notify();
+    return true;
+  }
+
+  /**
+   * Replaces an entire downstream dynamic branch with newly synthesized pages from an AI agent.
+   */
+  public replaceDynamicBranch(anchorPageId: string, dynamicPages: FormPage[]): boolean {
+    const anchorIdx = this.schema.pages.findIndex((p) => p.id === anchorPageId);
+    if (anchorIdx === -1) return false;
+
+    // Remove obsolete pages between anchor and end
+    const pagesToRemove = this.schema.pages.slice(anchorIdx + 1);
+    for (const page of pagesToRemove) {
+      for (const field of page.fields) {
+        this.formManager.unregisterField(field.name as any);
+      }
+    }
+    this.schema.pages.splice(anchorIdx + 1, pagesToRemove.length);
+
+    // Insert dynamic pages
+    for (let i = 0; i < dynamicPages.length; i++) {
+      this.injectDynamicPage(dynamicPages[i], { insertIndex: anchorIdx + 1 + i });
+    }
+
+    return true;
+  }
+
+  /**
+   * Removes a dynamically injected page.
+   */
+  public removeDynamicPage(pageId: string): boolean {
+    const pageIdx = this.schema.pages.findIndex((p) => p.id === pageId);
+    if (pageIdx === -1 || pageIdx === this.getCurrentPageIndex() || this.schema.pages.length <= 1) {
+      return false;
+    }
+
+    const [removedPage] = this.schema.pages.splice(pageIdx, 1);
+    for (const field of removedPage.fields) {
+      this.formManager.unregisterField(field.name as any);
+    }
+
+    this.notify();
+    return true;
+  }
+
   public prevStep(): boolean {
     return this.navigationCoordinator.prevStep();
   }
@@ -719,6 +925,10 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
 
         if (completedPage) {
           this.ergonomicsCoordinator.triggerRewardEvaluation(completedIndex, completedPage);
+        }
+
+        if (this.assessmentEngine?.hasStepTimer()) {
+          this.assessmentEngine.startStepTimer();
         }
 
         if (this.telemetry) {
@@ -870,15 +1080,42 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
     return this.persistenceCoordinator.hasSavedDraft();
   }
 
-  public async flushOutbox(): Promise<number> {
-    return this.persistenceCoordinator.flushOutbox();
+  public async flushOutbox(force?: boolean): Promise<number> {
+    return this.persistenceCoordinator.flushOutbox(force);
   }
 
   public getOutboxQueue(): OfflineOutboxQueue<T> | undefined {
     return this.persistenceCoordinator.getOutboxQueue();
   }
 
+  public getAssessmentEngine(): IAssessmentPort | undefined {
+    return this.assessmentEngine;
+  }
+
+  public isAssessment(): boolean {
+    return Boolean(this.assessmentEngine);
+  }
+
+  public getAssessmentState(): AssessmentState | undefined {
+    return this.assessmentEngine?.getState();
+  }
+
+  public requestAssessmentHint(fieldName: string): string | undefined {
+    return this.assessmentEngine?.requestHint(fieldName);
+  }
+
+  public handleAppStateChange(state: 'active' | 'background' | 'inactive'): void {
+    this.assessmentEngine?.handleAppStateChange(state);
+  }
+
   public async submit(): Promise<void> {
+    if (this.assessmentEngine && !this.assessmentEngine.isInstantTiming()) {
+      try {
+        this.assessmentEngine.gradeAll(this.formManager.getState().values as Record<string, unknown>);
+      } catch {
+        // Outbound port failure must not crash submission
+      }
+    }
     return this.persistenceCoordinator.submit();
   }
 
@@ -898,6 +1135,10 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
     if (this.unsubscribeLifecycle) {
       this.unsubscribeLifecycle();
       this.unsubscribeLifecycle = undefined;
+    }
+    if (this.assessmentEngine) {
+      this.assessmentEngine.dispose();
+      this.assessmentEngine = undefined;
     }
     this.persistenceCoordinator.destroy();
     if (this.telemetry && 'flush' in this.telemetry) {

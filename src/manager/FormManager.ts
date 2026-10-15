@@ -260,6 +260,46 @@ export class FormManager<T extends Record<string, unknown>> {
     );
   }
 
+  /**
+   * Dynamically registers a new field into the active form runtime.
+   * Preserves existing form values and updates the dependency DAG.
+   */
+  public registerField<K extends keyof T>(fieldName: K, fieldConfig: FormFieldConfig<T[K]>): void {
+    this.config.fields[fieldName] = fieldConfig;
+    const currentValues = this.tsForm.state.values as Record<string, unknown>;
+    if (currentValues[fieldName as string] === undefined) {
+      const initialVal = getInitialFieldValue(fieldConfig);
+      this.tsForm.setFieldValue(fieldName as any, initialVal as any);
+    }
+    this.dagEngine = new FormDagEngine<T>(this.config);
+  }
+
+  /**
+   * Dynamically unregisters a field from the active form runtime.
+   */
+  public unregisterField<K extends keyof T>(fieldName: K): void {
+    delete this.config.fields[fieldName];
+    delete this.fieldErrors[fieldName];
+    delete this.touchedFields[fieldName];
+    const anyStore = this.tsForm?.store as any;
+    if (typeof anyStore?.setState === 'function') {
+      anyStore.setState((prev: any) => {
+        const nextValues = { ...(prev?.values || {}) };
+        delete nextValues[fieldName as string];
+        const nextFields = { ...(prev?.fields || {}) };
+        delete nextFields[fieldName as string];
+        return {
+          ...prev,
+          values: nextValues as T,
+          fields: nextFields,
+        };
+      });
+    } else if (this.tsForm?.state?.values) {
+      delete (this.tsForm.state.values as Record<string, unknown>)[fieldName as string];
+    }
+    this.dagEngine = new FormDagEngine<T>(this.config);
+  }
+
   public focusField(field: keyof T): void {
     this.fieldFocusTimestamps.set(field, Date.now());
     if (this.telemetry) {

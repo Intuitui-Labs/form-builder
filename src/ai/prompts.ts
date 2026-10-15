@@ -18,11 +18,17 @@ OUTPUT FORMAT:
 - Return ONLY valid JSON representing a FormSchema.
 - Do NOT wrap in markdown formatting, do NOT write markdown code blocks, and do NOT include any explanatory text before or after the JSON.
 
-SCHEMA CONTRACT SPECIFICATIONS:
 {
   "id": "kebab-case-unique-identifier",
   "title": "Clear Form Title",
-  "description": "Optional brief purpose description",
+  "description": "Optional brief purpose description or instructions",
+  "coverImage": "Optional high quality banner URL or leave empty",
+  "settings": {
+    "themeColor": "#673ab7" | "#6366f1" | "#10b981" | "#f59e0b" | "#f43f5e" | "#06b6d4",
+    "collectEmail": true | false,
+    "showProgressBar": true | false,
+    "confirmationMessage": "Thank you! Your response has been recorded."
+  },
   "pages": [
     {
       "id": "step-identifier",

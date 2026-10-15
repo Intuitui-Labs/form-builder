@@ -324,6 +324,15 @@ export class SearchGroundedFormCompiler {
     if (options?.tenantId) {
       schema.tenantId = options.tenantId;
     }
+    schema.settings = {
+      isPublished: false,
+      showProgressBar: true,
+      collectEmail: false,
+      confirmationMessage: 'Thank you! Your response has been securely recorded.',
+      themeColor: '#6366f1',
+      coverImage: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&q=80',
+    };
+    schema.coverImage = schema.settings.coverImage;
 
     // Configure metrics on visualization gauge
     const terminalPage = schema.pages[schema.pages.length - 1];

@@ -1,14 +1,15 @@
 import { describe, it, expect, vi } from 'vitest';
+import { MemoryStorageAdapter } from '../../src/adapters/index.js';
 import {
   MultiStepFormManager,
   FormLifecycleMachine,
   DefaultSanitizer,
-  MemoryStorageAdapter,
   type FormSchema,
   type ITelemetryPort,
   type TelemetryEvent,
   type INetworkStatusPort,
 } from '../../src/index.js';
+
 
 const TEST_SCHEMA: FormSchema = {
   v: '1.0',

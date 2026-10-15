@@ -81,6 +81,7 @@ export type ValidatorRule =
   | { type: 'maxFiles'; max: number; message?: string };
 
 import type { Condition, PageJumpRule } from './FormBranching.js';
+import type { QuestionRubric, AssessmentSchemaConfig } from '../assessment/types.js';
 
 export type SemanticIntent =
   // Authentication & Passkeys
@@ -160,6 +161,7 @@ export interface FormField {
     dependsOn?: string[];
   };
   clarification?: ClarificationDescriptor;
+  rubric?: QuestionRubric;
 }
 
 export type PageRole = 'cover' | 'standard' | 'summary' | 'terminal';
@@ -204,6 +206,10 @@ export interface FieldDefinition {
   media?: MediaDescriptor;
   visualization?: InteractiveVisualizationDescriptor;
   clarification?: ClarificationDescriptor;
+  rubric?: QuestionRubric;
+  semanticIntent?: SemanticIntent;
+  sensitive?: boolean;
+  privacyRationale?: string;
 }
 
 export interface FormPage {
@@ -226,9 +232,17 @@ export interface FormSettings {
   isPublished?: boolean;
   category?: string;
   slug?: string;
+  coverImage?: string;
+  logoUrl?: string;
+  themeColor?: string;
+  confirmationMessage?: string;
+  collectEmail?: boolean;
+  showProgressBar?: boolean;
   affordanceConfig?: FormAffordanceConfig;
   [key: string]: unknown;
 }
+
+import type { FormGovernanceConfig } from '../governance/types.js';
 
 export interface FormSchema {
   v?: '1.0' | string;
@@ -237,12 +251,16 @@ export interface FormSchema {
   tenantId?: string;
   title: string;
   description?: string;
+  coverImage?: string;
   pages: FormPage[];
   settings?: FormSettings;
+  governance?: FormGovernanceConfig;
   affordanceConfig?: FormAffordanceConfig;
+  assessment?: AssessmentSchemaConfig;
   createdAt?: string;
   updatedAt?: string;
 }
+
 
 export interface FormResponse {
   id: string;

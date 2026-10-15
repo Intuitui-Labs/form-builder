@@ -10,11 +10,9 @@ import { DraftManager } from '../../persistence/DraftManager.js';
 import { OfflineOutboxQueue } from '../../persistence/OfflineOutboxQueue.js';
 import { resolveSemanticIntent } from '../../core/SemanticIntentResolver.js';
 import type { FormResilienceOptions } from '../MultiStepFormManager.js';
-import {
-  MemoryStorageAdapter,
-  AlwaysOnlineNetworkAdapter,
-  CallbackTransportAdapter,
-} from '../../adapters/index.js';
+import { MemoryStorageAdapter } from '../../adapters/storage/MemoryStorageAdapter.js';
+import { AlwaysOnlineNetworkAdapter } from '../../adapters/network/AlwaysOnlineNetworkAdapter.js';
+import { CallbackTransportAdapter } from '../../adapters/transport/CallbackTransportAdapter.js';
 import type { MultiStepCoordinatorContext } from './types.js';
 
 export class FormPersistenceCoordinator<T extends Record<string, unknown>> {
@@ -55,6 +53,9 @@ export class FormPersistenceCoordinator<T extends Record<string, unknown>> {
         storage: this.storagePort,
         networkStatus: this.networkStatusPort,
         transport: this.transportPort,
+        batteryStatus: resOpt?.batteryStatus,
+        criticalBatteryThreshold: resOpt?.criticalBatteryThreshold,
+        throttleOnLowPower: resOpt?.throttleOnLowPower,
       });
 
       this.unsubscribeOutbox = this.outboxQueue.subscribe((q) => {
@@ -265,9 +266,9 @@ export class FormPersistenceCoordinator<T extends Record<string, unknown>> {
     return res;
   }
 
-  public async flushOutbox(): Promise<number> {
+  public async flushOutbox(force?: boolean): Promise<number> {
     if (!this.outboxQueue) return 0;
-    const count = await this.outboxQueue.flush();
+    const count = await this.outboxQueue.flush(force);
     const pending = await this.outboxQueue.getPendingCount();
     this.ctx.lifecyclePort.send({ type: 'OUTBOX_COUNT_CHANGE', count: pending });
     this.ctx.notify();

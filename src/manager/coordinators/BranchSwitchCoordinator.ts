@@ -199,7 +199,9 @@ export class BranchSwitchCoordinator<T extends Record<string, unknown>> {
       if (matchingRule) {
         divergentFromStepIndex = i;
         divergentFromStepTitle = page.title ?? `Step ${i + 1}`;
-        const preds = this.extractConditionPredicates(matchingRule.condition);
+        const preds = matchingRule.condition
+          ? this.extractConditionPredicates(matchingRule.condition)
+          : [];
         for (const pred of preds) {
           const fieldDef = this.ctx.schema.pages.flatMap((p) => p.fields).find((f) => f.name === pred.field);
           const currentValue = values[pred.field];

@@ -104,7 +104,6 @@ INSTRUCTIONS:
   }
 
   private parseAndValidateResponse(raw: string, validFields: FormField[]): ExtractedEntity[] {
-    const validFieldNames = validFields.length > 0 ? new Set(validFields.map((f) => f.name)) : null;
     const dangerousKeys = new Set(['__proto__', 'constructor', 'prototype']);
 
     let cleaned = raw.trim();
@@ -133,7 +132,12 @@ INSTRUCTIONS:
           if (!item || typeof item !== 'object') continue;
           const key = String(item.fieldKey || item.field || item.name || '');
           if (!key || dangerousKeys.has(key)) continue;
-          if (validFieldNames && !validFieldNames.has(key)) continue;
+
+          const targetField = this.resolveTargetField(key, validFields);
+          if (validFields.length > 0 && !targetField) continue;
+
+          const fieldName = targetField ? targetField.name : key;
+          const coercedValue = targetField ? this.coerceValue(item.value, targetField.type) : item.value;
 
           const confidence =
             typeof item.confidence === 'number' && item.confidence >= 0 && item.confidence <= 1
@@ -141,8 +145,8 @@ INSTRUCTIONS:
               : 0.85;
 
           results.push({
-            field: key,
-            value: item.value,
+            field: fieldName,
+            value: coercedValue,
             confidence,
             sourceSnippet: typeof item.rawSpan === 'string' ? item.rawSpan : (typeof item.snippet === 'string' ? item.snippet : undefined),
             origin: this.providerId,
@@ -154,27 +158,32 @@ INSTRUCTIONS:
       // Support object format: { "email": { "value": ... } } or { "email": "test@test.com" }
       for (const [key, payload] of Object.entries(parsed)) {
         if (dangerousKeys.has(key)) continue;
-        if (validFieldNames && !validFieldNames.has(key)) continue;
+
+        const targetField = this.resolveTargetField(key, validFields);
+        if (validFields.length > 0 && !targetField) continue;
+
+        const fieldName = targetField ? targetField.name : key;
 
         if (payload && typeof payload === 'object' && 'value' in payload) {
           const item = payload as { value: unknown; confidence?: unknown; snippet?: unknown };
+          const coercedValue = targetField ? this.coerceValue(item.value, targetField.type) : item.value;
           const confidence =
             typeof item.confidence === 'number' && item.confidence >= 0 && item.confidence <= 1
               ? item.confidence
               : 0.85;
 
           results.push({
-            field: key,
-            value: item.value,
+            field: fieldName,
+            value: coercedValue,
             confidence,
             sourceSnippet: typeof item.snippet === 'string' ? item.snippet : undefined,
             origin: this.providerId,
           });
         } else if (payload !== undefined && payload !== null) {
-          // Direct value assignment format fallback: { "email": "test@test.com" }
+          const coercedValue = targetField ? this.coerceValue(payload, targetField.type) : payload;
           results.push({
-            field: key,
-            value: payload,
+            field: fieldName,
+            value: coercedValue,
             confidence: 0.8,
             origin: this.providerId,
           });
@@ -185,5 +194,79 @@ INSTRUCTIONS:
     } catch {
       return [];
     }
+  }
+
+  private resolveTargetField(extractedKey: string, validFields: FormField[]): FormField | undefined {
+    if (validFields.length === 0) return undefined;
+
+    // 1. Exact match
+    const exact = validFields.find((f) => f.name === extractedKey || f.id === extractedKey);
+    if (exact) return exact;
+
+    // 2. Normalized alphanumeric match (ignore underscores, dashes, spaces, case)
+    const normalizedKey = extractedKey.toLowerCase().replace(/[-_\s]/g, '');
+    const normalizedMatch = validFields.find((f) => f.name.toLowerCase().replace(/[-_\s]/g, '') === normalizedKey);
+    if (normalizedMatch) return normalizedMatch;
+
+    // 3. Semantic Intent match
+    for (const field of validFields) {
+      if (field.semanticIntent) {
+        const intentNorm = field.semanticIntent.toLowerCase().replace(/[-_\s]/g, '');
+        if (intentNorm.includes(normalizedKey) || normalizedKey.includes(intentNorm)) {
+          return field;
+        }
+      }
+    }
+
+    // 4. Common aliases heuristic map
+    const aliasMap: Record<string, string[]> = {
+      email: ['contact-email', 'email_address', 'mail'],
+      phone: ['contact-phone', 'mobile', 'cell', 'telephone', 'tel', 'phone_number'],
+      name: ['name-full', 'full_name', 'customer_name', 'applicant_name'],
+      firstname: ['name-given', 'first_name', 'given_name'],
+      lastname: ['name-family', 'last_name', 'surname'],
+      address: ['address-line1', 'street', 'street_address'],
+      city: ['address-city', 'town'],
+      state: ['address-state', 'province', 'region'],
+      zip: ['address-postal-code', 'postal', 'postal_code', 'zip_code'],
+      country: ['address-country', 'nation'],
+      ssn: ['identity-tax-id', 'tax_id', 'tin', 'ein'],
+      income: ['annual_income', 'gross_income', 'salary', 'annual_revenue'],
+    };
+
+    for (const [aliasRoot, aliases] of Object.entries(aliasMap)) {
+      if (normalizedKey.includes(aliasRoot) || aliases.some((a) => normalizedKey.includes(a.replace(/[-_]/g, '')))) {
+        const match = validFields.find((f) => {
+          const fNorm = f.name.toLowerCase().replace(/[-_]/g, '');
+          const intentNorm = f.semanticIntent ? f.semanticIntent.toLowerCase().replace(/[-_]/g, '') : '';
+          return fNorm.includes(aliasRoot) || intentNorm.includes(aliasRoot) || aliases.some((a) => fNorm.includes(a.replace(/[-_]/g, '')) || intentNorm.includes(a.replace(/[-_]/g, '')));
+        });
+        if (match) return match;
+      }
+    }
+
+    return undefined;
+  }
+
+  private coerceValue(value: unknown, fieldType: string): unknown {
+    if (value === undefined || value === null) return value;
+
+    if (fieldType === 'number' || fieldType === 'slider') {
+      if (typeof value === 'number') return value;
+      if (typeof value === 'string') {
+        const cleaned = value.replace(/[$€£¥,%\s]/g, '').trim();
+        const num = Number(cleaned);
+        return isNaN(num) ? value : num;
+      }
+    }
+
+    if (fieldType === 'checkbox' || fieldType === 'switch') {
+      if (typeof value === 'boolean') return value;
+      const str = String(value).toLowerCase().trim();
+      if (str === 'true' || str === 'yes' || str === '1') return true;
+      if (str === 'false' || str === 'no' || str === '0') return false;
+    }
+
+    return value;
   }
 }

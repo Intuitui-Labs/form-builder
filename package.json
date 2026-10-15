@@ -93,6 +93,26 @@
       "import": "./dist/ai/index.js",
       "default": "./dist/ai/index.js"
     },
+    "./assessment": {
+      "types": "./dist/assessment/index.d.ts",
+      "import": "./dist/assessment/index.js",
+      "default": "./dist/assessment/index.js"
+    },
+    "./studio": {
+      "types": "./dist/studio/index.d.ts",
+      "import": "./dist/studio/index.js",
+      "default": "./dist/studio/index.js"
+    },
+    "./governance": {
+      "types": "./dist/governance/index.d.ts",
+      "import": "./dist/governance/index.js",
+      "default": "./dist/governance/index.js"
+    },
+    "./manager": {
+      "types": "./dist/manager/index.d.ts",
+      "import": "./dist/manager/index.js",
+      "default": "./dist/manager/index.js"
+    },
     "./*": {
 
       "types": "./dist/*.d.ts",
@@ -148,7 +168,7 @@
     "hydration",
     "analytics"
   ],
-  "author": "Intuitui Labs & Neev Foundation",
+  "author": "Intuitui Labs",
   "license": "MIT",
   "dependencies": {
     "@tanstack/form-core": "^0.42.1",

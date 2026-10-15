@@ -312,4 +312,4 @@ pnpm showcase:verify
 ---
 
 ## 📄 License
-MIT © Intuitui Labs & Neev Foundation.
+MIT © Intuitui Labs.

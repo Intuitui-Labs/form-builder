@@ -49,3 +49,6 @@ export { WebSpeechAdapter, NullSpeechAdapter } from './speech/WebSpeechAdapter.j
 
 // Spatial Affordance adapters
 export { SpatialAffordanceAdapter, type SpatialAffordanceAdapterOptions } from './spatial/index.js';
+
+// Battery & Power adapters
+export * from './battery/index.js';

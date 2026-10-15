@@ -1,13 +1,14 @@
 import { describe, it, expect } from 'vitest';
+import { SpatialAffordanceAdapter } from '../src/adapters/index.js';
 import {
   NoopSpatialAffordanceAdapter,
   evaluateGestaltProximity,
   calculateFieldQuantumDensity,
-  SpatialAffordanceAdapter,
   lintFormSchema,
   type FormSchema,
   type FieldDefinition,
 } from '../src/index.js';
+
 
 describe('Spatial Affordance Engine & Hexagonal Ports', () => {
   describe('NoopSpatialAffordanceAdapter (Zero-Bloat Fallback)', () => {

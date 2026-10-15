@@ -30,3 +30,21 @@ export {
   type SearchGroundingContext,
   type GroundedCompilationResult,
 } from './SearchGroundedFormCompiler.js';
+
+export {
+  AiStudioCopilotDispatcher,
+  type AiToolActionProposal,
+  type ProposalValidationResult,
+  type ApplyProposalOptions,
+  type ApplyProposalResult,
+  type ParseToolCallResult,
+} from './StudioAiCopilotDispatcher.js';
+
+export {
+  SchemaPatchEngine,
+  type PatchOperationType,
+  type SchemaPatchOp,
+  type PatchApplyResult,
+  type PatchOptions,
+} from './SchemaPatchEngine.js';
+

@@ -1,9 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
+import { MemoryTelemetryAdapter } from '../../src/adapters/index.js';
 import {
   MultiStepFormManager,
-  MemoryTelemetryAdapter,
   type FormSchema,
 } from '../../src/index.js';
+
 
 describe('MultiStepFormManager Telemetry Lifecycle Integration', () => {
   const testSchema: FormSchema = {

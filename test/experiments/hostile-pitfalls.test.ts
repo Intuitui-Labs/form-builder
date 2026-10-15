@@ -1,12 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
+import { MemoryExperimentAdapter } from '../../src/adapters/index.js';
 import {
   ExperimentFormHydrator,
-  MemoryExperimentAdapter,
-  AnalyticsEngine,
   type FormSchema,
   type FormDraftSnapshot,
   type FormResponse,
 } from '../../src/index.js';
+import { AnalyticsEngine } from '../../src/analytics/index.js';
+
 
 const controlSchema: FormSchema = {
   id: 'intake-form',

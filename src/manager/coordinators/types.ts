@@ -15,6 +15,7 @@ import type { ResolvedAffordanceConfig } from '../../adapters/index.js';
 import type { NativeFocusController } from '../../focus/NativeFocusController.js';
 import type { FormManager } from '../FormManager.js';
 import type { OfflineOutboxQueue, OutboxSyncStatus } from '../../persistence/OfflineOutboxQueue.js';
+import type { IAssessmentPort } from '../../ports/IAssessmentPort.js';
 
 /**
  * Shared context and interface bindings provided to each coordinator by MultiStepFormManager.
@@ -64,4 +65,5 @@ export interface MultiStepCoordinatorContext<T extends Record<string, unknown>> 
   getOutboxQueue: () => OfflineOutboxQueue<T> | undefined;
   getOutboxSyncStatus: () => OutboxSyncStatus;
   getOutboxLastSyncError: () => string | undefined;
+  getAssessmentEngine?: () => IAssessmentPort | undefined;
 }

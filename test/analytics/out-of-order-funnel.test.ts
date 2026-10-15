@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { AnalyticsEngine, type FormTelemetryEvent } from '../../src/index.js';
+import { AnalyticsEngine } from '../../src/analytics/index.js';
+import type { FormTelemetryEvent } from '../../src/index.js';
 
 describe('AnalyticsEngine - Out-of-Order Telemetry Event Chronology', () => {
   it('correctly orders out-of-sequence network telemetry packets before computing funnel metrics', () => {

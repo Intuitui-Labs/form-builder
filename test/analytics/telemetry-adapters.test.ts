@@ -3,8 +3,9 @@ import {
   MemoryTelemetryAdapter,
   BatchingTelemetryAdapter,
   CallbackTelemetryAdapter,
-  type FormTelemetryEvent,
-} from '../../src/index.js';
+} from '../../src/adapters/index.js';
+import type { FormTelemetryEvent } from '../../src/index.js';
+
 
 describe('Telemetry Outbound Adapters', () => {
   describe('MemoryTelemetryAdapter', () => {

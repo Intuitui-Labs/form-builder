@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { AnalyticsEngine, type FormTelemetryEvent } from '../../src/index.js';
+import { AnalyticsEngine } from '../../src/analytics/index.js';
+import type { FormTelemetryEvent } from '../../src/index.js';
 
 describe('AnalyticsEngine: Funnel & Friction Intelligence', () => {
   describe('calculateFunnel()', () => {
