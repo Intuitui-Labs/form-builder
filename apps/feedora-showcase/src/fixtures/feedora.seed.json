@@ -1,0 +1,1773 @@
+{
+  "source": "gihini-research/db.sqlite3",
+  "organizations": [
+    {
+      "id": 1,
+      "org_name": "University of Moratuwa",
+      "org_type": "university",
+      "user_role": "Student",
+      "country": "",
+      "user_id": 4
+    }
+  ],
+  "respondents": [
+    {
+      "user_id": 2,
+      "email": "gihinilwaid@gmail.com",
+      "display_name": "gihinilwaid",
+      "total_points": 420
+    },
+    {
+      "user_id": 3,
+      "email": "amayawaid@gmail.com",
+      "display_name": "amayawaid",
+      "total_points": 0
+    },
+    {
+      "user_id": 5,
+      "email": "ajithwaid@gmail.com",
+      "display_name": "ajithwaid",
+      "total_points": 0
+    }
+  ],
+  "responses": [
+    {
+      "id": 1,
+      "survey_id": 4,
+      "user_id": null,
+      "points_earned": 95,
+      "completed_at": "2026-05-02 18:05:14.513355"
+    },
+    {
+      "id": 2,
+      "survey_id": 6,
+      "user_id": null,
+      "points_earned": 30,
+      "completed_at": "2026-05-02 21:43:56.620465"
+    },
+    {
+      "id": 3,
+      "survey_id": 7,
+      "user_id": null,
+      "points_earned": 380,
+      "completed_at": "2026-05-02 21:56:21.845032"
+    },
+    {
+      "id": 4,
+      "survey_id": 8,
+      "user_id": 4,
+      "points_earned": 30,
+      "completed_at": "2026-05-02 23:21:06.333497"
+    },
+    {
+      "id": 5,
+      "survey_id": 7,
+      "user_id": 4,
+      "points_earned": 380,
+      "completed_at": "2026-05-03 17:30:51.069945"
+    },
+    {
+      "id": 6,
+      "survey_id": 11,
+      "user_id": 4,
+      "points_earned": 40,
+      "completed_at": "2026-05-04 02:51:19.666297"
+    },
+    {
+      "id": 7,
+      "survey_id": 11,
+      "user_id": 4,
+      "points_earned": 40,
+      "completed_at": "2026-05-04 02:53:12.181122"
+    },
+    {
+      "id": 8,
+      "survey_id": 11,
+      "user_id": 4,
+      "points_earned": 40,
+      "completed_at": "2026-05-04 02:54:12.375160"
+    },
+    {
+      "id": 9,
+      "survey_id": 11,
+      "user_id": 4,
+      "points_earned": 30,
+      "completed_at": "2026-05-04 02:55:07.511608"
+    },
+    {
+      "id": 10,
+      "survey_id": 11,
+      "user_id": null,
+      "points_earned": 30,
+      "completed_at": "2026-05-04 04:15:42.080352"
+    },
+    {
+      "id": 14,
+      "survey_id": 21,
+      "user_id": 4,
+      "points_earned": 30,
+      "completed_at": "2026-05-04 07:38:48.668695"
+    },
+    {
+      "id": 16,
+      "survey_id": 17,
+      "user_id": null,
+      "points_earned": 40,
+      "completed_at": "2026-05-05 02:20:29.357127"
+    },
+    {
+      "id": 17,
+      "survey_id": 17,
+      "user_id": null,
+      "points_earned": 40,
+      "completed_at": "2026-05-05 02:21:25.476516"
+    },
+    {
+      "id": 18,
+      "survey_id": 21,
+      "user_id": null,
+      "points_earned": 30,
+      "completed_at": "2026-05-05 02:49:42.623619"
+    },
+    {
+      "id": 19,
+      "survey_id": 23,
+      "user_id": null,
+      "points_earned": 50,
+      "completed_at": "2026-05-05 07:30:50.820001"
+    },
+    {
+      "id": 22,
+      "survey_id": 21,
+      "user_id": null,
+      "points_earned": 30,
+      "completed_at": "2026-05-05 11:21:04.520319"
+    },
+    {
+      "id": 23,
+      "survey_id": 24,
+      "user_id": null,
+      "points_earned": 380,
+      "completed_at": "2026-05-05 20:57:42.130189"
+    },
+    {
+      "id": 24,
+      "survey_id": 24,
+      "user_id": null,
+      "points_earned": 380,
+      "completed_at": "2026-05-05 20:59:56.192976"
+    },
+    {
+      "id": 25,
+      "survey_id": 23,
+      "user_id": null,
+      "points_earned": 40,
+      "completed_at": "2026-05-05 21:01:51.360364"
+    },
+    {
+      "id": 26,
+      "survey_id": 21,
+      "user_id": null,
+      "points_earned": 30,
+      "completed_at": "2026-05-05 21:02:39.926147"
+    },
+    {
+      "id": 27,
+      "survey_id": 21,
+      "user_id": null,
+      "points_earned": 30,
+      "completed_at": "2026-05-05 21:42:02.640365"
+    },
+    {
+      "id": 28,
+      "survey_id": 21,
+      "user_id": null,
+      "points_earned": 30,
+      "completed_at": "2026-05-05 22:16:32.421019"
+    },
+    {
+      "id": 29,
+      "survey_id": 21,
+      "user_id": null,
+      "points_earned": 30,
+      "completed_at": "2026-05-05 22:37:17.924662"
+    },
+    {
+      "id": 30,
+      "survey_id": 21,
+      "user_id": 4,
+      "points_earned": 30,
+      "completed_at": "2026-05-06 04:06:58.731160"
+    },
+    {
+      "id": 32,
+      "survey_id": 31,
+      "user_id": 4,
+      "points_earned": 30,
+      "completed_at": "2026-07-07 18:49:33.024224"
+    },
+    {
+      "id": 33,
+      "survey_id": 33,
+      "user_id": 4,
+      "points_earned": 35,
+      "completed_at": "2026-07-11 10:37:56.071923"
+    },
+    {
+      "id": 34,
+      "survey_id": 33,
+      "user_id": 4,
+      "points_earned": 35,
+      "completed_at": "2026-07-11 10:40:45.722681"
+    },
+    {
+      "id": 35,
+      "survey_id": 33,
+      "user_id": 4,
+      "points_earned": 35,
+      "completed_at": "2026-07-11 12:43:18.555083"
+    },
+    {
+      "id": 36,
+      "survey_id": 33,
+      "user_id": 4,
+      "points_earned": 35,
+      "completed_at": "2026-07-11 14:42:42.231030"
+    },
+    {
+      "id": 37,
+      "survey_id": 34,
+      "user_id": 4,
+      "points_earned": 35,
+      "completed_at": "2026-07-12 04:32:42.415975"
+    },
+    {
+      "id": 38,
+      "survey_id": 34,
+      "user_id": 4,
+      "points_earned": 47,
+      "completed_at": "2026-07-12 08:24:11.522167"
+    },
+    {
+      "id": 39,
+      "survey_id": 21,
+      "user_id": 4,
+      "points_earned": 35,
+      "completed_at": "2026-07-13 07:07:01.564508"
+    },
+    {
+      "id": 40,
+      "survey_id": 21,
+      "user_id": 4,
+      "points_earned": 35,
+      "completed_at": "2026-07-13 07:07:45.858025"
+    },
+    {
+      "id": 41,
+      "survey_id": 37,
+      "user_id": 4,
+      "points_earned": 0,
+      "completed_at": "2026-07-13 07:40:34.107121"
+    },
+    {
+      "id": 42,
+      "survey_id": 37,
+      "user_id": 4,
+      "points_earned": 0,
+      "completed_at": "2026-07-13 07:41:00.169828"
+    },
+    {
+      "id": 43,
+      "survey_id": 37,
+      "user_id": 4,
+      "points_earned": 10,
+      "completed_at": "2026-07-13 07:47:02.773969"
+    },
+    {
+      "id": 44,
+      "survey_id": 42,
+      "user_id": 4,
+      "points_earned": 0,
+      "completed_at": "2026-07-13 14:42:26.711191"
+    },
+    {
+      "id": 45,
+      "survey_id": 42,
+      "user_id": 4,
+      "points_earned": 0,
+      "completed_at": "2026-07-13 14:42:56.182149"
+    },
+    {
+      "id": 46,
+      "survey_id": 43,
+      "user_id": 4,
+      "points_earned": 20,
+      "completed_at": "2026-07-13 14:55:47.224028"
+    },
+    {
+      "id": 47,
+      "survey_id": 43,
+      "user_id": 4,
+      "points_earned": 20,
+      "completed_at": "2026-07-13 14:56:10.489646"
+    },
+    {
+      "id": 48,
+      "survey_id": 43,
+      "user_id": 4,
+      "points_earned": 30,
+      "completed_at": "2026-07-13 14:58:11.065842"
+    },
+    {
+      "id": 49,
+      "survey_id": 11,
+      "user_id": null,
+      "points_earned": 40,
+      "completed_at": "2026-10-15 14:26:35.962974"
+    },
+    {
+      "id": 50,
+      "survey_id": 11,
+      "user_id": 2,
+      "points_earned": 40,
+      "completed_at": "2026-10-15 14:26:36.018279"
+    },
+    {
+      "id": 51,
+      "survey_id": 24,
+      "user_id": 2,
+      "points_earned": 380,
+      "completed_at": "2026-10-15 14:27:03.975240"
+    }
+  ],
+  "hmsamAnswers": [
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "PEU1",
+      "hmsam_construct": "peou",
+      "likert_value": 5
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "PEU2",
+      "hmsam_construct": "peou",
+      "likert_value": 4
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "PEU3",
+      "hmsam_construct": "peou",
+      "likert_value": 4
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "PEU4",
+      "hmsam_construct": "peou",
+      "likert_value": 3
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "PEU5",
+      "hmsam_construct": "peou",
+      "likert_value": 4
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "PEU6",
+      "hmsam_construct": "peou",
+      "likert_value": 3
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "PU1",
+      "hmsam_construct": "pu",
+      "likert_value": 5
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "PU2",
+      "hmsam_construct": "pu",
+      "likert_value": 5
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "PU3",
+      "hmsam_construct": "pu",
+      "likert_value": 4
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "PU4",
+      "hmsam_construct": "pu",
+      "likert_value": 1
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "PU5",
+      "hmsam_construct": "pu",
+      "likert_value": 5
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "PU6",
+      "hmsam_construct": "pu",
+      "likert_value": 5
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "JOY1",
+      "hmsam_construct": "joy",
+      "likert_value": 5
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "JOY2",
+      "hmsam_construct": "joy",
+      "likert_value": 5
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "JOY3",
+      "hmsam_construct": "joy",
+      "likert_value": 4
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "JOY4",
+      "hmsam_construct": "joy",
+      "likert_value": 4
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "JOY5",
+      "hmsam_construct": "joy",
+      "likert_value": 3
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "CUR1",
+      "hmsam_construct": "curiosity",
+      "likert_value": 4
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "CUR2",
+      "hmsam_construct": "curiosity",
+      "likert_value": 4
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "CUR3",
+      "hmsam_construct": "curiosity",
+      "likert_value": 5
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "CUR4",
+      "hmsam_construct": "curiosity",
+      "likert_value": 3
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "CUR5",
+      "hmsam_construct": "curiosity",
+      "likert_value": 3
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "CTR1",
+      "hmsam_construct": "control",
+      "likert_value": 3
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "CTR2",
+      "hmsam_construct": "control",
+      "likert_value": 3
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "CTR3",
+      "hmsam_construct": "control",
+      "likert_value": 3
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "CTR4",
+      "hmsam_construct": "control",
+      "likert_value": 3
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "CTR5",
+      "hmsam_construct": "control",
+      "likert_value": 5
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "IMM1",
+      "hmsam_construct": "fi",
+      "likert_value": 3
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "IMM2",
+      "hmsam_construct": "fi",
+      "likert_value": 2
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "IMM3",
+      "hmsam_construct": "fi",
+      "likert_value": 2
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "IMM4",
+      "hmsam_construct": "fi",
+      "likert_value": 3
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "IMM5",
+      "hmsam_construct": "fi",
+      "likert_value": 3
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "IMM6",
+      "hmsam_construct": "fi",
+      "likert_value": 2
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "BIU1",
+      "hmsam_construct": "biu",
+      "likert_value": 3
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "BIU2",
+      "hmsam_construct": "biu",
+      "likert_value": 3
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "BIU3",
+      "hmsam_construct": "biu",
+      "likert_value": 2
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "BIU4",
+      "hmsam_construct": "biu",
+      "likert_value": 2
+    },
+    {
+      "response_id": 3,
+      "survey_id": 7,
+      "question_code": "BIU5",
+      "hmsam_construct": "biu",
+      "likert_value": 3
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "PEU1",
+      "hmsam_construct": "peou",
+      "likert_value": 2
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "PEU2",
+      "hmsam_construct": "peou",
+      "likert_value": 3
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "PEU3",
+      "hmsam_construct": "peou",
+      "likert_value": 2
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "PEU4",
+      "hmsam_construct": "peou",
+      "likert_value": 3
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "PEU5",
+      "hmsam_construct": "peou",
+      "likert_value": 3
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "PEU6",
+      "hmsam_construct": "peou",
+      "likert_value": 4
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "PU1",
+      "hmsam_construct": "pu",
+      "likert_value": 4
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "PU2",
+      "hmsam_construct": "pu",
+      "likert_value": 3
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "PU3",
+      "hmsam_construct": "pu",
+      "likert_value": 3
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "PU4",
+      "hmsam_construct": "pu",
+      "likert_value": 4
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "PU5",
+      "hmsam_construct": "pu",
+      "likert_value": 4
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "PU6",
+      "hmsam_construct": "pu",
+      "likert_value": 3
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "JOY1",
+      "hmsam_construct": "joy",
+      "likert_value": 3
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "JOY2",
+      "hmsam_construct": "joy",
+      "likert_value": 5
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "JOY3",
+      "hmsam_construct": "joy",
+      "likert_value": 2
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "JOY4",
+      "hmsam_construct": "joy",
+      "likert_value": 3
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "JOY5",
+      "hmsam_construct": "joy",
+      "likert_value": 3
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "CUR1",
+      "hmsam_construct": "curiosity",
+      "likert_value": 2
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "CUR2",
+      "hmsam_construct": "curiosity",
+      "likert_value": 2
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "CUR3",
+      "hmsam_construct": "curiosity",
+      "likert_value": 4
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "CUR4",
+      "hmsam_construct": "curiosity",
+      "likert_value": 4
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "CUR5",
+      "hmsam_construct": "curiosity",
+      "likert_value": 2
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "CTR1",
+      "hmsam_construct": "control",
+      "likert_value": 2
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "CTR2",
+      "hmsam_construct": "control",
+      "likert_value": 3
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "CTR3",
+      "hmsam_construct": "control",
+      "likert_value": 3
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "CTR4",
+      "hmsam_construct": "control",
+      "likert_value": 3
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "CTR5",
+      "hmsam_construct": "control",
+      "likert_value": 3
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "IMM1",
+      "hmsam_construct": "fi",
+      "likert_value": 3
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "IMM2",
+      "hmsam_construct": "fi",
+      "likert_value": 4
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "IMM3",
+      "hmsam_construct": "fi",
+      "likert_value": 1
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "IMM4",
+      "hmsam_construct": "fi",
+      "likert_value": 1
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "IMM5",
+      "hmsam_construct": "fi",
+      "likert_value": 2
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "IMM6",
+      "hmsam_construct": "fi",
+      "likert_value": 2
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "BIU1",
+      "hmsam_construct": "biu",
+      "likert_value": 2
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "BIU2",
+      "hmsam_construct": "biu",
+      "likert_value": 2
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "BIU3",
+      "hmsam_construct": "biu",
+      "likert_value": 3
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "BIU4",
+      "hmsam_construct": "biu",
+      "likert_value": 3
+    },
+    {
+      "response_id": 5,
+      "survey_id": 7,
+      "question_code": "BIU5",
+      "hmsam_construct": "biu",
+      "likert_value": 4
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "PEU1",
+      "hmsam_construct": "peou",
+      "likert_value": 5
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "PEU2",
+      "hmsam_construct": "peou",
+      "likert_value": 4
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "PEU3",
+      "hmsam_construct": "peou",
+      "likert_value": 4
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "PEU4",
+      "hmsam_construct": "peou",
+      "likert_value": 5
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "PEU5",
+      "hmsam_construct": "peou",
+      "likert_value": 5
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "PEU6",
+      "hmsam_construct": "peou",
+      "likert_value": 3
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "PU1",
+      "hmsam_construct": "pu",
+      "likert_value": 4
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "PU2",
+      "hmsam_construct": "pu",
+      "likert_value": 4
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "PU3",
+      "hmsam_construct": "pu",
+      "likert_value": 5
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "PU4",
+      "hmsam_construct": "pu",
+      "likert_value": 3
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "PU5",
+      "hmsam_construct": "pu",
+      "likert_value": 1
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "PU6",
+      "hmsam_construct": "pu",
+      "likert_value": 1
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "JOY1",
+      "hmsam_construct": "joy",
+      "likert_value": 2
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "JOY2",
+      "hmsam_construct": "joy",
+      "likert_value": 2
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "JOY3",
+      "hmsam_construct": "joy",
+      "likert_value": 3
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "JOY4",
+      "hmsam_construct": "joy",
+      "likert_value": 4
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "JOY5",
+      "hmsam_construct": "joy",
+      "likert_value": 4
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "CUR1",
+      "hmsam_construct": "curiosity",
+      "likert_value": 4
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "CUR2",
+      "hmsam_construct": "curiosity",
+      "likert_value": 4
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "CUR3",
+      "hmsam_construct": "curiosity",
+      "likert_value": 4
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "CUR4",
+      "hmsam_construct": "curiosity",
+      "likert_value": 4
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "CUR5",
+      "hmsam_construct": "curiosity",
+      "likert_value": 4
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "CTR1",
+      "hmsam_construct": "control",
+      "likert_value": 4
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "CTR2",
+      "hmsam_construct": "control",
+      "likert_value": 4
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "CTR3",
+      "hmsam_construct": "control",
+      "likert_value": 3
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "CTR4",
+      "hmsam_construct": "control",
+      "likert_value": 4
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "CTR5",
+      "hmsam_construct": "control",
+      "likert_value": 4
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "IMM1",
+      "hmsam_construct": "fi",
+      "likert_value": 5
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "IMM2",
+      "hmsam_construct": "fi",
+      "likert_value": 5
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "IMM3",
+      "hmsam_construct": "fi",
+      "likert_value": 5
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "IMM4",
+      "hmsam_construct": "fi",
+      "likert_value": 4
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "IMM5",
+      "hmsam_construct": "fi",
+      "likert_value": 5
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "IMM6",
+      "hmsam_construct": "fi",
+      "likert_value": 5
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "BIU1",
+      "hmsam_construct": "biu",
+      "likert_value": 4
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "BIU2",
+      "hmsam_construct": "biu",
+      "likert_value": 3
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "BIU3",
+      "hmsam_construct": "biu",
+      "likert_value": 3
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "BIU4",
+      "hmsam_construct": "biu",
+      "likert_value": 4
+    },
+    {
+      "response_id": 23,
+      "survey_id": 24,
+      "question_code": "BIU5",
+      "hmsam_construct": "biu",
+      "likert_value": 4
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "PEU1",
+      "hmsam_construct": "peou",
+      "likert_value": 2
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "PEU2",
+      "hmsam_construct": "peou",
+      "likert_value": 2
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "PEU3",
+      "hmsam_construct": "peou",
+      "likert_value": 2
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "PEU4",
+      "hmsam_construct": "peou",
+      "likert_value": 3
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "PEU5",
+      "hmsam_construct": "peou",
+      "likert_value": 4
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "PEU6",
+      "hmsam_construct": "peou",
+      "likert_value": 5
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "PU1",
+      "hmsam_construct": "pu",
+      "likert_value": 4
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "PU2",
+      "hmsam_construct": "pu",
+      "likert_value": 3
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "PU3",
+      "hmsam_construct": "pu",
+      "likert_value": 2
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "PU4",
+      "hmsam_construct": "pu",
+      "likert_value": 1
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "PU5",
+      "hmsam_construct": "pu",
+      "likert_value": 2
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "PU6",
+      "hmsam_construct": "pu",
+      "likert_value": 3
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "JOY1",
+      "hmsam_construct": "joy",
+      "likert_value": 4
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "JOY2",
+      "hmsam_construct": "joy",
+      "likert_value": 5
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "JOY3",
+      "hmsam_construct": "joy",
+      "likert_value": 3
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "JOY4",
+      "hmsam_construct": "joy",
+      "likert_value": 3
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "JOY5",
+      "hmsam_construct": "joy",
+      "likert_value": 3
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "CUR1",
+      "hmsam_construct": "curiosity",
+      "likert_value": 3
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "CUR2",
+      "hmsam_construct": "curiosity",
+      "likert_value": 3
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "CUR3",
+      "hmsam_construct": "curiosity",
+      "likert_value": 4
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "CUR4",
+      "hmsam_construct": "curiosity",
+      "likert_value": 4
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "CUR5",
+      "hmsam_construct": "curiosity",
+      "likert_value": 4
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "CTR1",
+      "hmsam_construct": "control",
+      "likert_value": 4
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "CTR2",
+      "hmsam_construct": "control",
+      "likert_value": 4
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "CTR3",
+      "hmsam_construct": "control",
+      "likert_value": 3
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "CTR4",
+      "hmsam_construct": "control",
+      "likert_value": 4
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "CTR5",
+      "hmsam_construct": "control",
+      "likert_value": 4
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "IMM1",
+      "hmsam_construct": "fi",
+      "likert_value": 4
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "IMM2",
+      "hmsam_construct": "fi",
+      "likert_value": 4
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "IMM3",
+      "hmsam_construct": "fi",
+      "likert_value": 4
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "IMM4",
+      "hmsam_construct": "fi",
+      "likert_value": 4
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "IMM5",
+      "hmsam_construct": "fi",
+      "likert_value": 4
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "IMM6",
+      "hmsam_construct": "fi",
+      "likert_value": 4
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "BIU1",
+      "hmsam_construct": "biu",
+      "likert_value": 4
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "BIU2",
+      "hmsam_construct": "biu",
+      "likert_value": 4
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "BIU3",
+      "hmsam_construct": "biu",
+      "likert_value": 4
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "BIU4",
+      "hmsam_construct": "biu",
+      "likert_value": 4
+    },
+    {
+      "response_id": 24,
+      "survey_id": 24,
+      "question_code": "BIU5",
+      "hmsam_construct": "biu",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "PEU1",
+      "hmsam_construct": "peou",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "PEU2",
+      "hmsam_construct": "peou",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "PEU3",
+      "hmsam_construct": "peou",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "PEU4",
+      "hmsam_construct": "peou",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "PEU5",
+      "hmsam_construct": "peou",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "PEU6",
+      "hmsam_construct": "peou",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "PU1",
+      "hmsam_construct": "pu",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "PU2",
+      "hmsam_construct": "pu",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "PU3",
+      "hmsam_construct": "pu",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "PU4",
+      "hmsam_construct": "pu",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "PU5",
+      "hmsam_construct": "pu",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "PU6",
+      "hmsam_construct": "pu",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "JOY1",
+      "hmsam_construct": "joy",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "JOY2",
+      "hmsam_construct": "joy",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "JOY3",
+      "hmsam_construct": "joy",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "JOY4",
+      "hmsam_construct": "joy",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "JOY5",
+      "hmsam_construct": "joy",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "CUR1",
+      "hmsam_construct": "curiosity",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "CUR2",
+      "hmsam_construct": "curiosity",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "CUR3",
+      "hmsam_construct": "curiosity",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "CUR4",
+      "hmsam_construct": "curiosity",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "CUR5",
+      "hmsam_construct": "curiosity",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "CTR1",
+      "hmsam_construct": "control",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "CTR2",
+      "hmsam_construct": "control",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "CTR3",
+      "hmsam_construct": "control",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "CTR4",
+      "hmsam_construct": "control",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "CTR5",
+      "hmsam_construct": "control",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "IMM1",
+      "hmsam_construct": "fi",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "IMM2",
+      "hmsam_construct": "fi",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "IMM3",
+      "hmsam_construct": "fi",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "IMM4",
+      "hmsam_construct": "fi",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "IMM5",
+      "hmsam_construct": "fi",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "IMM6",
+      "hmsam_construct": "fi",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "BIU1",
+      "hmsam_construct": "biu",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "BIU2",
+      "hmsam_construct": "biu",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "BIU3",
+      "hmsam_construct": "biu",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "BIU4",
+      "hmsam_construct": "biu",
+      "likert_value": 4
+    },
+    {
+      "response_id": 51,
+      "survey_id": 24,
+      "question_code": "BIU5",
+      "hmsam_construct": "biu",
+      "likert_value": 4
+    }
+  ],
+  "featuresHmsam": {
+    "mascot": {
+      "enabled": true,
+      "name": "mochi",
+      "position": "top-left"
+    },
+    "progress": {
+      "enabled": true,
+      "style": "solid",
+      "color": "#7A4FA8",
+      "label": "percent"
+    },
+    "points": {
+      "enabled": true,
+      "values": {
+        "likert": 10,
+        "mcq": 10,
+        "checkbox": 10,
+        "short": 10,
+        "open": 20,
+        "date": 5,
+        "file": 15
+      }
+    },
+    "badges": {
+      "enabled": false
+    },
+    "voucher": {
+      "enabled": false,
+      "code": "",
+      "discount": ""
+    },
+    "collection": {
+      "email": false,
+      "savecopy": false,
+      "emailcopy": false,
+      "limit": true,
+      "accept": true
+    },
+    "dashboard": {
+      "enabled": true,
+      "alpha": true,
+      "hmsam": true,
+      "responses": true,
+      "leaderboard": true,
+      "byquestion": true,
+      "individual": true
+    }
+  },
+  "featuresGamified": {
+    "mascot": {
+      "enabled": true,
+      "name": "mochi",
+      "position": "bottom-left"
+    },
+    "progress": {
+      "enabled": true,
+      "style": "solid",
+      "color": "#1F4D8F",
+      "label": "percent"
+    },
+    "points": {
+      "enabled": true,
+      "values": {
+        "likert": 10,
+        "mcq": 10,
+        "checkbox": 10,
+        "short": 5,
+        "open": 20,
+        "date": 5,
+        "file": 15
+      }
+    },
+    "badges": {
+      "enabled": true
+    },
+    "voucher": {
+      "enabled": false,
+      "code": "",
+      "discount": ""
+    },
+    "collection": {
+      "email": false,
+      "savecopy": false,
+      "emailcopy": false,
+      "limit": true,
+      "accept": true
+    },
+    "dashboard": {
+      "enabled": true,
+      "alpha": true,
+      "hmsam": true,
+      "responses": true,
+      "leaderboard": true,
+      "byquestion": true,
+      "individual": true
+    }
+  }
+}
