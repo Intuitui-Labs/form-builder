@@ -26,7 +26,10 @@ Welcome to the technical documentation library for `@intuitui-labs/form-builder-
     *   [LLM Agent Mechanics & The Headless Form Engine](./architecture/ai-agent-engine-mechanics-and-aci.md) — How LLM agents physically operate, dual programmatic vs. runtime generative modalities, Agent-Computer Interfaces (ACI), comparative analogical landscape, and hostile operationalization.
     *   [Polyglot Monorepo & Network Topology Architecture](./architecture/polyglot-monorepo-and-network-topology.md) — PNPM workspace linking Python PEP 621 services, physical IP resolution for Expo Go, and database Single Source of Truth invariants.
     *   [Django REST Seam & OpenAPI Gateway Specification](./architecture/django-rest-seam-and-openapi-specification.md) — Isolated REST contract, superuser persona bypass, JSON survey taker, and dynamic OpenAPI 3.1.0 specification.
-    *   [Mobile Dual-Sided Studio & Guided Auth Stepper Architecture](./architecture/mobile-dual-sided-studio-and-auth-stepper.md) — Guided 3-stage stepper, `KeyboardAvoidingView` ergonomics, Gihini design token preservation, and Creator Studio scaffolding.
+    *   [Mobile Dual-Sided Studio & Guided Auth Stepper Architecture](./architecture/mobile-dual-sided-studio-and-auth-stepper.md) — Guided 3-Stage stepper, `KeyboardAvoidingView` ergonomics, Gihini design token preservation, and Creator Studio scaffolding.
+    *   [Psychometric Fraud, Speeder Defense & Guest Points Migration](./architecture/psychometric-fraud-and-speeder-defense.md) — Safe Cronbach's Alpha zero-variance handling ($\sigma^2_X = 0$), straight-lining detection (LongString Index), speeder dwell protection, and guest-to-user atomic points transfer.
+    *   [Cross-Platform Optical QR & Peer-to-Peer Offline Transfer](./architecture/cross-platform-optical-qr-p2p-transfer.md) — Universal Android/iOS optical scanning, on-device Base64 image generation via `qrcode.toDataURL`, CRC32 checksum envelopes (`FDR1`), multi-frame chunking, and 100% offline SQLite schema importation.
+    *   [Gihini Research Collaboration & Handover Blueprint](./architecture/gihini-handover-and-collaboration-blueprint.md) — Pragmatic capacity evaluation, academic defense preservation, and 3-tiered delivery strategy for Django backend seams vs. companion mobile apps.
 *   [Infrastructure & Collaboration](./infra/pr-and-collaboration-playbook.md)
     *   [PR & Upstream Collaboration Playbook](./infra/pr-and-collaboration-playbook.md) — Zero-regression guidelines, pycache artifact shielding, and PR checklist for upstream repository collaboration.
 *   [Core Documentation](./Core/form-engine-architecture.md)
@@ -44,6 +47,19 @@ Welcome to the technical documentation library for `@intuitui-labs/form-builder-
 ---
 
 ## Changelog
+
+### [0.2.2] - 2026-10-17
+#### Added
+*   **Psychometric Fraud & Speeder Defense Port (`IPsychometricAuditorPort`)**:
+    *   Zero-variance cohort protection ($\sigma^2_X = 0$) returning safe $\alpha = 0.0$ without `NaN` or `ZeroDivisionError`.
+    *   Straight-lining detection via LongString Index ($\ge 80\%$ identical choices penalizes confidence by 45%).
+    *   Speeder dwell protection (flags $< 350\text{ms}$ dwell and timing spoofing with sub-$200\text{ms}$ clicks).
+    *   Atomic guest points migration (`guest-user` $\rightarrow$ authenticated account).
+*   **Cross-Platform Optical QR & P2P Offline Transfer (`IQrAirDropPort`)**:
+    *   Universal Android/iOS optical scanning via 2D matrix barcode (light photon transmission).
+    *   Client-side Base64 PNG QR code rendering via `qrcode.toDataURL` with zero native SVG/C++ bloat.
+    *   Dual distribution modes: `📱 Camera Scan Link` for standard phone cameras and `📦 Full Offline Schema` for zero-network field transfers.
+    *   Fast manual 6-character access code resolution (`/api/v1/surveys/code/<code/meta/`).
 
 ### [0.2.1] - 2026-10-17
 #### Added
