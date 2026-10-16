@@ -12,8 +12,11 @@ import type { RemoteSurveyMeta, RemoteSubmitResult } from './transportTypes';
 export interface ITransportPort {
   readonly name: string;
 
-  /** Read-only survey metadata (features + questions) as JSON. */
+  /** Read-only survey metadata (features + questions) as JSON by UUID. */
   fetchSurveyMeta(accessUuid: string): Promise<RemoteSurveyMeta>;
+
+  /** Read-only survey metadata by 6-char access code. */
+  fetchSurveyMetaByCode(accessCode: string): Promise<RemoteSurveyMeta>;
 
   /**
    * Submit answers keyed by question code (e.g. "PEU1"). The adapter maps codes

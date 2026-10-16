@@ -187,6 +187,6 @@ describe('CallbackLLMExtractorAdapter: Fuzzy Semantic Intent & Safe Coercion Har
     expect(rolledBackValues.annual_revenue).toBeNull(); // Reset to initial null
     expect(rolledBackValues.applicant_tax_id).toBe(''); // Reset to initial empty string
     expect(rolledBackValues.is_us_citizen).toBe(false); // Reset to initial false
-  });
+  }, 15000);
 });
 

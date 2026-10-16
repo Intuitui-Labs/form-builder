@@ -80,6 +80,7 @@ interface FeedoraContextValue {
   activeSurveyMeta: RemoteSurveyMeta | null;
   airDropSchema: FormSchema | null;
   openSurvey: (uuid: string) => Promise<void>;
+  openSurveyByCode: (code: string) => Promise<RemoteSurveyMeta>;
   openAirDropSurvey: (schema: FormSchema) => void;
   resetToDefaultSurvey: () => void;
 }
@@ -221,6 +222,20 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const openSurveyByCode = useCallback(async (code: string) => {
+    try {
+      const meta = await transportPort.fetchSurveyMetaByCode(code);
+      setAirDropSchema(null);
+      setActiveSurveyUuid(meta.survey.uuid);
+      setActiveSurveyMeta(meta);
+      setVersion((v) => v + 1);
+      return meta;
+    } catch (err) {
+      console.warn('Failed to fetch survey metadata by code:', err);
+      throw err;
+    }
+  }, []);
+
   const openAirDropSurvey = useCallback((schema: FormSchema) => {
     setAirDropSchema(schema);
     setActiveSurveyUuid(schema.id);
@@ -266,6 +281,7 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
         activeSurveyMeta,
         airDropSchema,
         openSurvey,
+        openSurveyByCode,
         openAirDropSurvey,
         resetToDefaultSurvey,
       }}

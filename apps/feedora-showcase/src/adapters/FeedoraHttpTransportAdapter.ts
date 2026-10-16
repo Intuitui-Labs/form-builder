@@ -40,6 +40,24 @@ export class FeedoraHttpTransportAdapter implements ITransportPort {
     return meta;
   }
 
+  async fetchSurveyMetaByCode(accessCode: string): Promise<RemoteSurveyMeta> {
+    const cleanCode = accessCode.trim().toUpperCase();
+    const endpoint = `${this.baseUrl.replace(/\/+$/, '')}/api/v1/surveys/code/${encodeURIComponent(cleanCode)}/meta/`;
+    const response = await this.fetchImpl(endpoint, {
+      method: 'GET',
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      throw new Error(`Survey with access code '${cleanCode}' not found (${response.status})`);
+    }
+    this.captureCsrf(response);
+    const meta = (await response.json()) as RemoteSurveyMeta;
+    if (meta.survey?.uuid) {
+      this.metaCache.set(meta.survey.uuid, meta);
+    }
+    return meta;
+  }
+
   async submitResponse(
     accessUuid: string,
     answersByCode: Record<string, unknown>,

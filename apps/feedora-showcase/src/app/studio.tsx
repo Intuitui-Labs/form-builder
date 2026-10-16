@@ -10,7 +10,9 @@ import {
   Text,
   TextInput,
   View,
+  Image,
 } from 'react-native';
+import QRCode from 'qrcode';
 import { router } from 'expo-router';
 import {
   MultiStepFormManager,
@@ -228,11 +230,16 @@ export default function StudioScreen() {
   const [draftSavedStatus, setDraftSavedStatus] = useState<string>('Auto-saved');
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
-  // AirDrop Distribution State
+  // Instant QR & P2P Distribution State
   const [isAirDropOpen, setIsAirDropOpen] = useState(false);
   const [airDropSlug, setAirDropSlug] = useState('');
   const [airDropTitle, setAirDropTitle] = useState('');
+  const [airDropAccessCode, setAirDropAccessCode] = useState('');
+  const [airDropQrDataUrl, setAirDropQrDataUrl] = useState<string | null>(null);
+  const [airDropTab, setAirDropTab] = useState<'link' | 'offline'>('link');
+  const [generatingQr, setGeneratingQr] = useState(false);
   const [copiedSlug, setCopiedSlug] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   // ---------------------------------------------------------------------------
   // Draft Auto-Persistence
@@ -572,14 +579,61 @@ export default function StudioScreen() {
     features: FEEDORA_FEATURES as unknown as Record<string, unknown>,
   }), [formTitle, formDesc, isHmsam, questions]);
 
-  const handleOpenAirDrop = (customMeta?: RemoteSurveyMeta) => {
+  const getShareLink = useCallback((code: string) => {
+    const host =
+      typeof window !== 'undefined' && window.location?.hostname
+        ? window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+          ? '10.10.66.76'
+          : window.location.hostname
+        : '10.10.66.76';
+    const port = typeof window !== 'undefined' && window.location?.port ? window.location.port : '8081';
+    return `http://${host}:${port}/?code=${encodeURIComponent(code || 'PREVIEW')}`;
+  }, []);
+
+  const updateQrImage = useCallback(
+    async (mode: 'link' | 'offline', code: string, slug: string) => {
+      setGeneratingQr(true);
+      try {
+        if (mode === 'link') {
+          const targetUrl = getShareLink(code);
+          const url = await QRCode.toDataURL(targetUrl, {
+            width: 260,
+            margin: 2,
+            errorCorrectionLevel: 'M',
+            color: { dark: '#0F172A', light: '#FFFFFF' },
+          });
+          setAirDropQrDataUrl(url);
+        } else {
+          const url = await QRCode.toDataURL(slug, {
+            width: 280,
+            margin: 2,
+            errorCorrectionLevel: 'L',
+            color: { dark: '#0F172A', light: '#FFFFFF' },
+          });
+          setAirDropQrDataUrl(url);
+        }
+      } catch (err) {
+        console.error('Failed to generate QR code', err);
+      } finally {
+        setGeneratingQr(false);
+      }
+    },
+    [getShareLink],
+  );
+
+  const handleOpenAirDrop = (customMeta?: RemoteSurveyMeta, customCode?: string) => {
     const targetMeta = customMeta || previewMeta;
     const targetSchema = convertRemoteSurveyToSchema(targetMeta);
     const manifest = qrAirDropPort.encodeManifest(targetSchema);
+    const code = customCode || targetMeta.survey.access_code || 'PREVIEW';
     setAirDropSlug(manifest);
     setAirDropTitle(targetSchema.title);
+    setAirDropAccessCode(code);
+    setAirDropTab('link');
     setIsAirDropOpen(true);
     setCopiedSlug(false);
+    setCopiedLink(false);
+    updateQrImage('link', code, manifest);
   };
 
   return (
@@ -646,6 +700,19 @@ export default function StudioScreen() {
                 "{publishSuccess.title}" is live. Access Code:{' '}
                 <Text style={styles.codeHighlight}>{publishSuccess.accessCode}</Text>
               </Text>
+              <Pressable
+                style={styles.celebrationShareBtn}
+                onPress={async () => {
+                  try {
+                    const meta = await transportPort.fetchSurveyMeta(publishSuccess.uuid);
+                    handleOpenAirDrop(meta, publishSuccess.accessCode);
+                  } catch {
+                    handleOpenAirDrop(undefined, publishSuccess.accessCode);
+                  }
+                }}
+              >
+                <Text style={styles.celebrationShareBtnText}>📲 Show QR Code & P2P Share</Text>
+              </Pressable>
             </View>
             <Pressable
               style={styles.dismissBtn}
@@ -776,13 +843,13 @@ export default function StudioScreen() {
                         onPress={async () => {
                           try {
                             const meta = await transportPort.fetchSurveyMeta(s.uuid);
-                            handleOpenAirDrop(meta);
+                            handleOpenAirDrop(meta, s.accessCode);
                           } catch (err) {
-                            Alert.alert('AirDrop Error', (err as Error).message);
+                            Alert.alert('QR Share Error', (err as Error).message);
                           }
                         }}
                       >
-                        <Text style={styles.cardActionAirDropText}>AirDrop 📲</Text>
+                        <Text style={styles.cardActionAirDropText}>📲 QR & Share</Text>
                       </Pressable>
                     </View>
                   </View>
@@ -1270,7 +1337,7 @@ export default function StudioScreen() {
                 style={styles.airdropBtn}
                 onPress={() => handleOpenAirDrop()}
               >
-                <Text style={styles.airdropBtnText}>AirDrop via Offline QR 📲</Text>
+                <Text style={styles.airdropBtnText}>📲 Instant QR & P2P Share (Android & iOS)</Text>
               </Pressable>
             </View>
           </View>
@@ -1290,7 +1357,7 @@ export default function StudioScreen() {
         />
       </Modal>
 
-      {/* Peer-to-Peer AirDrop Modal */}
+      {/* Instant QR & P2P Share Modal */}
       <Modal
         visible={isAirDropOpen}
         transparent
@@ -1300,51 +1367,162 @@ export default function StudioScreen() {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>📲 AirDrop Survey Manifest</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>📲 Instant QR & P2P Share</Text>
+                <Text style={styles.modalHeaderSubtitle}>
+                  Universal Android & iOS Optical Scanner
+                </Text>
+              </View>
               <Pressable onPress={() => setIsAirDropOpen(false)}>
                 <Text style={styles.modalCloseIcon}>✕</Text>
               </Pressable>
             </View>
-            <Text style={styles.modalDesc}>
-              This survey manifest is compressed with a CRC32 integrity checksum.
-              Any respondent device running the Feedora app can import this schema offline.
-            </Text>
 
-            <View style={styles.manifestBox}>
-              <Text style={styles.manifestLabel}>AIRDROP MANIFEST SLUG ({airDropSlug.length} chars)</Text>
-              <ScrollView style={styles.manifestScroll}>
-                <Text style={styles.manifestCode} selectable>{airDropSlug}</Text>
-              </ScrollView>
-            </View>
-
-            <View style={styles.airdropActionRow}>
+            {/* Mode Switcher Tabs */}
+            <View style={styles.qrTabRow}>
               <Pressable
-                style={styles.copyBtn}
+                style={[styles.qrTabBtn, airDropTab === 'link' && styles.qrTabBtnActive]}
                 onPress={() => {
-                  if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                    navigator.clipboard.writeText(airDropSlug);
-                  }
-                  setCopiedSlug(true);
-                  setTimeout(() => setCopiedSlug(false), 2000);
+                  setAirDropTab('link');
+                  updateQrImage('link', airDropAccessCode, airDropSlug);
                 }}
               >
-                <Text style={styles.copyBtnText}>
-                  {copiedSlug ? '✓ Manifest Copied!' : '📋 Copy AirDrop Code'}
+                <Text style={[styles.qrTabText, airDropTab === 'link' && styles.qrTabTextActive]}>
+                  📱 Camera Scan Link
                 </Text>
               </Pressable>
-
               <Pressable
-                style={styles.testOfflineBtn}
+                style={[styles.qrTabBtn, airDropTab === 'offline' && styles.qrTabBtnActive]}
                 onPress={() => {
-                  const schema = convertRemoteSurveyToSchema(previewMeta);
-                  openAirDropSurvey(schema);
-                  setIsAirDropOpen(false);
-                  router.replace('/');
+                  setAirDropTab('offline');
+                  updateQrImage('offline', airDropAccessCode, airDropSlug);
                 }}
               >
-                <Text style={styles.testOfflineBtnText}>Test Offline on This Device 🚀</Text>
+                <Text style={[styles.qrTabText, airDropTab === 'offline' && styles.qrTabTextActive]}>
+                  📦 Full Offline Schema
+                </Text>
               </Pressable>
             </View>
+
+            {airDropTab === 'link' ? (
+              <>
+                <Text style={styles.modalDesc}>
+                  Point <Text style={{ fontWeight: '800', color: colors.ink }}>ANY Android camera, Google Lens, or iPhone camera</Text> at this QR code to launch the survey instantly.
+                </Text>
+
+                <View style={styles.qrDisplayBox}>
+                  {generatingQr || !airDropQrDataUrl ? (
+                    <ActivityIndicator size="large" color={colors.primary} style={{ height: 200 }} />
+                  ) : (
+                    <Image
+                      source={{ uri: airDropQrDataUrl }}
+                      style={styles.qrImage}
+                      resizeMode="contain"
+                    />
+                  )}
+                  <Text style={styles.qrHintText}>Scan with phone camera · No app download required</Text>
+                </View>
+
+                {/* Prominent Access Code Display */}
+                <View style={styles.accessCodeCard}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.accessCodeLabel}>MANUAL PARTICIPANT CODE</Text>
+                    <Text style={styles.accessCodeValue}>{airDropAccessCode || 'PREVIEW'}</Text>
+                  </View>
+                  <Pressable
+                    style={styles.codeCopySmallBtn}
+                    onPress={() => {
+                      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                        navigator.clipboard.writeText(airDropAccessCode || 'PREVIEW');
+                      }
+                      setCopiedLink(true);
+                      setTimeout(() => setCopiedLink(false), 2000);
+                    }}
+                  >
+                    <Text style={styles.codeCopySmallText}>
+                      {copiedLink ? '✓ Copied' : 'Copy Code'}
+                    </Text>
+                  </Pressable>
+                </View>
+
+                {/* Shareable URL Row */}
+                <View style={styles.urlCard}>
+                  <Text style={styles.urlText} numberOfLines={1}>
+                    {getShareLink(airDropAccessCode)}
+                  </Text>
+                  <Pressable
+                    style={styles.copyUrlBtn}
+                    onPress={() => {
+                      const link = getShareLink(airDropAccessCode);
+                      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                        navigator.clipboard.writeText(link);
+                      }
+                      setCopiedLink(true);
+                      setTimeout(() => setCopiedLink(false), 2000);
+                    }}
+                  >
+                    <Text style={styles.copyUrlBtnText}>
+                      {copiedLink ? '✓ Link Copied!' : '🔗 Copy Web Link'}
+                    </Text>
+                  </Pressable>
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={styles.modalDesc}>
+                  <Text style={{ fontWeight: '800', color: colors.ink }}>Zero-Network Field Mode:</Text> This QR code encodes the entire instrument schema with a CRC32 integrity checksum. Open Feedora on ANY Android or iOS device and tap "Scan / Import" to load offline.
+                </Text>
+
+                <View style={styles.qrDisplayBox}>
+                  {generatingQr || !airDropQrDataUrl ? (
+                    <ActivityIndicator size="large" color={colors.primary} style={{ height: 200 }} />
+                  ) : (
+                    <Image
+                      source={{ uri: airDropQrDataUrl }}
+                      style={styles.qrImage}
+                      resizeMode="contain"
+                    />
+                  )}
+                  <Text style={styles.qrHintText}>High-density offline barcode · 100% network free</Text>
+                </View>
+
+                <View style={styles.manifestBox}>
+                  <Text style={styles.manifestLabel}>OFFLINE MANIFEST CODE ({airDropSlug.length} chars)</Text>
+                  <ScrollView style={styles.manifestScroll}>
+                    <Text style={styles.manifestCode} selectable>{airDropSlug}</Text>
+                  </ScrollView>
+                </View>
+
+                <View style={styles.airdropActionRow}>
+                  <Pressable
+                    style={styles.copyBtn}
+                    onPress={() => {
+                      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                        navigator.clipboard.writeText(airDropSlug);
+                      }
+                      setCopiedSlug(true);
+                      setTimeout(() => setCopiedSlug(false), 2000);
+                    }}
+                  >
+                    <Text style={styles.copyBtnText}>
+                      {copiedSlug ? '✓ Manifest Copied!' : '📋 Copy Offline Code'}
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={styles.testOfflineBtn}
+                    onPress={() => {
+                      const schema = convertRemoteSurveyToSchema(previewMeta);
+                      openAirDropSurvey(schema);
+                      setIsAirDropOpen(false);
+                      router.replace('/');
+                    }}
+                  >
+                    <Text style={styles.testOfflineBtnText}>Test Offline on This Device 🚀</Text>
+                  </Pressable>
+                </View>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -2532,6 +2710,136 @@ const styles = StyleSheet.create({
   },
   testOfflineBtnText: {
     fontSize: 12.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  celebrationShareBtn: {
+    marginTop: 6,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radii.small,
+    alignSelf: 'flex-start',
+  },
+  celebrationShareBtnText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  modalHeaderSubtitle: {
+    fontSize: 11.5,
+    color: colors.muted,
+    marginTop: 2,
+  },
+  qrTabRow: {
+    flexDirection: 'row',
+    backgroundColor: colors.canvas,
+    borderRadius: radii.small,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: colors.line,
+    gap: 4,
+  },
+  qrTabBtn: {
+    flex: 1,
+    paddingVertical: 7,
+    alignItems: 'center',
+    borderRadius: radii.small - 2,
+  },
+  qrTabBtnActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  qrTabText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: colors.muted,
+  },
+  qrTabTextActive: {
+    color: colors.primaryDeep,
+    fontWeight: '800',
+  },
+  qrDisplayBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: radii.medium,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  qrImage: {
+    width: 200,
+    height: 200,
+  },
+  qrHintText: {
+    fontSize: 10.5,
+    color: colors.faint,
+    marginTop: 6,
+    textAlign: 'center',
+  },
+  accessCodeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primaryMid,
+    borderWidth: 1,
+    borderRadius: radii.small,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  accessCodeLabel: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    color: colors.primaryDeep,
+  },
+  accessCodeValue: {
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: 3,
+    color: colors.primaryDeep,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    marginTop: 1,
+  },
+  codeCopySmallBtn: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: colors.primaryMid,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  codeCopySmallText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.primaryDeep,
+  },
+  urlCard: {
+    backgroundColor: colors.canvas,
+    borderRadius: radii.small,
+    borderWidth: 1,
+    borderColor: colors.line,
+    padding: 10,
+    gap: 8,
+  },
+  urlText: {
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    color: colors.ink,
+  },
+  copyUrlBtn: {
+    backgroundColor: colors.primary,
+    paddingVertical: 8,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  copyUrlBtnText: {
+    fontSize: 12,
     fontWeight: '800',
     color: '#FFFFFF',
   },

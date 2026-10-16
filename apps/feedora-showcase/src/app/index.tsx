@@ -64,6 +64,8 @@ export default function SurveyScreen() {
     activeSurveyUuid,
     activeSurveyMeta,
     airDropSchema,
+    openSurvey,
+    openSurveyByCode,
     openAirDropSurvey,
     resetToDefaultSurvey,
     openAuthModal,
@@ -76,10 +78,11 @@ export default function SurveyScreen() {
   const [syncNote, setSyncNote] = useState<string | null>(null);
   const [auditNotice, setAuditNotice] = useState<string | null>(null);
 
-  // AirDrop Import Modal State
+  // AirDrop / QR Import Modal State
   const [isAirDropModalOpen, setIsAirDropModalOpen] = useState(false);
   const [airDropInput, setAirDropInput] = useState('');
   const [airDropError, setAirDropError] = useState<string | null>(null);
+  const [importingLoading, setImportingLoading] = useState(false);
 
   const currentSchema = useMemo(() => {
     if (airDropSchema) {
@@ -101,32 +104,83 @@ export default function SurveyScreen() {
     toastTimer.current = setTimeout(() => setToast(null), 3400);
   };
 
-  const handleImportAirDrop = () => {
+  const handleImportAirDrop = async () => {
     setAirDropError(null);
     const trimmed = airDropInput.trim();
     if (!trimmed) {
-      setAirDropError('Please paste an AirDrop code or URL');
+      setAirDropError('Please enter an access code, URL, or offline manifest.');
       return;
     }
 
+    // 1. Try QR AirDrop Manifest (FDR1:...)
     const res = qrAirDropPort.decodeManifest(trimmed);
-    if (!res.success || !res.schema) {
-      const urlRes = StudioShareCodec.extractFromUrl(trimmed);
-      if (urlRes.success && urlRes.schema) {
-        openAirDropSurvey(urlRes.schema);
+    if (res.success && res.schema) {
+      openAirDropSurvey(res.schema);
+      setIsAirDropModalOpen(false);
+      setAirDropInput('');
+      startOver();
+      return;
+    }
+
+    // 2. Try Studio Share URL or Code
+    const urlRes = StudioShareCodec.extractFromUrl(trimmed);
+    if (urlRes.success && urlRes.schema) {
+      openAirDropSurvey(urlRes.schema);
+      setIsAirDropModalOpen(false);
+      setAirDropInput('');
+      startOver();
+      return;
+    }
+
+    // 3. Try Remote Access Code or URL with ?code= or ?survey=
+    let codeOrUuid = trimmed;
+    try {
+      if (trimmed.includes('?')) {
+        const urlObj = new URL(trimmed.startsWith('http') ? trimmed : `http://localhost/${trimmed}`);
+        const codeParam = urlObj.searchParams.get('code');
+        const surveyParam = urlObj.searchParams.get('survey');
+        if (codeParam) codeOrUuid = codeParam;
+        else if (surveyParam) codeOrUuid = surveyParam;
+      }
+    } catch {
+      // Ignore URL parsing errors, use trimmed
+    }
+
+    // Check if it's a UUID
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(codeOrUuid)) {
+      setImportingLoading(true);
+      try {
+        await openSurvey(codeOrUuid);
         setIsAirDropModalOpen(false);
         setAirDropInput('');
         startOver();
         return;
+      } catch (err) {
+        setAirDropError(`Survey lookup failed: ${(err as Error).message}`);
+        return;
+      } finally {
+        setImportingLoading(false);
       }
-      setAirDropError(res.error || 'Failed to decode or verify AirDrop manifest');
-      return;
     }
 
-    openAirDropSurvey(res.schema);
-    setIsAirDropModalOpen(false);
-    setAirDropInput('');
-    startOver();
+    // Check if it's an access code (e.g. 4 to 10 alphanumeric characters)
+    if (/^[A-Za-z0-9]{4,10}$/.test(codeOrUuid)) {
+      setImportingLoading(true);
+      try {
+        await openSurveyByCode(codeOrUuid);
+        setIsAirDropModalOpen(false);
+        setAirDropInput('');
+        startOver();
+        return;
+      } catch (err) {
+        setAirDropError(`Code lookup failed: ${(err as Error).message}`);
+        return;
+      } finally {
+        setImportingLoading(false);
+      }
+    }
+
+    setAirDropError(res.error || 'Failed to decode manifest or recognize access code.');
   };
 
   const handleSubmit = async (values: Values) => {
@@ -380,8 +434,8 @@ export default function SurveyScreen() {
         ))}
 
         <View style={styles.airDropRow}>
-          <Text style={styles.airDropPrompt}>Have an offline survey manifest?</Text>
-          <ActionButton label="📲 Import AirDrop" secondary onPress={() => setIsAirDropModalOpen(true)} />
+          <Text style={styles.airDropPrompt}>Have a survey QR code, access code, or offline file?</Text>
+          <ActionButton label="📲 Scan / Enter Code" secondary onPress={() => setIsAirDropModalOpen(true)} />
         </View>
 
         {profile && authUser ? (
@@ -545,22 +599,26 @@ export default function SurveyScreen() {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>📲 Import AirDrop Survey</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>📲 Scan or Enter Survey Code</Text>
+                <Text style={styles.modalSub}>Universal Android & iOS Optical Scanner</Text>
+              </View>
               <Pressable onPress={() => setIsAirDropModalOpen(false)}>
                 <Text style={styles.modalCloseIcon}>✕</Text>
               </Pressable>
             </View>
             <Text style={styles.modalDesc}>
-              Paste a compressed AirDrop manifest (starting with FDR1:) or a shareable link from another researcher or device.
+              Enter a 6-character access code (e.g. <Text style={{ fontWeight: '800', color: colors.ink }}>HMSAM1</Text>), paste a survey link, or import an <Text style={{ fontWeight: '800', color: colors.ink }}>FDR1:...</Text> offline manifest.
             </Text>
             <TextInput
               style={styles.modalInput}
-              placeholder="Paste FDR1:... or https://feedora.app/#f=..."
+              placeholder="e.g. HMSAM1, https://..., or FDR1:..."
               placeholderTextColor={colors.faint}
               value={airDropInput}
               onChangeText={setAirDropInput}
               multiline
-              numberOfLines={4}
+              numberOfLines={3}
+              autoCapitalize="characters"
             />
             {airDropError && (
               <Text style={styles.modalErrorText}>⚠️ {airDropError}</Text>
@@ -570,7 +628,11 @@ export default function SurveyScreen() {
                 <ActionButton label="Cancel" secondary onPress={() => setIsAirDropModalOpen(false)} />
               </View>
               <View style={{ flex: 1 }}>
-                <ActionButton label="Import & Launch Offline" onPress={handleImportAirDrop} />
+                <ActionButton
+                  label={importingLoading ? 'Loading…' : 'Load & Launch 🚀'}
+                  onPress={handleImportAirDrop}
+                  disabled={importingLoading}
+                />
               </View>
             </View>
           </View>
@@ -709,6 +771,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.ink,
     fontFamily: serifFont,
+  },
+  modalSub: {
+    fontSize: 11.5,
+    color: colors.muted,
+    marginTop: 2,
   },
   modalCloseIcon: {
     fontSize: 18,
