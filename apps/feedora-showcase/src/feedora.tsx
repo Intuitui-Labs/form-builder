@@ -14,11 +14,16 @@ import { FeedoraRewardAdapter } from './adapters/FeedoraRewardAdapter';
 import { FeedoraHttpTransportAdapter } from './adapters/FeedoraHttpTransportAdapter';
 import { HmsamMeasurementAdapter } from './adapters/HmsamMeasurementAdapter';
 import { CompositeAuthAdapter } from './adapters/CompositeAuthAdapter';
+import { DjangoStudioAdapter } from './adapters/DjangoStudioAdapter';
 import { FEEDORA_REMOTE } from './config';
 import type { ContributionProfile } from './domain/types';
 import type { AuthMode, AuthUser } from './domain/authTypes';
+import type { ICreatorStudioPort } from './domain/ports/ICreatorStudioPort';
 import { AuthModal } from './components/AuthModal';
 import { AccountDrawer } from './components/AccountDrawer';
+
+import { DefaultPsychometricAuditor, type FormSchema } from '@intuitui-labs/form-builder-engine';
+import { QrAirDropAdapter } from '@intuitui-labs/form-builder-engine/studio';
 
 // ---------------------------------------------------------------------------
 // Composition root: the app owns its adapters. The engine stays headless.
@@ -28,12 +33,19 @@ import { AccountDrawer } from './components/AccountDrawer';
 //   3. Django API (Direct HTTP to gihini-research backend)
 // ---------------------------------------------------------------------------
 export const store = createStore();
-export const authPort = new CompositeAuthAdapter({ store });
+export const authPort = new CompositeAuthAdapter({
+  store,
+  djangoBaseUrl: FEEDORA_REMOTE.baseUrl,
+  initialMode: 'django',
+});
+export const studioPort = new DjangoStudioAdapter(FEEDORA_REMOTE.baseUrl);
 export const contributionPort = new FeedoraContributionAdapter(store);
 export const rewardPort = new FeedoraRewardAdapter(FEEDORA_FEATURES);
 export const progressPort = new FeedoraProgressAdapter();
 export const measurementPort = new HmsamMeasurementAdapter();
 export const transportPort = new FeedoraHttpTransportAdapter(FEEDORA_REMOTE.baseUrl);
+export const psychometricAuditor = new DefaultPsychometricAuditor();
+export const qrAirDropPort = new QrAirDropAdapter();
 export const entities = FEEDORA_ENTITIES;
 
 // Tiny change bus so the three screens stay in sync without a global store.
@@ -45,6 +57,8 @@ export function subscribeDataChanged(listener: () => void): () => void {
 export function notifyDataChanged(): void {
   for (const listener of listeners) listener();
 }
+
+import type { RemoteSurveyMeta } from './domain/ports/transportTypes';
 
 interface FeedoraContextValue {
   entityId: string;
@@ -60,6 +74,14 @@ interface FeedoraContextValue {
   setAuthMode: (mode: AuthMode) => void;
   openAuthModal: () => void;
   openAccountDrawer: () => void;
+  studioPort: ICreatorStudioPort;
+  // Dynamic Survey Selection
+  activeSurveyUuid: string | null;
+  activeSurveyMeta: RemoteSurveyMeta | null;
+  airDropSchema: FormSchema | null;
+  openSurvey: (uuid: string) => Promise<void>;
+  openAirDropSurvey: (schema: FormSchema) => void;
+  resetToDefaultSurvey: () => void;
 }
 
 const FeedoraContext = createContext<FeedoraContextValue | null>(null);
@@ -78,6 +100,9 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
   const [isAccountDrawerOpen, setAccountDrawerOpen] = useState(false);
 
   useEffect(() => {
+    // Bootstrap auth session from server cookie
+    authPort.init();
+
     // Listen to auth changes
     const unsubAuth = authPort.onAuthStateChange((user) => {
       setAuthUser(user);
@@ -113,10 +138,33 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
     const currentAvatar = authUser?.avatar || '🎙️';
 
     contributionPort
-      .join(currentUserId, currentName, currentAvatar, entityId)
+      .join(currentUserId, currentName, currentAvatar, entityId, authUser?.totalPoints ?? 0)
       .then((joined) => {
         if (!cancelled) setProfile(joined);
       });
+
+    // Automatically claim & migrate points earned as guest when user signs in
+    if (authUser && authUser.id !== 'guest-user') {
+      (async () => {
+        const guestProfile = await contributionPort.getProfile('guest-user', entityId);
+        if (guestProfile && guestProfile.totalPoints > 0) {
+          const userProf = await contributionPort.getProfile(authUser.id, entityId);
+          if (userProf) {
+            userProf.totalPoints += guestProfile.totalPoints;
+            userProf.surveysCompleted += guestProfile.surveysCompleted;
+            userProf.standing = contributionPort.standingFor(userProf.totalPoints);
+            await store.putProfile(userProf);
+          }
+          guestProfile.totalPoints = 0;
+          guestProfile.surveysCompleted = 0;
+          guestProfile.standing = contributionPort.standingFor(0);
+          await store.putProfile(guestProfile);
+          if (!cancelled) {
+            setVersion((v) => v + 1);
+          }
+        }
+      })();
+    }
 
     return () => {
       cancelled = true;
@@ -138,7 +186,13 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
       if (cancelled) return;
       setContributorCounts(counts);
       setResponses(loadedResponses);
-      if (refreshedProfile) setProfile(refreshedProfile);
+      if (refreshedProfile) {
+        if (authUser?.totalPoints && authUser.totalPoints > refreshedProfile.totalPoints) {
+          refreshedProfile.totalPoints = authUser.totalPoints;
+          refreshedProfile.standing = contributionPort.standingFor(authUser.totalPoints);
+        }
+        setProfile(refreshedProfile);
+      }
     })();
 
     return () => {
@@ -147,6 +201,48 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
   }, [version, entityId, authUser]);
 
   const refresh = useCallback(() => {
+    setVersion((v) => v + 1);
+  }, []);
+
+  // Dynamic Survey selection state
+  const [activeSurveyUuid, setActiveSurveyUuid] = useState<string | null>(null);
+  const [activeSurveyMeta, setActiveSurveyMeta] = useState<RemoteSurveyMeta | null>(null);
+  const [airDropSchema, setAirDropSchema] = useState<FormSchema | null>(null);
+
+  const openSurvey = useCallback(async (uuid: string) => {
+    try {
+      const meta = await transportPort.fetchSurveyMeta(uuid);
+      setAirDropSchema(null);
+      setActiveSurveyUuid(uuid);
+      setActiveSurveyMeta(meta);
+      setVersion((v) => v + 1);
+    } catch (err) {
+      console.warn('Failed to fetch survey metadata:', err);
+    }
+  }, []);
+
+  const openAirDropSurvey = useCallback((schema: FormSchema) => {
+    setAirDropSchema(schema);
+    setActiveSurveyUuid(schema.id);
+    setActiveSurveyMeta({
+      survey: {
+        id: 9999,
+        uuid: schema.id,
+        title: schema.title,
+        description: schema.description || '',
+        is_hmsam: true,
+        access_code: 'AIRDROP',
+      },
+      features: {},
+      questions: [],
+    });
+    setVersion((v) => v + 1);
+  }, []);
+
+  const resetToDefaultSurvey = useCallback(() => {
+    setActiveSurveyUuid(null);
+    setActiveSurveyMeta(null);
+    setAirDropSchema(null);
     setVersion((v) => v + 1);
   }, []);
 
@@ -165,6 +261,13 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
         setAuthMode,
         openAuthModal,
         openAccountDrawer,
+        studioPort,
+        activeSurveyUuid,
+        activeSurveyMeta,
+        airDropSchema,
+        openSurvey,
+        openAirDropSurvey,
+        resetToDefaultSurvey,
       }}
     >
       {children}

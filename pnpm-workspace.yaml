@@ -2,6 +2,10 @@ packages:
   - '.'
   - 'apps/*'
   - 'fixtures/*'
+  - 'services/*'
 
 allowBuilds:
   esbuild: true
+
+python:
+  enabled: true

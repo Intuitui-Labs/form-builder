@@ -26,7 +26,13 @@ export interface IContributionPort {
   getEntity(entityId: string): Entity | undefined;
 
   /** Joining is idempotent — first call creates the profile, later calls are no-ops. */
-  join(userId: string, displayName: string, avatar: string, entityId: string): Promise<ContributionProfile>;
+  join(
+    userId: string,
+    displayName: string,
+    avatar: string,
+    entityId: string,
+    initialPoints?: number,
+  ): Promise<ContributionProfile>;
 
   getProfile(userId: string, entityId: string): Promise<ContributionProfile | null>;
 

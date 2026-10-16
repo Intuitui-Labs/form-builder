@@ -108,6 +108,11 @@
       "import": "./dist/governance/index.js",
       "default": "./dist/governance/index.js"
     },
+    "./psychometrics": {
+      "types": "./dist/psychometrics/index.d.ts",
+      "import": "./dist/psychometrics/index.js",
+      "default": "./dist/psychometrics/index.js"
+    },
     "./manager": {
       "types": "./dist/manager/index.d.ts",
       "import": "./dist/manager/index.js",
@@ -142,6 +147,9 @@
     "expo:feedora": "pnpm --filter @intuitui-labs/feedora-showcase run start",
     "expo:feedora:go": "pnpm --filter @intuitui-labs/feedora-showcase run start:go",
     "expo:feedora:web": "pnpm --filter @intuitui-labs/feedora-showcase run web",
+    "research:check": "pnpm --filter gihini-research run check",
+    "research:dev": "pnpm --filter gihini-research run dev",
+    "research:test": "pnpm --filter gihini-research run test",
     "expo:go": "pnpm run expo:latest:go",
     "expo:web": "pnpm run expo:latest:web",
     "showcase:verify": "pnpm --filter @intuitui-labs/showcase-latest run verify",

@@ -36,6 +36,9 @@ import type {
   ISpeechSynthesisPort,
   IBatteryStatusPort,
   IAdaptiveStepOraclePort,
+  IPsychometricAuditorPort,
+  PsychometricAuditResult,
+  QuestionMetadata,
 } from '../ports/index.js';
 import type { IEntityExtractorPort } from '../ports/IEntityExtractorPort.js';
 import type { IHapticFeedbackPort } from '../ports/IHapticFeedbackPort.js';
@@ -102,6 +105,8 @@ export interface FormExperienceOptions {
   speechSynthesis?: ISpeechSynthesisPort;
   assessmentEngine?: IAssessmentPort;
   adaptiveStepOracle?: IAdaptiveStepOraclePort;
+  psychometricAuditor?: IPsychometricAuditorPort;
+  onPsychometricAudit?: (result: PsychometricAuditResult) => void;
 }
 
 export interface FormSecurityOptions {
@@ -143,6 +148,8 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
   private assessmentEngine?: IAssessmentPort;
   private adaptiveStepOracle?: IAdaptiveStepOraclePort;
   private speechSynthesisPort?: ISpeechSynthesisPort;
+  private psychometricAuditor?: IPsychometricAuditorPort;
+  private onPsychometricAudit?: (result: PsychometricAuditResult) => void;
 
   // Subsystem Coordinators
   private navigationCoordinator!: StepNavigationCoordinator<T>;
@@ -246,6 +253,8 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
     // Resolve Assessment Engine Seam (Injected by composition root, never constructed by kernel)
     this.assessmentEngine = expOpt?.assessmentEngine;
     this.adaptiveStepOracle = expOpt?.adaptiveStepOracle;
+    this.psychometricAuditor = expOpt?.psychometricAuditor;
+    this.onPsychometricAudit = expOpt?.onPsychometricAudit;
 
     // Flatten all fields across all pages to pass to FormHydrator
     const allFields = schema.pages.flatMap((page) => page.fields);
@@ -1116,7 +1125,41 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
         // Outbound port failure must not crash submission
       }
     }
+
+    if (this.psychometricAuditor) {
+      try {
+        const questions: QuestionMetadata[] = [];
+        for (const page of this.schema.pages) {
+          for (const field of page.fields) {
+            questions.push({
+              id: field.id,
+              name: field.name,
+              type: field.type,
+              construct: (field as { construct?: string }).construct,
+              minRating: (field as { minRating?: number }).minRating,
+              maxRating: (field as { maxRating?: number }).maxRating,
+            });
+          }
+        }
+
+        const audit = this.psychometricAuditor.auditSubmission({
+          answers: this.formManager.getState().values as Record<string, unknown>,
+          questions,
+        });
+
+        if (this.onPsychometricAudit) {
+          this.onPsychometricAudit(audit);
+        }
+      } catch {
+        // Auditor failure must not crash submission
+      }
+    }
+
     return this.persistenceCoordinator.submit();
+  }
+
+  public getPsychometricAuditor(): IPsychometricAuditorPort | undefined {
+    return this.psychometricAuditor;
   }
 
   public isOnline(): boolean {

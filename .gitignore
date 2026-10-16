@@ -34,3 +34,7 @@ apps/*/node_modules/
 apps/*/dist/
 apps/*/web-build/
 apps/*/*.tsbuildinfo
+
+# Junctions and external services
+services/
+

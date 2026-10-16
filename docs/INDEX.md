@@ -24,6 +24,11 @@ Welcome to the technical documentation library for `@intuitui-labs/form-builder-
     *   [Form UX Heuristics, Common Pitfalls & Engine Alignment Audit](./architecture/form-ux-heuristics-and-pitfalls-audit.md) — Comprehensive Baymard Institute, Nielsen Norman Group, and WCAG 1.3.5 heuristics audit, mobile keyboard traps, and engine alignment matrix.
     *   [Enterprise Mobile Form Seams & React 19 / React Native 0.86–0.88 Architecture](./architecture/enterprise-mobile-form-seams-and-react-19.md) — React 19 ref cleanup protocols, `forwardRef` deprecation, Fabric host handles, and the 5 Universal Architectural Seams for mobile forms.
     *   [LLM Agent Mechanics & The Headless Form Engine](./architecture/ai-agent-engine-mechanics-and-aci.md) — How LLM agents physically operate, dual programmatic vs. runtime generative modalities, Agent-Computer Interfaces (ACI), comparative analogical landscape, and hostile operationalization.
+    *   [Polyglot Monorepo & Network Topology Architecture](./architecture/polyglot-monorepo-and-network-topology.md) — PNPM workspace linking Python PEP 621 services, physical IP resolution for Expo Go, and database Single Source of Truth invariants.
+    *   [Django REST Seam & OpenAPI Gateway Specification](./architecture/django-rest-seam-and-openapi-specification.md) — Isolated REST contract, superuser persona bypass, JSON survey taker, and dynamic OpenAPI 3.1.0 specification.
+    *   [Mobile Dual-Sided Studio & Guided Auth Stepper Architecture](./architecture/mobile-dual-sided-studio-and-auth-stepper.md) — Guided 3-stage stepper, `KeyboardAvoidingView` ergonomics, Gihini design token preservation, and Creator Studio scaffolding.
+*   [Infrastructure & Collaboration](./infra/pr-and-collaboration-playbook.md)
+    *   [PR & Upstream Collaboration Playbook](./infra/pr-and-collaboration-playbook.md) — Zero-regression guidelines, pycache artifact shielding, and PR checklist for upstream repository collaboration.
 *   [Core Documentation](./Core/form-engine-architecture.md)
 
     *   [Headless Form Engine Architecture](./Core/form-engine-architecture.md) — UML Class layouts, structural interactions, and code integrations.
@@ -39,6 +44,17 @@ Welcome to the technical documentation library for `@intuitui-labs/form-builder-
 ---
 
 ## Changelog
+
+### [0.2.1] - 2026-10-17
+#### Added
+*   **Dual-Sided Mobile Creator Studio & Guided Auth Stepper**:
+    *   3-Stage guided authentication stepper with persona selection (`🎙️ Form Respondent` vs `🔬 Creator / Admin`), schema-driven autofill fields, and `KeyboardAvoidingView` ergonomics.
+    *   Visual Form Studio (`apps/feedora-showcase/src/app/studio.tsx`) connected to Gihini's 21 Django research surveys with live fleet inspection and one-tap instrument publishing.
+    *   Preserved brand aesthetic: `Instrument Serif` typography pairing, editorial paper palette, and mascot badge progression.
+*   **Django REST Seam & Polyglot Monorepo Bridge**:
+    *   REST Seam at `/api/v1/` featuring JSON login with superuser persona bypass, survey fleet listing, survey metadata, and answer scoring.
+    *   Dynamic OpenAPI 3.1.0 specification (`/api/v1/openapi.json`) and standalone Swagger UI (`/api/v1/docs/`).
+    *   PNPM v12.14 Python workspace bridge linking `services/gihini-research` with automated test harness (`feedora_project.test_api`).
 
 ### [0.2.0] - 2026-10-15
 #### Added

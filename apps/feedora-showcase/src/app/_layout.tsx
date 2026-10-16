@@ -43,6 +43,7 @@ export default function RootLayout() {
         }}
       >
         <Tabs.Screen name="index" options={{ title: 'Survey' }} />
+        <Tabs.Screen name="studio" options={{ title: 'Studio' }} />
         <Tabs.Screen name="dashboard" options={{ title: 'Insights' }} />
         <Tabs.Screen name="community" options={{ title: 'Community' }} />
       </Tabs>

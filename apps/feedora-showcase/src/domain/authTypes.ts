@@ -19,7 +19,9 @@ export type AuthMode = 'local' | 'supabase' | 'django';
 export interface AuthUser {
   id: string;
   email: string;
+  username?: string;
   role: UserRole;
+  isStaff?: boolean;
   displayName: string;
   avatar: string;
   // Shared / Organization association

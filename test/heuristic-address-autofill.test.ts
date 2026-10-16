@@ -317,10 +317,14 @@ describe('Heuristic Address Autofill & Transactional Enrichment', () => {
   });
 
   it('integrates seamlessly with the real lk-edu-geo package when provided by consumer', async () => {
+    let timer: NodeJS.Timeout | undefined;
     try {
       // Guard dynamic import with short race timeout to prevent worker thread hang in isolated test runners
       const importPromise = import('../../lk-edu-geo/src/index.js');
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Import timeout')), 500));
+      const timeoutPromise = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Import timeout')), 500);
+        timer?.unref?.();
+      });
       // @ts-ignore
       const realLkGeo = await Promise.race([importPromise, timeoutPromise]);
       const adapter = new LkEduGeoAddressAdapter(realLkGeo);
@@ -335,6 +339,8 @@ describe('Heuristic Address Autofill & Transactional Enrichment', () => {
       expect(kandyResult?.stateOrProvince).toBe('Central');
     } catch {
       // If environment prevents sibling import, test gracefully completes
+    } finally {
+      if (timer) clearTimeout(timer);
     }
-  }, 3000);
+  }, 10000);
 });

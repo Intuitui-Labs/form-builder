@@ -17,6 +17,8 @@ export * from './focus/index.js';
 export * from './lint/index.js';
 export * from './ai/index.js';
 export * from './governance/index.js';
+export * from './psychometrics/index.js';
+
 
 // Heavy subsystems (adapters, assessment, and studio) are NOT re-exported here —
 // they are available via their dedicated subpaths:

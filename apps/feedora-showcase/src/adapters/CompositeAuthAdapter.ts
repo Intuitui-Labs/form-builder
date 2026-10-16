@@ -14,6 +14,7 @@ import { DjangoAuthAdapter } from './DjangoAuthAdapter';
 
 export class CompositeAuthAdapter implements IAuthPort {
   private activeMode: AuthMode = 'local';
+  private readonly store?: IEntityStore;
   private readonly localAdapter: LocalAuthAdapter;
   private readonly supabaseAdapter: SupabaseAuthAdapter;
   private readonly djangoAdapter: DjangoAuthAdapter;
@@ -25,6 +26,7 @@ export class CompositeAuthAdapter implements IAuthPort {
     djangoBaseUrl?: string;
     initialMode?: AuthMode;
   }) {
+    this.store = options?.store;
     this.localAdapter = new LocalAuthAdapter(options?.store);
     this.supabaseAdapter = new SupabaseAuthAdapter(options?.supabaseConfig);
     this.djangoAdapter = new DjangoAuthAdapter(options?.djangoBaseUrl || 'http://localhost:8000');
@@ -80,11 +82,39 @@ export class CompositeAuthAdapter implements IAuthPort {
   setMode(mode: AuthMode): void {
     if (this.activeMode === mode) return;
     this.activeMode = mode;
+    this.persistSession(this.getCurrentUser(), this.activeMode);
     this.notify(this.getCurrentUser());
   }
 
   async init(): Promise<AuthUser | null> {
-    await Promise.all([this.localAdapter.init(), this.supabaseAdapter.init(), this.djangoAdapter.init()]);
+    // 1. Immediately restore cached session from persistent store
+    if (this.store) {
+      try {
+        const saved = await this.store.getItem('feedora_active_session');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && parsed.user) {
+            this.activeMode = parsed.mode || this.activeMode;
+            if (this.activeMode === 'django') {
+              (this.djangoAdapter as any).currentUser = parsed.user;
+            } else if (this.activeMode === 'local') {
+              (this.localAdapter as any).currentUser = parsed.user;
+            }
+            this.notify(parsed.user);
+          }
+        }
+      } catch {}
+    }
+
+    // 2. Background reconcile with backend
+    try {
+      await Promise.all([this.localAdapter.init(), this.supabaseAdapter.init(), this.djangoAdapter.init()]);
+      const activeUser = this.getCurrentUser();
+      if (activeUser) {
+        await this.persistSession(activeUser, this.activeMode);
+      }
+    } catch {}
+
     return this.getCurrentUser();
   }
 
@@ -103,20 +133,39 @@ export class CompositeAuthAdapter implements IAuthPort {
     }
   }
 
+  private async persistSession(user: AuthUser | null, mode: AuthMode): Promise<void> {
+    if (!this.store) return;
+    try {
+      if (user) {
+        await this.store.setItem('feedora_active_session', JSON.stringify({ user, mode }));
+      } else {
+        await this.store.removeItem('feedora_active_session');
+      }
+    } catch {}
+  }
+
   async signUpRespondent(input: SignUpRespondentInput): Promise<AuthUser> {
-    return this.activeAdapter.signUpRespondent(input);
+    const user = await this.activeAdapter.signUpRespondent(input);
+    await this.persistSession(user, this.activeMode);
+    return user;
   }
 
   async signUpCreator(input: SignUpCreatorInput): Promise<AuthUser> {
-    return this.activeAdapter.signUpCreator(input);
+    const user = await this.activeAdapter.signUpCreator(input);
+    await this.persistSession(user, this.activeMode);
+    return user;
   }
 
   async signIn(input: SignInInput): Promise<AuthUser> {
-    return this.activeAdapter.signIn(input);
+    const user = await this.activeAdapter.signIn(input);
+    await this.persistSession(user, this.activeMode);
+    return user;
   }
 
   async signOut(): Promise<void> {
     await this.activeAdapter.signOut();
+    await this.persistSession(null, this.activeMode);
+    this.notify(null);
   }
 
   async exportData(format: 'json' | 'csv' | 'sql'): Promise<ExportDataPayload> {

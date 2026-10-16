@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -9,7 +9,10 @@ import {
   View,
 } from 'react-native';
 import type { AuthMode, ExportDataPayload } from '../domain/authTypes';
-import { authPort, useFeedora } from '../feedora';
+import { standingFor } from '../domain/levels';
+import { authPort, store, useFeedora } from '../feedora';
+import { FEEDORA_REMOTE } from '../config';
+import type { SubmissionHistoryRecord } from '../domain/ports/IEntityStore';
 import { colors, radii, serifFont } from '../theme';
 
 interface AccountDrawerProps {
@@ -22,6 +25,70 @@ export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerPro
   const { authUser, authMode, setAuthMode, profile, refresh } = useFeedora();
   const [exportResult, setExportResult] = useState<ExportDataPayload | null>(null);
   const [copied, setCopied] = useState(false);
+  const [historyItems, setHistoryItems] = useState<SubmissionHistoryRecord[]>([]);
+  const [entityPoints, setEntityPoints] = useState<{ name: string; points: number }[]>([]);
+
+  useEffect(() => {
+    if (!visible || !authUser) return;
+    let isMounted = true;
+
+    if (authMode === 'django') {
+      fetch(`${FEEDORA_REMOTE.baseUrl}/api/v1/respondent/history/`, {
+        credentials: 'include',
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (!isMounted || !data.ok) return;
+          if (Array.isArray(data.history)) {
+            setHistoryItems(
+              data.history.map((h: any) => ({
+                id: h.responseId,
+                entityId: h.organization,
+                surveyId: h.surveyUuid,
+                surveyTitle: h.surveyTitle,
+                userId: String(authUser.id),
+                pointsEarned: h.pointsEarned,
+                completedAt: h.completedAt,
+              })),
+            );
+          }
+          if (Array.isArray(data.pointsByOrganization)) {
+            setEntityPoints(
+              data.pointsByOrganization.map((o: any) => ({
+                name: o.organization,
+                points: o.points,
+              })),
+            );
+          }
+        })
+        .catch(() => {});
+    }
+
+    store.listUserHistory(String(authUser.id)).then((items) => {
+      if (!isMounted) return;
+      if (items.length > 0) {
+        setHistoryItems((prev) => (prev.length > 0 ? prev : items));
+      }
+    });
+
+    store.getPointsByEntity(String(authUser.id)).then((ptMap) => {
+      if (!isMounted) return;
+      const arr = Object.entries(ptMap).map(([entId, pts]) => {
+        const ent = store.getEntity(entId);
+        return {
+          name: ent ? ent.name : entId,
+          points: pts,
+        };
+      });
+      if (arr.length > 0) {
+        setEntityPoints((prev) => (prev.length > 0 ? prev : arr));
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [visible, authUser, authMode]);
 
   const handleSignOut = async () => {
     await authPort.signOut();
@@ -40,6 +107,9 @@ export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerPro
   }
 
   const isCreator = authUser.role === 'creator';
+  const displayedPoints = Math.max(profile?.totalPoints ?? 0, authUser.totalPoints ?? 0);
+  const standing = standingFor(displayedPoints);
+  const surveysCount = profile?.surveysCompleted ?? authUser.surveysCompleted ?? 0;
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -84,20 +154,77 @@ export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerPro
 
             {/* Respondent Stats or Creator Stats */}
             {!isCreator ? (
-              <View style={styles.statsCard}>
-                <View style={styles.statCol}>
-                  <Text style={styles.statNum}>{profile?.totalPoints ?? authUser.totalPoints}</Text>
-                  <Text style={styles.statLbl}>Voice Points</Text>
+              <>
+                <View style={styles.statsCard}>
+                  <View style={styles.statCol}>
+                    <Text style={styles.statNum}>{displayedPoints.toLocaleString()}</Text>
+                    <Text style={styles.statLbl}>Voice Points</Text>
+                  </View>
+                  <View style={styles.statCol}>
+                    <Text style={styles.statNum}>{standing.title}</Text>
+                    <Text style={styles.statLbl}>Level Standing</Text>
+                  </View>
+                  <View style={styles.statCol}>
+                    <Text style={styles.statNum}>{surveysCount}</Text>
+                    <Text style={styles.statLbl}>Surveys</Text>
+                  </View>
                 </View>
-                <View style={styles.statCol}>
-                  <Text style={styles.statNum}>{profile?.standing.title ?? 'Active Member'}</Text>
-                  <Text style={styles.statLbl}>Level Standing</Text>
+
+                {/* Contributions by Organization (mirrors her points_by_company) */}
+                <View style={styles.section}>
+                  <Text style={styles.sectionHeading}>CONTRIBUTIONS BY ORGANIZATION</Text>
+                  <Text style={styles.sectionSub}>
+                    Voice points earned across participating universities and research labs.
+                  </Text>
+                  {entityPoints.length === 0 ? (
+                    <View style={styles.emptyHistoryBox}>
+                      <Text style={styles.emptyHistoryText}>
+                        No points recorded yet. Submit a survey to start contributing!
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={styles.orgPointsList}>
+                      {entityPoints.map((op, i) => (
+                        <View key={i} style={styles.orgPointRow}>
+                          <Text style={styles.orgPointName}>{op.name}</Text>
+                          <Text style={styles.orgPointVal}>{op.points} pts</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
                 </View>
-                <View style={styles.statCol}>
-                  <Text style={styles.statNum}>{profile?.surveysCompleted ?? 1}</Text>
-                  <Text style={styles.statLbl}>Surveys</Text>
+
+                {/* Submissions & Survey History (mirrors her respondent_profile.html) */}
+                <View style={styles.section}>
+                  <Text style={styles.sectionHeading}>RECENT SUBMISSIONS & RESPONSES</Text>
+                  <Text style={styles.sectionSub}>
+                    Audit trail of research surveys completed and points awarded.
+                  </Text>
+                  {historyItems.length === 0 ? (
+                    <View style={styles.emptyHistoryBox}>
+                      <Text style={styles.emptyHistoryText}>
+                        No completed surveys found in this session.
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={styles.historyList}>
+                      {historyItems.map((item, idx) => (
+                        <View key={idx} style={styles.historyCard}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.historyTitle}>{item.surveyTitle}</Text>
+                            <Text style={styles.historyMeta}>
+                              {item.completedAt ? new Date(item.completedAt).toLocaleDateString() : 'Today'} · {item.entityId}
+                            </Text>
+                          </View>
+                          <View style={styles.historyPointsBadge}>
+                            <Text style={styles.historyPointsText}>+{item.pointsEarned} pts</Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  )}
                 </View>
-              </View>
+              </>
             ) : (
               <View style={styles.creatorCard}>
                 <Text style={styles.creatorOrgTitle}>
@@ -110,78 +237,82 @@ export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerPro
               </View>
             )}
 
-            {/* Engine Switcher */}
-            <View style={styles.section}>
-              <Text style={styles.sectionHeading}>ACTIVE BACKEND ENGINE</Text>
-              <View style={styles.modeRow}>
-                <Pressable
-                  style={[styles.modeBtn, authMode === 'local' && styles.modeBtnActive]}
-                  onPress={() => setAuthMode('local')}
-                >
-                  <Text style={[styles.modeBtnText, authMode === 'local' && styles.modeBtnTextActive]}>
-                    ⚡ Local SQLite
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.modeBtn, authMode === 'supabase' && styles.modeBtnActive]}
-                  onPress={() => setAuthMode('supabase')}
-                >
-                  <Text style={[styles.modeBtnText, authMode === 'supabase' && styles.modeBtnTextActive]}>
-                    ☁️ Supabase
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.modeBtn, authMode === 'django' && styles.modeBtnActive]}
-                  onPress={() => setAuthMode('django')}
-                >
-                  <Text style={[styles.modeBtnText, authMode === 'django' && styles.modeBtnTextActive]}>
-                    🐍 Django API
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-
-            {/* Data Migration & Export (Aligned with Gihini's schema) */}
-            <View style={styles.section}>
-              <Text style={styles.sectionHeading}>SCHEMA EXPORT & MIGRATION</Text>
-              <Text style={styles.sectionSub}>
-                Export data aligned 1:1 with Gihini's Django models for instant migration.
-              </Text>
-              <View style={styles.exportRow}>
-                <Pressable style={styles.exportBtn} onPress={() => handleExport('json')}>
-                  <Text style={styles.exportBtnText}>📥 Export JSON</Text>
-                </Pressable>
-                <Pressable style={styles.exportBtn} onPress={() => handleExport('csv')}>
-                  <Text style={styles.exportBtnText}>📊 Export CSV</Text>
-                </Pressable>
-                <Pressable style={styles.exportBtn} onPress={() => handleExport('sql')}>
-                  <Text style={styles.exportBtnText}>🗄️ Export SQL</Text>
-                </Pressable>
-              </View>
-
-              {exportResult && (
-                <View style={styles.exportBox}>
-                  <View style={styles.exportHead}>
-                    <Text style={styles.exportFormat}>
-                      {exportResult.format.toUpperCase()} EXPORT ({exportResult.userCount} users)
-                    </Text>
+            {/* Engine Switcher & Developer Tools — Creators / Admins Only */}
+            {isCreator && (
+              <>
+                <View style={styles.section}>
+                  <Text style={styles.sectionHeading}>ACTIVE BACKEND ENGINE (CREATOR TOOLS)</Text>
+                  <View style={styles.modeRow}>
                     <Pressable
-                      onPress={() => {
-                        setCopied(true);
-                      }}
+                      style={[styles.modeBtn, authMode === 'local' && styles.modeBtnActive]}
+                      onPress={() => setAuthMode('local')}
                     >
-                      <Text style={styles.copyText}>{copied ? '✓ Saved' : 'Copy Preview'}</Text>
+                      <Text style={[styles.modeBtnText, authMode === 'local' && styles.modeBtnTextActive]}>
+                        ⚡ Local SQLite
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.modeBtn, authMode === 'supabase' && styles.modeBtnActive]}
+                      onPress={() => setAuthMode('supabase')}
+                    >
+                      <Text style={[styles.modeBtnText, authMode === 'supabase' && styles.modeBtnTextActive]}>
+                        ☁️ Supabase
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.modeBtn, authMode === 'django' && styles.modeBtnActive]}
+                      onPress={() => setAuthMode('django')}
+                    >
+                      <Text style={[styles.modeBtnText, authMode === 'django' && styles.modeBtnTextActive]}>
+                        🐍 Django API
+                      </Text>
                     </Pressable>
                   </View>
-                  <TextInput
-                    style={styles.exportText}
-                    value={exportResult.content}
-                    multiline
-                    editable={false}
-                  />
                 </View>
-              )}
-            </View>
+
+                {/* Data Migration & Export (Aligned with Gihini's schema) */}
+                <View style={styles.section}>
+                  <Text style={styles.sectionHeading}>SCHEMA EXPORT & MIGRATION</Text>
+                  <Text style={styles.sectionSub}>
+                    Export data aligned 1:1 with Gihini's Django models for instant migration.
+                  </Text>
+                  <View style={styles.exportRow}>
+                    <Pressable style={styles.exportBtn} onPress={() => handleExport('json')}>
+                      <Text style={styles.exportBtnText}>📥 Export JSON</Text>
+                    </Pressable>
+                    <Pressable style={styles.exportBtn} onPress={() => handleExport('csv')}>
+                      <Text style={styles.exportBtnText}>📊 Export CSV</Text>
+                    </Pressable>
+                    <Pressable style={styles.exportBtn} onPress={() => handleExport('sql')}>
+                      <Text style={styles.exportBtnText}>🗄️ Export SQL</Text>
+                    </Pressable>
+                  </View>
+
+                  {exportResult && (
+                    <View style={styles.exportBox}>
+                      <View style={styles.exportHead}>
+                        <Text style={styles.exportFormat}>
+                          {exportResult.format.toUpperCase()} EXPORT ({exportResult.userCount} users)
+                        </Text>
+                        <Pressable
+                          onPress={() => {
+                            setCopied(true);
+                          }}
+                        >
+                          <Text style={styles.copyText}>{copied ? '✓ Saved' : 'Copy Preview'}</Text>
+                        </Pressable>
+                      </View>
+                      <TextInput
+                        style={styles.exportText}
+                        value={exportResult.content}
+                        multiline
+                        editable={false}
+                      />
+                    </View>
+                  )}
+                </View>
+              </>
+            )}
 
             {/* Actions */}
             <View style={styles.actionRow}>
@@ -458,5 +589,77 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: colors.rose,
+  },
+  orgPointsList: {
+    backgroundColor: colors.paper,
+    borderRadius: radii.medium,
+    borderWidth: 1,
+    borderColor: colors.line,
+    padding: 10,
+    gap: 6,
+  },
+  orgPointRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+  },
+  orgPointName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  orgPointVal: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.primary,
+  },
+  historyList: {
+    gap: 8,
+  },
+  historyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.paper,
+    borderRadius: radii.medium,
+    borderWidth: 1,
+    borderColor: colors.line,
+    padding: 12,
+    gap: 10,
+  },
+  historyTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: colors.ink,
+  },
+  historyMeta: {
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: 2,
+  },
+  historyPointsBadge: {
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radii.pill,
+  },
+  historyPointsText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.primary,
+  },
+  emptyHistoryBox: {
+    backgroundColor: colors.paper,
+    borderRadius: radii.medium,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: 'center',
+  },
+  emptyHistoryText: {
+    fontSize: 11.5,
+    color: colors.muted,
+    textAlign: 'center',
   },
 });

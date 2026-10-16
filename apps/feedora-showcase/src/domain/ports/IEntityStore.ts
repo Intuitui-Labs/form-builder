@@ -18,6 +18,26 @@ export interface IEntityStore {
   /** Persist a completed response so reliability can be computed across the sample. */
   addResponse(items: Record<string, number>): Promise<void>;
   listResponses(): Promise<Record<string, number>[]>;
+
+  /** Submission history tracking for respondent profile. */
+  recordSurveyResponse(record: SubmissionHistoryRecord): Promise<void>;
+  listUserHistory(userId: string): Promise<SubmissionHistoryRecord[]>;
+  getPointsByEntity(userId: string): Promise<Record<string, number>>;
+
+  /** Key-value storage for settings, auth session, and studio drafts. */
+  getItem(key: string): Promise<string | null>;
+  setItem(key: string, value: string): Promise<void>;
+  removeItem(key: string): Promise<void>;
+}
+
+export interface SubmissionHistoryRecord {
+  id?: number;
+  entityId: string;
+  surveyId: string;
+  surveyTitle: string;
+  userId: string;
+  pointsEarned: number;
+  completedAt: string;
 }
 
 /** Everything needed to prime a fresh store from her real Django data. */

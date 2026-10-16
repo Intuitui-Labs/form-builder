@@ -267,3 +267,20 @@ export type {
   AdaptiveStepContext,
   AdaptiveOracleDecision,
 } from './IAdaptiveStepOraclePort.js';
+
+export type {
+  IPsychometricAuditorPort,
+  PsychometricAuditResult,
+  PsychometricAnomalyFlag,
+  CronbachAlphaResult,
+  QuestionMetadata,
+  PsychometricAuditMetrics,
+  AuditRecommendation,
+} from './IPsychometricAuditorPort.js';
+
+export type {
+  IQrAirDropPort,
+  AirDropManifestResult,
+  ChunkReassemblyResult,
+} from './IQrAirDropPort.js';
+

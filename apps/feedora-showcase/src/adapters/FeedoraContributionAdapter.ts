@@ -33,19 +33,27 @@ export class FeedoraContributionAdapter implements IContributionPort {
     displayName: string,
     avatar: string,
     entityId: string,
+    initialPoints = 0,
   ): Promise<ContributionProfile> {
     const existing = await this.store.getProfile(userId, entityId);
-    if (existing) return existing;
+    if (existing) {
+      if (initialPoints > existing.totalPoints) {
+        existing.totalPoints = initialPoints;
+        existing.standing = standingFor(existing.totalPoints);
+        await this.store.putProfile(existing);
+      }
+      return existing;
+    }
 
     const profile: ContributionProfile = {
       userId,
       displayName,
       avatar,
       entityId,
-      totalPoints: 0,
+      totalPoints: Math.max(0, initialPoints),
       surveysCompleted: 0,
       badges: [],
-      standing: standingFor(0),
+      standing: standingFor(Math.max(0, initialPoints)),
       updatedAt: new Date().toISOString(),
     };
     await this.store.putProfile(profile);

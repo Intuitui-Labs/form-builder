@@ -11,3 +11,5 @@ export {
   StudioShareCodec,
   type DecodeSchemaResult,
 } from './StudioShareCodec.js';
+export { QrAirDropAdapter } from './QrAirDropAdapter.js';
+

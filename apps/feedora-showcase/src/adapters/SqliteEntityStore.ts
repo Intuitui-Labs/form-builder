@@ -61,9 +61,10 @@ export class SqliteEntityStore implements IEntityStore {
       );
 
       CREATE TABLE IF NOT EXISTS surveys_response (
-        id            INTEGER PRIMARY KEY,
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
         entity_id     TEXT NOT NULL,
         survey_id     TEXT NOT NULL,
+        survey_title  TEXT DEFAULT '',
         user_id       TEXT,
         points_earned INTEGER NOT NULL DEFAULT 0,
         completed_at  TEXT NOT NULL
@@ -72,6 +73,11 @@ export class SqliteEntityStore implements IEntityStore {
       CREATE TABLE IF NOT EXISTS hmsam_response (
         id      INTEGER PRIMARY KEY AUTOINCREMENT,
         payload TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
       );
     `);
   }
@@ -165,6 +171,107 @@ export class SqliteEntityStore implements IEntityStore {
   async listResponses(): Promise<Record<string, number>[]> {
     const rows = this.db.getAllSync<{ payload: string }>('SELECT payload FROM hmsam_response');
     return rows.map((row) => JSON.parse(row.payload) as Record<string, number>);
+  }
+
+  async recordSurveyResponse(record: import('../domain/ports/IEntityStore').SubmissionHistoryRecord): Promise<void> {
+    try {
+      this.db.runSync(
+        `INSERT INTO surveys_response (entity_id, survey_id, survey_title, user_id, points_earned, completed_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          record.entityId,
+          record.surveyId,
+          record.surveyTitle || 'HMSAM Survey',
+          record.userId,
+          record.pointsEarned,
+          record.completedAt,
+        ],
+      );
+    } catch {
+      try {
+        this.db.execSync('ALTER TABLE surveys_response ADD COLUMN survey_title TEXT DEFAULT "";');
+        this.db.runSync(
+          `INSERT INTO surveys_response (entity_id, survey_id, survey_title, user_id, points_earned, completed_at)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [
+            record.entityId,
+            record.surveyId,
+            record.surveyTitle || 'HMSAM Survey',
+            record.userId,
+            record.pointsEarned,
+            record.completedAt,
+          ],
+        );
+      } catch {}
+    }
+  }
+
+  async listUserHistory(userId: string): Promise<import('../domain/ports/IEntityStore').SubmissionHistoryRecord[]> {
+    interface HistoryRow {
+      id: number;
+      entity_id: string;
+      survey_id: string;
+      survey_title?: string;
+      user_id: string;
+      points_earned: number;
+      completed_at: string;
+    }
+    try {
+      const rows = this.db.getAllSync<HistoryRow>(
+        'SELECT * FROM surveys_response WHERE user_id = ? ORDER BY completed_at DESC',
+        [userId],
+      );
+      return rows.map((r) => ({
+        id: r.id,
+        entityId: r.entity_id,
+        surveyId: r.survey_id,
+        surveyTitle: r.survey_title || 'Research Survey',
+        userId: r.user_id,
+        pointsEarned: r.points_earned,
+        completedAt: r.completed_at,
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  async getPointsByEntity(userId: string): Promise<Record<string, number>> {
+    interface EntityPointsRow {
+      entity_id: string;
+      total: number;
+    }
+    try {
+      const rows = this.db.getAllSync<EntityPointsRow>(
+        'SELECT entity_id, SUM(points_earned) as total FROM surveys_response WHERE user_id = ? GROUP BY entity_id ORDER BY total DESC',
+        [userId],
+      );
+      const result: Record<string, number> = {};
+      for (const r of rows) {
+        result[r.entity_id] = r.total;
+      }
+      return result;
+    } catch {
+      return {};
+    }
+  }
+
+  async getItem(key: string): Promise<string | null> {
+    const row = this.db.getFirstSync<{ value: string }>(
+      'SELECT value FROM app_settings WHERE key = ?',
+      [key],
+    );
+    return row ? row.value : null;
+  }
+
+  async setItem(key: string, value: string): Promise<void> {
+    this.db.runSync(
+      'INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+      [key, value],
+    );
+  }
+
+  async removeItem(key: string): Promise<void> {
+    this.db.runSync('DELETE FROM app_settings WHERE key = ?', [key]);
   }
 }
 

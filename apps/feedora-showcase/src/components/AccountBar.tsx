@@ -3,7 +3,7 @@ import { useFeedora } from '../feedora';
 import { colors, radii } from '../theme';
 
 export function AccountBar() {
-  const { authUser, authMode, openAccountDrawer, openAuthModal } = useFeedora();
+  const { authUser, authMode, profile, openAccountDrawer, openAuthModal } = useFeedora();
 
   if (!authUser) {
     return (
@@ -21,6 +21,7 @@ export function AccountBar() {
   const isCreator = authUser.role === 'creator';
   const engineLabel =
     authMode === 'local' ? '⚡ SQLite' : authMode === 'supabase' ? '☁️ Supabase' : '🐍 Django';
+  const displayedPoints = Math.max(profile?.totalPoints ?? 0, authUser.totalPoints ?? 0);
 
   return (
     <View style={styles.container}>
@@ -47,9 +48,16 @@ export function AccountBar() {
               </Text>
             </View>
           </View>
-          <Text style={styles.orgSub} numberOfLines={1}>
-            {authUser.organizationName || 'University of Moratuwa'}
-          </Text>
+          <View style={styles.subRow}>
+            <Text style={styles.orgSub} numberOfLines={1}>
+              {authUser.organizationName || 'University of Moratuwa'}
+            </Text>
+            {!isCreator && (
+              <Text style={styles.pointsSub}>
+                {' '}· 💎 {displayedPoints.toLocaleString()} pts
+              </Text>
+            )}
+          </View>
         </View>
 
         {/* Engine switcher indicator */}
@@ -147,10 +155,21 @@ const styles = StyleSheet.create({
   rolePillTextCreator: {
     color: colors.gold,
   },
+  subRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
   orgSub: {
     fontSize: 10,
     color: colors.muted,
     fontWeight: '600',
+    marginTop: 1,
+  },
+  pointsSub: {
+    fontSize: 10,
+    color: colors.primary,
+    fontWeight: '800',
     marginTop: 1,
   },
   enginePill: {

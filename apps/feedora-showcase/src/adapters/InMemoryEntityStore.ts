@@ -46,11 +46,86 @@ export class InMemoryEntityStore implements IEntityStore {
     return [...this.profiles.values()].filter((profile) => profile.entityId === entityId);
   }
 
+  private readonly kvStore = new Map<string, string>();
+
   async addResponse(items: Record<string, number>): Promise<void> {
     this.responses.push(items);
   }
 
   async listResponses(): Promise<Record<string, number>[]> {
     return this.responses;
+  }
+
+  private readonly history: Array<{
+    id: number;
+    entityId: string;
+    surveyId: string;
+    surveyTitle: string;
+    userId: string;
+    pointsEarned: number;
+    completedAt: string;
+  }> = [];
+
+  async recordSurveyResponse(record: {
+    id?: number;
+    entityId: string;
+    surveyId: string;
+    surveyTitle: string;
+    userId: string;
+    pointsEarned: number;
+    completedAt: string;
+  }): Promise<void> {
+    this.history.unshift({
+      id: this.history.length + 1,
+      ...record,
+    });
+  }
+
+  async listUserHistory(userId: string) {
+    return this.history.filter((h) => h.userId === userId);
+  }
+
+  async getPointsByEntity(userId: string): Promise<Record<string, number>> {
+    const res: Record<string, number> = {};
+    for (const h of this.history) {
+      if (h.userId === userId) {
+        res[h.entityId] = (res[h.entityId] || 0) + h.pointsEarned;
+      }
+    }
+    return res;
+  }
+
+  async getItem(key: string): Promise<string | null> {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const val = window.localStorage.getItem(key);
+        if (val !== null) return val;
+      }
+    } catch {
+      // In private browsing or non-DOM
+    }
+    return this.kvStore.get(key) ?? null;
+  }
+
+  async setItem(key: string, value: string): Promise<void> {
+    this.kvStore.set(key, value);
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(key, value);
+      }
+    } catch {
+      // In private browsing or non-DOM
+    }
+  }
+
+  async removeItem(key: string): Promise<void> {
+    this.kvStore.delete(key);
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem(key);
+      }
+    } catch {
+      // In private browsing or non-DOM
+    }
   }
 }

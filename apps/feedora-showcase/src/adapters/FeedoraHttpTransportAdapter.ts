@@ -46,32 +46,31 @@ export class FeedoraHttpTransportAdapter implements ITransportPort {
   ): Promise<RemoteSubmitResult> {
     const meta = this.metaCache.get(accessUuid) ?? (await this.fetchSurveyMeta(accessUuid));
 
-    const body = new URLSearchParams();
+    const answersPayload: Record<string, unknown> = {};
     for (const question of meta.questions) {
-      const value = answersByCode[question.code];
-      if (value === undefined || value === null || value === '') continue;
-
-      if (Array.isArray(value)) {
-        for (const entry of value) body.append(`q_${question.id}`, String(entry));
-      } else {
-        body.append(`q_${question.id}`, String(value));
+      const value = answersByCode[question.code] ?? answersByCode[String(question.id)];
+      if (value !== undefined && value !== null && value !== '') {
+        answersPayload[String(question.id)] = value;
       }
     }
 
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    };
-    const token = this.csrfToken ?? this.readCookie('csrftoken');
-    if (token) headers['X-CSRFToken'] = token;
+    try {
+      const response = await this.fetchImpl(
+        `${this.baseUrl.replace(/\/+$/, '')}/api/v1/surveys/${accessUuid}/submit/`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ answers: answersPayload }),
+          credentials: 'include',
+        },
+      );
 
-    const response = await this.fetchImpl(this.url(accessUuid, 'submit/'), {
-      method: 'POST',
-      headers,
-      body: body.toString(),
-      credentials: 'include',
-    });
-
-    return { ok: response.ok, status: response.status };
+      return { ok: response.ok, status: response.status };
+    } catch {
+      return { ok: false, status: 0 };
+    }
   }
 
   private url(accessUuid: string, suffix: string): string {
