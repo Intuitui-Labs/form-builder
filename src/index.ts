@@ -18,6 +18,7 @@ export * from './lint/index.js';
 export * from './ai/index.js';
 export * from './governance/index.js';
 export * from './psychometrics/index.js';
+export * from './qr/index.js';
 
 
 // Heavy subsystems (adapters, assessment, and studio) are NOT re-exported here —

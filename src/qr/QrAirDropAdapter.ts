@@ -4,7 +4,7 @@ import type {
   AirDropManifestResult,
   ChunkReassemblyResult,
 } from '../ports/IQrAirDropPort.js';
-import { StudioShareCodec } from './StudioShareCodec.js';
+import { StudioShareCodec } from '../studio/StudioShareCodec.js';
 
 function computeCrc32(str: string): string {
   let crc = 0 ^ -1;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { QrAirDropAdapter } from '../../src/studio/QrAirDropAdapter.js';
+import { QrAirDropAdapter } from '../../src/qr/index.js';
 import type { FormSchema } from '../../src/schema/FormSchema.js';
 
 describe('Hostile Peer-to-Peer QR Schema AirDrop Codec', () => {

@@ -22,8 +22,11 @@ import type { ICreatorStudioPort } from './domain/ports/ICreatorStudioPort';
 import { AuthModal } from './components/AuthModal';
 import { AccountDrawer } from './components/AccountDrawer';
 
-import { DefaultPsychometricAuditor, type FormSchema } from '@intuitui-labs/form-builder-engine';
-import { QrAirDropAdapter } from '@intuitui-labs/form-builder-engine/studio';
+import {
+  DefaultPsychometricAuditor,
+  QrAirDropAdapter,
+  type FormSchema,
+} from '@intuitui-labs/form-builder-engine';
 
 // ---------------------------------------------------------------------------
 // Composition root: the app owns its adapters. The engine stays headless.

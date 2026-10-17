@@ -113,6 +113,11 @@
       "import": "./dist/psychometrics/index.js",
       "default": "./dist/psychometrics/index.js"
     },
+    "./qr": {
+      "types": "./dist/qr/index.d.ts",
+      "import": "./dist/qr/index.js",
+      "default": "./dist/qr/index.js"
+    },
     "./manager": {
       "types": "./dist/manager/index.d.ts",
       "import": "./dist/manager/index.js",
