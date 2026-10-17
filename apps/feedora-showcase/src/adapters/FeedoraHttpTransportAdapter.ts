@@ -92,7 +92,7 @@ export class FeedoraHttpTransportAdapter implements ITransportPort {
   }
 
   private url(accessUuid: string, suffix: string): string {
-    return `${this.baseUrl.replace(/\/+$/, '')}/surveys/respond/${accessUuid}/${suffix}`;
+    return `${this.baseUrl.replace(/\/+$/, '')}/api/v1/surveys/${accessUuid}/${suffix}`;
   }
 
   private captureCsrf(response: Response): void {
