@@ -1,6 +1,6 @@
 {
   "name": "@intuitui-labs/form-builder-engine",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Headless schema-driven form evaluation, validation, hydration, and analytics engine built on TanStack Form and Zod for React Native, Expo, and Web.",
   "type": "module",
   "sideEffects": false,
@@ -124,7 +124,6 @@
       "default": "./dist/manager/index.js"
     },
     "./*": {
-
       "types": "./dist/*.d.ts",
       "import": "./dist/*.js",
       "default": "./dist/*.js"
