@@ -69,7 +69,14 @@ export class FeedoraHttpTransportAdapter implements ITransportPort {
     title: string;
     description: string;
     isHmsam: boolean;
+    kind?: string;
+    accessPolicy?: {
+      allowRedo: boolean;
+      maxAttempts?: number | null;
+      rewardStrategy: string;
+    };
     questionsCount: number;
+    createdAt?: string;
   }>> {
     try {
       const response = await this.fetchImpl(`${this.baseUrl.replace(/\/+$/, '')}/api/v1/surveys/`, {

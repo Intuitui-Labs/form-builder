@@ -51,23 +51,19 @@ export function SurveyCatalogModal({
   const [enteredCode, setEnteredCode] = useState('');
   const [codeError, setCodeError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'hmsam' | 'custom'>('all');
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<string>('Just now');
 
-  useEffect(() => {
-    if (!visible) return;
+  const reloadSurveys = () => {
     setLoading(true);
     transportPort
       .fetchPublicSurveys()
       .then((items) => {
-        // Enrich items with logical progression locks
-        // Seed survey ID 1 (or isHmsam) is baseline (no prereq)
-        // Others have gentle progression rules for research validity
         const enriched: SurveyCatalogItem[] = items.map((item, idx) => {
           let prerequisiteId: number | null = null;
           let prerequisiteTitle: string | undefined;
           let unlockCodeRequired = false;
 
           if (!item.isHmsam && idx > 2) {
-            // Surveys created later require baseline HMSAM completion first
             prerequisiteId = 1;
             prerequisiteTitle = 'Baseline HMSAM Survey';
           }
@@ -76,7 +72,7 @@ export function SurveyCatalogModal({
             unlockCodeRequired = false;
           }
 
-          const kind: FormKind = item.isHmsam
+          const kind: FormKind = (item.kind as FormKind) || (item.isHmsam
             ? 'survey'
             : item.title.toLowerCase().includes('quiz')
             ? 'quiz'
@@ -84,9 +80,9 @@ export function SurveyCatalogModal({
             ? 'exam'
             : item.title.toLowerCase().includes('intake')
             ? 'intake'
-            : 'survey';
+            : 'survey');
 
-          const accessPolicy = BatteryEngine.getDefaultAccessPolicy(kind);
+          const accessPolicy: FormAccessPolicy = (item.accessPolicy as FormAccessPolicy) || BatteryEngine.getDefaultAccessPolicy(kind);
 
           return {
             ...item,
@@ -99,9 +95,17 @@ export function SurveyCatalogModal({
         });
 
         setSurveys(enriched);
+        setLastRefreshedAt(new Date().toLocaleTimeString());
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    if (!visible) return;
+    reloadSurveys();
+    const interval = setInterval(reloadSurveys, 10000); // 10s live sync with Django DB
+    return () => clearInterval(interval);
   }, [visible]);
 
   const filtered = useMemo(() => {
@@ -166,13 +170,16 @@ export function SurveyCatalogModal({
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Text style={styles.eyebrow}>RESEARCH COMMONS</Text>
-              <Tag tone="teal">LIVE DJANGO CATALOG</Tag>
+              <Tag tone="teal">LIVE SYNC · {lastRefreshedAt}</Tag>
             </View>
             <Text style={styles.title}>All Available Surveys</Text>
             <Text style={styles.subtitle}>
               Browse all instruments created by researchers. Choose a study to begin or view its requirements.
             </Text>
           </View>
+          <Pressable style={styles.refreshBtn} onPress={reloadSurveys} hitSlop={10}>
+            <Text style={styles.refreshText}>🔄</Text>
+          </Pressable>
           <Pressable style={styles.closeBtn} onPress={onClose} hitSlop={10}>
             <Text style={styles.closeText}>✕</Text>
           </Pressable>
@@ -370,6 +377,18 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     color: colors.muted,
     marginTop: 4,
+  },
+  refreshBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.hover,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 6,
+  },
+  refreshText: {
+    fontSize: 14,
   },
   closeBtn: {
     width: 32,
