@@ -1,11 +1,28 @@
 import { useEffect } from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
 import { Tabs } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { FeedoraProvider, useFeedora } from '../feedora';
+import { OfflineSyncBanner } from '../components/OfflineSyncBanner';
+import { AuthModal } from '../components/AuthModal';
+import { WelcomeScreen } from '../components/WelcomeScreen';
+import { AccountDrawer } from '../components/AccountDrawer';
 import { colors } from '../theme';
 
 function FeedoraTabs() {
-  const { authUser, effectiveRole, switchPreviewRole, previewRole } = useFeedora();
+  const {
+    authUser,
+    effectiveRole,
+    switchPreviewRole,
+    previewRole,
+    isWelcomeOpen,
+    openWelcome,
+    closeWelcome,
+    isAuthModalOpen,
+    closeAuthModal,
+    isAccountDrawerOpen,
+    closeAccountDrawer,
+  } = useFeedora();
 
   const isCreatorActive = effectiveRole === 'creator';
   const isCreatorPreviewingRespondent =
@@ -13,6 +30,9 @@ function FeedoraTabs() {
 
   return (
     <View style={{ flex: 1 }}>
+      {/* Offline Connectivity & Outbox Sync Banner */}
+      <OfflineSyncBanner />
+
       {/* Banner when Creator is previewing as Respondent */}
       {isCreatorPreviewingRespondent && (
         <View
@@ -53,14 +73,14 @@ function FeedoraTabs() {
           tabBarActiveTintColor: colors.ink,
           tabBarInactiveTintColor: colors.faint,
           tabBarLabelStyle: {
-            fontSize: 11,
+            fontSize: 10.5,
             fontWeight: '600',
             letterSpacing: 0.2,
-            paddingBottom: 4,
+            paddingBottom: 2,
           },
           tabBarStyle: {
-            height: 62,
-            paddingTop: 8,
+            height: 64,
+            paddingTop: 6,
             paddingBottom: 6,
             backgroundColor: '#FFFFFF',
             borderTopColor: colors.line,
@@ -68,17 +88,67 @@ function FeedoraTabs() {
           },
         }}
       >
-        <Tabs.Screen name="index" options={{ title: 'Survey' }} />
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: 'Survey',
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons
+                name={focused ? 'clipboard' : 'clipboard-outline'}
+                size={22}
+                color={color}
+              />
+            ),
+          }}
+        />
         <Tabs.Screen
           name="studio"
           options={{
             title: 'Studio',
             href: isCreatorActive ? '/studio' : null,
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons
+                name={focused ? 'flask' : 'flask-outline'}
+                size={22}
+                color={color}
+              />
+            ),
           }}
         />
-        <Tabs.Screen name="dashboard" options={{ title: 'Insights' }} />
-        <Tabs.Screen name="community" options={{ title: 'Community' }} />
+        <Tabs.Screen
+          name="dashboard"
+          options={{
+            title: 'Insights',
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons
+                name={focused ? 'stats-chart' : 'stats-chart-outline'}
+                size={22}
+                color={color}
+              />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="community"
+          options={{
+            title: 'Community',
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons
+                name={focused ? 'people' : 'people-outline'}
+                size={22}
+                color={color}
+              />
+            ),
+          }}
+        />
       </Tabs>
+      <AuthModal visible={isAuthModalOpen} onClose={closeAuthModal} />
+      <WelcomeScreen visible={isWelcomeOpen} onClose={closeWelcome} />
+      <AccountDrawer
+        visible={isAccountDrawerOpen}
+        onClose={closeAccountDrawer}
+        onOpenAuth={openWelcome}
+      />
     </View>
   );
 }

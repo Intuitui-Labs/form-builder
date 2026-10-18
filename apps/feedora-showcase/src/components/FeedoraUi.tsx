@@ -402,7 +402,9 @@ export function FieldControl({
                   accessibilityRole="button"
                   disabled={readOnly}
                   accessibilityState={{ selected }}
-                  accessibilityLabel={`${field.label ?? field.name}: ${point}`}
+                  accessibilityLabel={`${field.label ?? field.name}: ${point} of ${max}`}
+                  accessibilityHint="Select rating value"
+                  hitSlop={{ top: 6, bottom: 6, left: 3, right: 3 }}
                   onPress={() => onChange(point)}
                   style={({ pressed }) => [
                     styles.scalePoint,
@@ -773,8 +775,8 @@ const styles = StyleSheet.create({
   scalePoint: {
     flex: 1,
     aspectRatio: 1,
-    maxHeight: 50,
-    minHeight: 40,
+    maxHeight: 52,
+    minHeight: 46,
     borderRadius: radii.small,
     borderWidth: 1,
     borderColor: colors.line,

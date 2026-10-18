@@ -20,9 +20,7 @@ import { FEEDORA_REMOTE } from './config';
 import type { ContributionProfile } from './domain/types';
 import type { AuthMode, AuthUser, UserRole } from './domain/authTypes';
 import type { ICreatorStudioPort } from './domain/ports/ICreatorStudioPort';
-import { AuthModal } from './components/AuthModal';
-import { AccountDrawer } from './components/AccountDrawer';
-import { WelcomeScreen } from './components/WelcomeScreen';
+
 
 import {
   DefaultPsychometricAuditor,
@@ -106,8 +104,12 @@ interface FeedoraContextValue {
   authUser: AuthUser | null;
   authMode: AuthMode;
   setAuthMode: (mode: AuthMode) => void;
+  isAuthModalOpen: boolean;
   openAuthModal: () => void;
+  closeAuthModal: () => void;
+  isAccountDrawerOpen: boolean;
   openAccountDrawer: () => void;
+  closeAccountDrawer: () => void;
   studioPort: ICreatorStudioPort;
   // Role & Preview Mode
   previewRole: UserRole | null;
@@ -142,8 +144,11 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
   const [authMode, setAuthModeState] = useState<AuthMode>(() => authPort.mode);
   const [isAuthModalOpen, setAuthModalOpen] = useState(false);
   const [isAccountDrawerOpen, setAccountDrawerOpen] = useState(false);
-  const [isWelcomeOpen, setIsWelcomeOpen] = useState(false);
+  const [isWelcomeOpen, setIsWelcomeOpen] = useState(() => !authPort.getCurrentUser());
   const [previewRole, setPreviewRole] = useState<UserRole | null>(null);
+
+  const closeAuthModal = useCallback(() => setAuthModalOpen(false), []);
+  const closeAccountDrawer = useCallback(() => setAccountDrawerOpen(false), []);
 
   const effectiveRole: UserRole = useMemo(() => {
     if (authUser?.role === 'creator') {
@@ -405,8 +410,12 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
         authUser,
         authMode,
         setAuthMode,
+        isAuthModalOpen,
         openAuthModal,
+        closeAuthModal,
+        isAccountDrawerOpen,
         openAccountDrawer,
+        closeAccountDrawer,
         previewRole,
         switchPreviewRole,
         effectiveRole,
@@ -425,13 +434,6 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
-      <AuthModal visible={isAuthModalOpen} onClose={() => setAuthModalOpen(false)} />
-      <WelcomeScreen visible={isWelcomeOpen} onClose={closeWelcome} />
-      <AccountDrawer
-        visible={isAccountDrawerOpen}
-        onClose={() => setAccountDrawerOpen(false)}
-        onOpenAuth={() => setIsWelcomeOpen(true)}
-      />
     </FeedoraContext.Provider>
   );
 }

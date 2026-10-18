@@ -12,9 +12,7 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+
 import {
   MultiStepFormManager,
   type IFeedbackNotifierPort,
@@ -440,6 +438,33 @@ export default function SurveyScreen() {
   const allEntities = entitiesList || entities;
   const currentEntity = allEntities.find((e) => e.id === entityId) || allEntities[0];
 
+  const liveEarnedPoints = useMemo(() => {
+    if (!isGamified) return 0;
+    let earned = 0;
+    for (const page of currentSchema.pages) {
+      for (const field of page.fields) {
+        const val = formState.values[field.name];
+        if (val !== undefined && val !== null && val !== '') {
+          earned += pointsForAnswer(FEEDORA_FEATURES, field.type, val);
+        }
+      }
+    }
+    return earned;
+  }, [formState.values, currentSchema, isGamified]);
+
+  const liveAnsweredCount = useMemo(() => {
+    let count = 0;
+    for (const page of currentSchema.pages) {
+      for (const field of page.fields) {
+        const val = formState.values[field.name];
+        if (val !== undefined && val !== null && val !== '') {
+          count++;
+        }
+      }
+    }
+    return count;
+  }, [formState.values, currentSchema]);
+
   return (
     <AppPage>
       <BrandHeader
@@ -520,92 +545,74 @@ export default function SurveyScreen() {
         </Panel>
       )}
 
-      {/* Spacious Active Institution & Research Identity Banner */}
-      <Panel style={styles.institutionBannerPanel}>
-        <View style={styles.activeInstitutionRow}>
-          <Text style={styles.institutionEmoji}>
+      {/* Sleek, Spacious Study Bar & QR Scanner Action */}
+      <View style={styles.studyHeaderBar}>
+        <Pressable
+          style={styles.studyEntityPill}
+          onPress={() => setIsInstitutionPickerOpen((v) => !v)}
+          accessibilityRole="button"
+          accessibilityLabel={`Contributing as ${currentEntity?.name}. Tap to change institution.`}
+        >
+          <Text style={styles.studyEntityEmoji}>
             {currentEntity?.type === 'university' ? '🏛️' : currentEntity?.type === 'research' ? '🔬' : '🏢'}
           </Text>
-          <View style={{ flex: 1, gap: 2 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={styles.institutionEyebrow}>CONTRIBUTING AS</Text>
-              <Tag tone="teal">PARTNER LAB</Tag>
-            </View>
-            <Text style={styles.institutionName}>{currentEntity?.name || 'University of Moratuwa'}</Text>
-            <Text style={styles.institutionDetail}>
-              {contributorCounts[entityId] ?? 0} active members · {currentEntity?.tagline || currentEntity?.country || 'Academic Partner'}
-            </Text>
-          </View>
-          <Pressable
-            style={styles.switchInstitutionBtn}
-            onPress={() => setIsInstitutionPickerOpen((v) => !v)}
-          >
-            <Text style={styles.switchInstitutionText}>
-              {isInstitutionPickerOpen ? 'Done ▲' : 'Change ▾'}
-            </Text>
-          </Pressable>
-        </View>
+          <Text style={styles.studyEntityText} numberOfLines={1}>
+            {currentEntity?.name || 'University of Moratuwa'}
+          </Text>
+          <Text style={styles.studyEntityChevron}>
+            {isInstitutionPickerOpen ? '▲' : '▾'}
+          </Text>
+        </Pressable>
 
-        {/* Collapsible Institution Selector */}
-        {isInstitutionPickerOpen && (
-          <View style={styles.institutionPickerAccordion}>
-            <Text style={styles.pickerSectionHeader}>SELECT RESEARCH INSTITUTION</Text>
-            {allEntities.map((entity) => (
-              <EntityCard
-                key={entity.id}
-                entity={entity}
-                memberCount={contributorCounts[entity.id] ?? 0}
-                selected={entity.id === entityId}
-                onSelect={() => {
-                  joinEntity(entity.id);
-                  setIsInstitutionPickerOpen(false);
-                }}
-              />
-            ))}
-          </View>
-        )}
+        <Pressable
+          style={styles.scanCodePillBtn}
+          onPress={() => setIsAirDropModalOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Scan QR or enter survey access code"
+        >
+          <Text style={styles.scanCodePillIcon}>📲</Text>
+          <Text style={styles.scanCodePillText}>Join by QR / Code</Text>
+        </Pressable>
+      </View>
 
-        <View style={styles.scanCodeCard}>
-          <View style={styles.scanCodeHeader}>
-            <Text style={styles.scanCodeIcon}>📲</Text>
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={styles.scanCodeTitle}>Join Study by QR or Code</Text>
-              <Text style={styles.scanCodeSub}>
-                Scan a researcher's QR code or enter a 6-character access code (e.g. HMSAM1)
+      {/* Dropdown Institution Selector when opened */}
+      {isInstitutionPickerOpen && (
+        <Panel style={styles.institutionPickerAccordion}>
+          <Text style={styles.pickerSectionHeader}>SELECT RESEARCH INSTITUTION</Text>
+          {allEntities.map((entity) => (
+            <EntityCard
+              key={entity.id}
+              entity={entity}
+              memberCount={contributorCounts[entity.id] ?? 0}
+              selected={entity.id === entityId}
+              onSelect={() => {
+                joinEntity(entity.id);
+                setIsInstitutionPickerOpen(false);
+              }}
+            />
+          ))}
+        </Panel>
+      )}
+
+      {/* Guest voice points advisory card (only if guest has earned points) */}
+      {isGamified && profile && !authUser && profile.totalPoints > 0 ? (
+        <Panel style={styles.guestClaimCard}>
+          <View style={styles.guestClaimRow}>
+            <Text style={styles.guestClaimIcon}>💎</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.guestClaimTitle}>
+                {profile.totalPoints} Unsaved Voice Points (Guest Session)
+              </Text>
+              <Text style={styles.guestClaimDesc}>
+                Your responses earned voice points! Sign in to permanently save your rank.
               </Text>
             </View>
           </View>
-          <Pressable
-            style={styles.scanCodeBtn}
-            onPress={() => setIsAirDropModalOpen(true)}
-          >
-            <Text style={styles.scanCodeBtnText}>📲 Open Code & Link Scanner</Text>
-          </Pressable>
-        </View>
-
-        {isGamified && profile && authUser ? (
-          <View style={styles.standingWrap}>
-            <LevelProgress standing={profile.standing} totalPoints={profile.totalPoints} />
+          <View style={{ marginTop: 8 }}>
+            <ActionButton label="Sign In to Claim Points →" onPress={openAuthModal} />
           </View>
-        ) : isGamified && profile && !authUser && profile.totalPoints > 0 ? (
-          <View style={styles.guestClaimCard}>
-            <View style={styles.guestClaimRow}>
-              <Text style={styles.guestClaimIcon}>💎</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.guestClaimTitle}>
-                  {profile.totalPoints} Unsaved Voice Points (Guest Session)
-                </Text>
-                <Text style={styles.guestClaimDesc}>
-                  Your responses earned voice points! Sign in or register to permanently bind them to your academic profile.
-                </Text>
-              </View>
-            </View>
-            <View style={{ marginTop: 8 }}>
-              <ActionButton label="Sign In to Claim Points →" onPress={openAuthModal} />
-            </View>
-          </View>
-        ) : null}
-      </Panel>
+        </Panel>
+      ) : null}
 
       {/* Academic Ethics / Participant Consent (Task 3.5 in Agent Brief) */}
       {!consented && !submitted && (
@@ -779,6 +786,35 @@ export default function SurveyScreen() {
               eta={progress.estimatedTimeRemainingText}
             />
 
+            {isGamified ? (
+              <View style={styles.liveGamificationHud}>
+                <View style={styles.livePointsBadge}>
+                  <Text style={styles.livePointsEmoji}>💎</Text>
+                  <Text style={styles.livePointsNum}>{liveEarnedPoints}</Text>
+                  <Text style={styles.livePointsLabel}>pts earned</Text>
+                </View>
+                <View style={styles.livePerksRow}>
+                  {activeSurveyMeta?.features?.rewards?.mode === 'variable' && (
+                    <Tag tone="gold">🎲 VARIABLE MULTIPLIER</Tag>
+                  )}
+                  {activeSurveyMeta?.features?.negative_reinforcement?.enabled && (
+                    <Tag tone="teal">🛡️ STREAK SHIELD</Tag>
+                  )}
+                  {liveAnsweredCount >= 3 ? (
+                    <Tag tone="teal">🔥 1.25x STREAK</Tag>
+                  ) : (
+                    <Tag tone="slate">⚡ LIVE POINTS</Tag>
+                  )}
+                </View>
+              </View>
+            ) : (
+              <View style={styles.controlArmBanner}>
+                <Text style={styles.controlArmText}>
+                  ⚖️ CONTROL ARM · Baseline Research Protocol (Zero Gamification)
+                </Text>
+              </View>
+            )}
+
             {currentPage?.title ? (
               <Text style={styles.pageTitle}>{currentPage.title}</Text>
             ) : null}
@@ -795,8 +831,18 @@ export default function SurveyScreen() {
                   error={formState.errors[field.name as keyof Values]}
                   readOnly={false}
                   onChange={(val) => {
+                    const prev = formState.values[field.name];
                     form.setFieldValue(field.name, val);
                     manager.pruneHiddenFieldValues();
+
+                    if (isGamified && (prev === undefined || prev === null || prev === '')) {
+                      const pts = pointsForAnswer(FEEDORA_FEATURES, field.type, val);
+                      if (pts > 0) {
+                        setToast({ points: pts, label: `${field.label ?? field.name} answered (+${pts} pts)` });
+                        if (toastTimer.current) clearTimeout(toastTimer.current);
+                        toastTimer.current = setTimeout(() => setToast(null), 2400);
+                      }
+                    }
                   }}
                 />
               ))}
@@ -1141,49 +1187,59 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  institutionBannerPanel: {
-    padding: 16,
+  studyHeaderBar: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10,
+    alignItems: 'center',
   },
-  activeInstitutionRow: {
+  studyEntityPill: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-  },
-  institutionEmoji: {
-    fontSize: 32,
-  },
-  institutionEyebrow: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    color: colors.faint,
-    letterSpacing: 0.8,
-  },
-  institutionName: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.ink,
-    fontFamily: serifFont,
-  },
-  institutionDetail: {
-    fontSize: 11,
-    color: colors.muted,
-  },
-  switchInstitutionBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    backgroundColor: colors.slateSoft,
+    gap: 6,
+    backgroundColor: colors.paper,
+    borderWidth: 1,
+    borderColor: colors.line,
     borderRadius: radii.small,
+    paddingHorizontal: 12,
+    minHeight: 44,
   },
-  switchInstitutionText: {
-    fontSize: 11,
+  studyEntityEmoji: {
+    fontSize: 16,
+  },
+  studyEntityText: {
+    flex: 1,
+    fontSize: 12.5,
     fontWeight: '700',
     color: colors.ink,
   },
+  studyEntityChevron: {
+    fontSize: 12,
+    color: colors.muted,
+    fontWeight: '800',
+  },
+  scanCodePillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FAF5FF',
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
+    borderRadius: radii.small,
+    paddingHorizontal: 12,
+    minHeight: 44,
+  },
+  scanCodePillIcon: {
+    fontSize: 15,
+  },
+  scanCodePillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#6B21A8',
+  },
   institutionPickerAccordion: {
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
+    marginBottom: 12,
     gap: 6,
   },
   pickerSectionHeader: {
@@ -1193,43 +1249,55 @@ const styles = StyleSheet.create({
     color: colors.faint,
     marginBottom: 4,
   },
-  scanCodeCard: {
-    backgroundColor: '#FAF5FF',
-    borderWidth: 1.5,
-    borderColor: '#E9D5FF',
-    borderRadius: radii.medium,
-    padding: 14,
-    marginTop: 14,
-    gap: 12,
-  },
-  scanCodeHeader: {
+  liveGamificationHud: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 12,
-  },
-  scanCodeIcon: {
-    fontSize: 26,
-  },
-  scanCodeTitle: {
-    fontSize: 13.5,
-    fontWeight: '800',
-    color: colors.ink,
-  },
-  scanCodeSub: {
-    fontSize: 11.5,
-    lineHeight: 16,
-    color: colors.muted,
-  },
-  scanCodeBtn: {
-    backgroundColor: colors.primary,
+    backgroundColor: '#FAF5FF',
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
     borderRadius: radii.small,
-    paddingVertical: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginVertical: 10,
+  },
+  livePointsBadge: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 5,
+  },
+  livePointsEmoji: {
+    fontSize: 16,
+  },
+  livePointsNum: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#6B21A8',
+  },
+  livePointsLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#7E22CE',
+  },
+  livePerksRow: {
+    flexDirection: 'row',
+    gap: 6,
     alignItems: 'center',
   },
-  scanCodeBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12.5,
-    fontWeight: '800',
+  controlArmBanner: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+    borderWidth: 1,
+    borderRadius: radii.small,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginVertical: 8,
+  },
+  controlArmText: {
+    fontSize: 11,
+    color: colors.muted,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   consentPanel: {
     backgroundColor: '#FAF5FF',

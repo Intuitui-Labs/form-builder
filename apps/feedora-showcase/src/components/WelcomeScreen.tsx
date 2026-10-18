@@ -172,9 +172,28 @@ export function WelcomeScreen({ visible, onClose }: WelcomeScreenProps) {
             </Text>
           </View>
 
+          {/* Quick Flow: Continue as Guest (Immediately Visible at the Top) */}
+          <Pressable style={styles.topGuestCard} onPress={handleGuestContinue}>
+            <View style={styles.topGuestHeader}>
+              <Text style={styles.topGuestEmoji}>🚀</Text>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.topGuestTitle}>Explore Immediately as Guest</Text>
+                  <View style={styles.instantPill}>
+                    <Text style={styles.instantPillText}>INSTANT</Text>
+                  </View>
+                </View>
+                <Text style={styles.topGuestSub}>
+                  No registration needed. Jump straight into active academic surveys now.
+                </Text>
+              </View>
+              <Text style={styles.topGuestArrow}>→</Text>
+            </View>
+          </Pressable>
+
           {/* Step 1: Choose Your Role */}
           <View style={styles.sectionWrap}>
-            <Text style={styles.sectionLabel}>STEP 1: CHOOSE YOUR ROLE</Text>
+            <Text style={styles.sectionLabel}>STEP 1: CHOOSE YOUR ROLE (OR SIGN IN)</Text>
             <View style={styles.roleCardRow}>
               {/* Respondent Card (Default) */}
               <Pressable
@@ -564,7 +583,56 @@ const styles = StyleSheet.create({
     color: '#475569',
   },
   heroSection: {
-    marginBottom: 24,
+    marginBottom: 16,
+  },
+  topGuestCard: {
+    backgroundColor: '#FAF5FF',
+    borderWidth: 1.5,
+    borderColor: '#E9D5FF',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 22,
+    shadowColor: '#7A4FA8',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  topGuestHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  topGuestEmoji: {
+    fontSize: 26,
+  },
+  topGuestTitle: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#6B21A8',
+  },
+  topGuestSub: {
+    fontSize: 11.5,
+    color: '#7E22CE',
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  topGuestArrow: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#7A4FA8',
+    paddingLeft: 4,
+  },
+  instantPill: {
+    backgroundColor: '#7A4FA8',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  instantPillText: {
+    fontSize: 8.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
   heroLogo: {
     fontSize: 28,
