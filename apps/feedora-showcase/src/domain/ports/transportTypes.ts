@@ -50,6 +50,8 @@ export interface RemoteSubmitResult {
     streak_shielded: boolean;
     perk_description?: string;
   };
+  totalPoints?: number;
+  user?: any;
 }
 
 export interface RemoteSurveyAnalysis {

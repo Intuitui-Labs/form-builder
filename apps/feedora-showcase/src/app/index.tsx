@@ -88,6 +88,7 @@ export default function SurveyScreen() {
     resetToDefaultSurvey,
     openAuthModal,
     outboxPort,
+    submissionHistory,
   } = useFeedora();
   const [runKey, setRunKey] = useState(0);
   const [toast, setToast] = useState<{ points: number; label: string } | null>(null);
@@ -139,16 +140,30 @@ export default function SurveyScreen() {
     const set = new Set<string | number>();
     if (profile?.surveysCompleted && profile.surveysCompleted > 0) {
       set.add(1);
+      set.add('1');
       set.add('hmsam');
       set.add(HMSAM_FORM_SCHEMA.id);
     }
+    for (const record of submissionHistory) {
+      if (record.surveyId) {
+        set.add(record.surveyId);
+        set.add(String(record.surveyId));
+      }
+    }
     return set;
-  }, [profile?.surveysCompleted]);
+  }, [profile?.surveysCompleted, submissionHistory]);
 
   const isSurveyCompleted = useMemo(() => {
     const curId = currentSchema.id;
-    return completedSurveyIds.has(curId) || (curId === HMSAM_FORM_SCHEMA.id && completedSurveyIds.has('hmsam'));
-  }, [currentSchema.id, completedSurveyIds]);
+    const metaUuid = activeSurveyMeta?.survey?.uuid;
+    const metaId = activeSurveyMeta?.survey?.id;
+    return (
+      completedSurveyIds.has(curId) ||
+      (metaUuid ? completedSurveyIds.has(metaUuid) : false) ||
+      (metaId !== undefined ? completedSurveyIds.has(metaId) || completedSurveyIds.has(String(metaId)) : false) ||
+      (curId === HMSAM_FORM_SCHEMA.id && completedSurveyIds.has('hmsam'))
+    );
+  }, [currentSchema.id, activeSurveyMeta, completedSurveyIds]);
 
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -357,6 +372,16 @@ export default function SurveyScreen() {
             note += ` · ${result.negativeReinforcement.perk_description}`;
           }
           setSyncNote(note);
+
+          // Real-time synchronization: sync exact authoritative server points
+          if (result.pointsEarned !== undefined && result.pointsEarned > 0) {
+            setTotalEarned(result.pointsEarned);
+          }
+          if (result.totalPoints !== undefined && profile) {
+            profile.totalPoints = result.totalPoints;
+            profile.standing = contributionPort.standingFor(result.totalPoints);
+            await store.putProfile(profile);
+          }
         } else {
           await outboxPort.enqueue({
             id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,

@@ -148,6 +148,8 @@ export class FeedoraHttpTransportAdapter implements ITransportPort {
         variableBonus: resData?.variableBonus,
         bonusLabel: resData?.bonusLabel,
         negativeReinforcement: resData?.negativeReinforcement,
+        totalPoints: resData?.totalPoints,
+        user: resData?.user,
       };
     } catch {
       return { ok: false, status: 0 };

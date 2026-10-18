@@ -131,9 +131,10 @@ export class SqliteEntityStore implements IEntityStore {
   }
 
   async getProfile(userId: string, entityId: string): Promise<ContributionProfile | null> {
+    const numericPart = entityId.replace(/^org-/, '');
     const row = this.db.getFirstSync<ProfileRow>(
-      'SELECT * FROM accounts_respondentprofile WHERE user_id = ? AND entity_id = ?',
-      [userId, entityId],
+      'SELECT * FROM accounts_respondentprofile WHERE user_id = ? AND (entity_id = ? OR entity_id = ? OR entity_id = ?) LIMIT 1',
+      [userId, entityId, `org-${numericPart}`, numericPart],
     );
     return row ? toProfile(row) : null;
   }
@@ -157,9 +158,10 @@ export class SqliteEntityStore implements IEntityStore {
   }
 
   async listProfiles(entityId: string): Promise<ContributionProfile[]> {
+    const numericPart = entityId.replace(/^org-/, '');
     const rows = this.db.getAllSync<ProfileRow>(
-      'SELECT * FROM accounts_respondentprofile WHERE entity_id = ? ORDER BY total_points DESC',
-      [entityId],
+      'SELECT * FROM accounts_respondentprofile WHERE entity_id = ? OR entity_id = ? OR entity_id = ? ORDER BY total_points DESC',
+      [entityId, `org-${numericPart}`, numericPart],
     );
     return rows.map(toProfile);
   }

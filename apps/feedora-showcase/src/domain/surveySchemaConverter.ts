@@ -140,12 +140,19 @@ export function convertRemoteSurveyToSchema(meta: RemoteSurveyMeta): FormSchema 
     ? 'quiz'
     : 'survey';
 
+  const featAny = features as Record<string, any> | undefined;
+  const allowRedo = Boolean(
+    featAny?.allow_multiple_submissions ||
+    featAny?.allowRedo ||
+    featAny?.collection?.allow_multiple_submissions
+  );
+
   return {
     id: survey.uuid || `survey-${survey.id}`,
     kind,
     accessPolicy: {
-      allowRedo: kind === 'quiz',
-      maxAttempts: kind === 'quiz' ? undefined : 1,
+      allowRedo,
+      maxAttempts: allowRedo ? undefined : 1,
       rewardStrategy: kind === 'quiz' ? 'score_delta' : 'first_attempt_only',
     },
     title: survey.title,

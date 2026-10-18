@@ -83,7 +83,10 @@ export class InMemoryEntityStore implements IEntityStore {
   }
 
   async getProfile(userId: string, entityId: string): Promise<ContributionProfile | null> {
-    return this.profiles.get(this.key(userId, entityId)) ?? null;
+    const direct = this.profiles.get(this.key(userId, entityId));
+    if (direct) return direct;
+    const altEntityId = entityId.startsWith('org-') ? entityId.replace('org-', '') : `org-${entityId}`;
+    return this.profiles.get(this.key(userId, altEntityId)) ?? null;
   }
 
   async putProfile(profile: ContributionProfile): Promise<void> {
@@ -92,7 +95,10 @@ export class InMemoryEntityStore implements IEntityStore {
   }
 
   async listProfiles(entityId: string): Promise<ContributionProfile[]> {
-    return [...this.profiles.values()].filter((profile) => profile.entityId === entityId);
+    const altEntityId = entityId.startsWith('org-') ? entityId.replace('org-', '') : `org-${entityId}`;
+    return [...this.profiles.values()].filter(
+      (profile) => profile.entityId === entityId || profile.entityId === altEntityId,
+    );
   }
 
   private readonly kvStore = new Map<string, string>();

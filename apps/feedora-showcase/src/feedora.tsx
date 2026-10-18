@@ -127,6 +127,7 @@ interface FeedoraContextValue {
   openAirDropSurvey: (schema: FormSchema) => void;
   resetToDefaultSurvey: () => void;
   outboxPort: OfflineOutboxQueue<Record<string, unknown>>;
+  submissionHistory: import('./domain/ports/IEntityStore').SubmissionHistoryRecord[];
 }
 
 const FeedoraContext = createContext<FeedoraContextValue | null>(null);
@@ -137,6 +138,7 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<ContributionProfile | null>(null);
   const [contributorCounts, setContributorCounts] = useState<Record<string, number>>({});
   const [responses, setResponses] = useState<Record<string, number>[]>([]);
+  const [submissionHistory, setSubmissionHistory] = useState<import('./domain/ports/IEntityStore').SubmissionHistoryRecord[]>([]);
   const [version, setVersion] = useState(0);
 
   // Auth management
@@ -276,10 +278,41 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
       }
       const loadedResponses = await store.listResponses();
       const refreshedProfile = await contributionPort.getProfile(currentUserId, entityId);
+      const localHistory = await store.listUserHistory(currentUserId);
+
+      // In Django mode, also fetch remote history if authenticated
+      let mergedHistory = [...localHistory];
+      if (authMode === 'django' && authUser && authUser.id !== 'guest-user') {
+        try {
+          const res = await fetch(`${FEEDORA_REMOTE.baseUrl}/api/v1/respondent/history/`, {
+            credentials: 'include',
+          });
+          const hData = await res.json();
+          if (hData.ok && Array.isArray(hData.history)) {
+            const seenIds = new Set(localHistory.map((h) => h.surveyId));
+            for (const item of hData.history) {
+              if (item.surveyUuid && !seenIds.has(item.surveyUuid)) {
+                mergedHistory.push({
+                  entityId,
+                  surveyId: item.surveyUuid,
+                  surveyTitle: item.surveyTitle,
+                  userId: currentUserId,
+                  pointsEarned: item.pointsEarned,
+                  completedAt: item.completedAt,
+                });
+                seenIds.add(item.surveyUuid);
+              }
+            }
+          }
+        } catch {
+          // offline fallback
+        }
+      }
 
       if (cancelled) return;
       setContributorCounts(counts);
       setResponses(loadedResponses);
+      setSubmissionHistory(mergedHistory);
       if (refreshedProfile) {
         if (authUser?.totalPoints && authUser.totalPoints > refreshedProfile.totalPoints) {
           refreshedProfile.totalPoints = authUser.totalPoints;
@@ -431,6 +464,7 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
         openAirDropSurvey,
         resetToDefaultSurvey,
         outboxPort,
+        submissionHistory,
       }}
     >
       {children}
