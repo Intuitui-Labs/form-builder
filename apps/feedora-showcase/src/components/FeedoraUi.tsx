@@ -49,7 +49,6 @@ export function BrandHeader({
         <View style={styles.brandGroup}>
           <FeedoraMark />
           <Text style={styles.brandLogo}>Feedora</Text>
-          <Text style={styles.brandNameMuted}>/ VOICE</Text>
         </View>
         {rightAction ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -662,20 +661,29 @@ const styles = StyleSheet.create({
   levelNext: { fontSize: 11.5, color: colors.muted, fontWeight: '500' },
 
   toast: {
+    position: 'absolute',
+    bottom: 24,
+    left: 20,
+    right: 20,
+    zIndex: 9999,
+    elevation: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: colors.amberLight,
+    backgroundColor: '#FFFBEB',
     borderColor: '#FCD34D',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderRadius: radii.medium,
-    padding: 12,
-    marginBottom: 14,
+    padding: 14,
+    shadowColor: '#78350F',
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
   },
   toastPoints: { fontSize: 20, fontWeight: '800', color: colors.amber },
-  toastTitle: { fontSize: 11.5, fontWeight: '700', color: colors.ink },
+  toastTitle: { fontSize: 12, fontWeight: '700', color: colors.ink },
   toastLabel: { fontSize: 11, color: colors.muted, marginTop: 1 },
-  toastDismiss: { fontSize: 13, color: colors.amber, fontWeight: '700', paddingHorizontal: 4 },
+  toastDismiss: { fontSize: 14, color: colors.amber, fontWeight: '800', paddingHorizontal: 4 },
 
   entityCard: {
     flexDirection: 'row',

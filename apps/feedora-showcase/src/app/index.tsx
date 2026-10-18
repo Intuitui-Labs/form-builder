@@ -145,6 +145,11 @@ export default function SurveyScreen() {
     return set;
   }, [profile?.surveysCompleted]);
 
+  const isSurveyCompleted = useMemo(() => {
+    const curId = currentSchema.id;
+    return completedSurveyIds.has(curId) || (curId === HMSAM_FORM_SCHEMA.id && completedSurveyIds.has('hmsam'));
+  }, [currentSchema.id, completedSurveyIds]);
+
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleReward = (reward: RewardPayload) => {
@@ -649,15 +654,28 @@ export default function SurveyScreen() {
 
       {/* Main survey card */}
       <Panel>
-        {isGamified && toast ? (
-          <PointsToast
-            points={toast.points}
-            label={toast.label}
-            onDismiss={() => setToast(null)}
-          />
-        ) : null}
-
-        {submitted ? (
+        {!submitted && isSurveyCompleted && !currentSchema.accessPolicy?.allowRedo ? (
+          <View style={styles.completedBox}>
+            <View style={styles.completedLockOverlay}>
+              <Text style={{ fontSize: 36 }}>✅</Text>
+              <Text style={styles.completedTitle}>Survey Already Completed</Text>
+              <Text style={styles.completedBody}>
+                You have already submitted this research instrument. Your responses and voice points are safely stored in the dataset.
+              </Text>
+              <View style={styles.completedActions}>
+                <ActionButton
+                  label="⏩ Open Next Available Survey →"
+                  onPress={() => setIsCatalogOpen(true)}
+                />
+                <ActionButton
+                  label="View My Reliability & Scores in Insights"
+                  secondary
+                  onPress={() => router.push('/dashboard')}
+                />
+              </View>
+            </View>
+          </View>
+        ) : submitted ? (
           <View style={styles.completedBox}>
             {!isGamified ? (
               <View style={styles.academicSuccessCard}>
@@ -946,8 +964,16 @@ export default function SurveyScreen() {
           await openSurvey(uuid);
           startOver();
         }}
-        completedSurveyIds={new Set(profile?.surveysCompleted && profile.surveysCompleted > 0 ? [1, 'hmsam'] : [])}
+        completedSurveyIds={completedSurveyIds}
       />
+
+      {isGamified && toast ? (
+        <PointsToast
+          points={toast.points}
+          label={toast.label}
+          onDismiss={() => setToast(null)}
+        />
+      ) : null}
     </AppPage>
   );
 }
@@ -1383,5 +1409,11 @@ const styles = StyleSheet.create({
   },
   academicSuccessIcon: {
     fontSize: 44,
+  },
+  completedLockOverlay: {
+    alignItems: 'center',
+    paddingVertical: 18,
+    gap: 12,
+    width: '100%',
   },
 });

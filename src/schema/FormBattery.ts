@@ -49,10 +49,14 @@ export interface SurveyBatterySchema {
 
 export interface FormSubmissionHistoryItem {
   formId: string;
-  completedAt: string;
+  completedAt?: string;
+  isCompleted?: boolean;
   scorePercent?: number;
   pointsEarned?: number;
   attemptNumber: number;
+  lastStepIndex?: number;
+  totalSteps?: number;
+  lastSavedAt?: string;
 }
 
 export interface BatteryAccessEvaluation {
@@ -63,4 +67,6 @@ export interface BatteryAccessEvaluation {
   reason?: 'prerequisite_unmet' | 'score_threshold_unmet' | 'max_attempts_reached' | 'time_locked' | 'access_code_required';
   missingFormIds?: string[];
   unlocksAt?: string;
+  hasPartialProgress?: boolean;
+  resumeStepIndex?: number;
 }

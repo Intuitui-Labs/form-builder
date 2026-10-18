@@ -230,4 +230,50 @@ describe('BatteryEngine: Multi-Form Progression, Archetypes & Redo Governance', 
     expect(nextNode).not.toBeNull();
     expect(nextNode?.schemaId).toBe('hmsam-baseline');
   });
+
+  it('detects partial progress vs full completion and supplies resume step index', () => {
+    const node = sampleBattery.nodes[1]; // hmsam-baseline (prereq: demographic-intake)
+    const partialHistory: FormSubmissionHistoryItem[] = [
+      {
+        formId: 'demographic-intake',
+        isCompleted: true,
+        completedAt: new Date().toISOString(),
+        attemptNumber: 1,
+      },
+      {
+        formId: 'hmsam-baseline',
+        isCompleted: false,
+        attemptNumber: 1,
+        lastStepIndex: 3,
+        totalSteps: 8,
+      },
+    ];
+
+    const evalResult = BatteryEngine.evaluateNodeAccess(node, partialHistory);
+    expect(evalResult.isCompleted).toBe(false);
+    expect(evalResult.hasPartialProgress).toBe(true);
+    expect(evalResult.resumeStepIndex).toBe(3);
+    expect(evalResult.canStart).toBe(true);
+
+    // After full completion with completedAt, isCompleted becomes true and partial flag clears
+    const completedHistory: FormSubmissionHistoryItem[] = [
+      {
+        formId: 'demographic-intake',
+        isCompleted: true,
+        completedAt: new Date().toISOString(),
+        attemptNumber: 1,
+      },
+      {
+        formId: 'hmsam-baseline',
+        isCompleted: true,
+        completedAt: new Date().toISOString(),
+        attemptNumber: 1,
+      },
+    ];
+
+    const completedEval = BatteryEngine.evaluateNodeAccess(node, completedHistory);
+    expect(completedEval.isCompleted).toBe(true);
+    expect(completedEval.hasPartialProgress).toBe(false);
+    expect(completedEval.canStart).toBe(false); // allowRedo is false for baseline survey
+  });
 });

@@ -61,8 +61,16 @@ export class BatteryEngine {
   ): BatteryAccessEvaluation {
     const now = options.currentTimeMs ?? Date.now();
     const relevantSubmissions = history.filter((h) => h.formId === node.schemaId);
-    const attemptsUsed = relevantSubmissions.length;
+    
+    // A submission is fully completed if completedAt is present or isCompleted is explicitly true
+    const completedSubmissions = relevantSubmissions.filter((h) => h.isCompleted !== false && (h.completedAt !== undefined || h.isCompleted === true));
+    const partialSubmissions = relevantSubmissions.filter((h) => h.isCompleted === false || (!h.completedAt && h.lastStepIndex !== undefined));
+    
+    const attemptsUsed = completedSubmissions.length;
     const isCompleted = attemptsUsed > 0;
+    const latestPartial = partialSubmissions[0];
+    const hasPartialProgress = !isCompleted && latestPartial !== undefined;
+    const resumeStepIndex = latestPartial?.lastStepIndex;
 
     const accessPolicy = node.accessPolicy ?? this.getDefaultAccessPolicy(node.kind);
 
@@ -74,6 +82,8 @@ export class BatteryEngine {
         attemptsUsed,
         isLocked: true,
         reason: 'max_attempts_reached',
+        hasPartialProgress,
+        resumeStepIndex,
       };
     }
 
@@ -85,6 +95,7 @@ export class BatteryEngine {
         attemptsUsed,
         isLocked: true,
         reason: 'max_attempts_reached',
+        hasPartialProgress: false,
       };
     }
 
@@ -104,6 +115,8 @@ export class BatteryEngine {
             isLocked: true,
             reason: 'prerequisite_unmet',
             missingFormIds: missing,
+            hasPartialProgress,
+            resumeStepIndex,
           };
         }
 
@@ -151,6 +164,8 @@ export class BatteryEngine {
       isCompleted,
       attemptsUsed,
       isLocked: false,
+      hasPartialProgress,
+      resumeStepIndex,
     };
   }
 
