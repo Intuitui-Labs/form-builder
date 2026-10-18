@@ -144,8 +144,20 @@ export function convertRemoteSurveyToSchema(meta: RemoteSurveyMeta): FormSchema 
     }
   }
 
+  const kind = survey.is_hmsam
+    ? 'survey'
+    : survey.title.toLowerCase().includes('quiz')
+    ? 'quiz'
+    : 'survey';
+
   return {
     id: survey.uuid || `survey-${survey.id}`,
+    kind,
+    accessPolicy: {
+      allowRedo: kind === 'quiz',
+      maxAttempts: kind === 'quiz' ? undefined : 1,
+      rewardStrategy: kind === 'quiz' ? 'score_delta' : 'first_attempt_only',
+    },
     title: survey.title,
     description: survey.description || '',
     pages: [coverPage, ...questionPages],

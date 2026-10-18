@@ -19,6 +19,7 @@ export * from './ai/index.js';
 export * from './governance/index.js';
 export * from './psychometrics/index.js';
 export * from './qr/index.js';
+export * from './battery/index.js';
 
 
 // Heavy subsystems (adapters, assessment, and studio) are NOT re-exported here —

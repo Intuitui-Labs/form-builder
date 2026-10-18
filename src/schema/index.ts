@@ -17,7 +17,19 @@ export type {
   FormFieldOption,
   PageRole,
   ClarificationDescriptor,
+  FormKind,
+  RedoRewardStrategy,
+  FormAccessPolicy,
 } from './FormSchema.js';
+
+export type {
+  BatteryStage,
+  BatteryPrerequisiteRule,
+  BatteryNode,
+  SurveyBatterySchema,
+  FormSubmissionHistoryItem,
+  BatteryAccessEvaluation,
+} from './FormBattery.js';
 
 export type {
   NavigationPolicy,

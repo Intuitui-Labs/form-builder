@@ -36,6 +36,12 @@ function likertField(item: HMSAMItem, order: number) {
 
 export const HMSAM_FORM_SCHEMA: FormSchema = {
   id: HMSAM_FORM_ID,
+  kind: 'survey',
+  accessPolicy: {
+    allowRedo: false,
+    maxAttempts: 1,
+    rewardStrategy: 'first_attempt_only',
+  },
   title: 'Hedonic System Adoption Survey',
   description:
     'The 38-item HMSAM instrument measuring perceived ease of use, usefulness, joy, curiosity, control, focused immersion and behavioural intention.',

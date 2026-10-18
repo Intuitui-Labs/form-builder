@@ -12,6 +12,7 @@ import {
 import { useFeedora, transportPort } from '../feedora';
 import { Tag } from './FeedoraUi';
 import { colors, radii, serifFont } from '../theme';
+import { BatteryEngine, FormKind, FormAccessPolicy } from '@intuitui-labs/form-builder-engine';
 
 interface SurveyCatalogItem {
   id: number;
@@ -20,6 +21,8 @@ interface SurveyCatalogItem {
   title: string;
   description: string;
   isHmsam: boolean;
+  kind?: FormKind;
+  accessPolicy?: FormAccessPolicy;
   questionsCount: number;
   // Dynamic lock criteria
   prerequisiteId?: number | null;
@@ -73,8 +76,22 @@ export function SurveyCatalogModal({
             unlockCodeRequired = false;
           }
 
+          const kind: FormKind = item.isHmsam
+            ? 'survey'
+            : item.title.toLowerCase().includes('quiz')
+            ? 'quiz'
+            : item.title.toLowerCase().includes('exam')
+            ? 'exam'
+            : item.title.toLowerCase().includes('intake')
+            ? 'intake'
+            : 'survey';
+
+          const accessPolicy = BatteryEngine.getDefaultAccessPolicy(kind);
+
           return {
             ...item,
+            kind,
+            accessPolicy,
             prerequisiteId,
             prerequisiteTitle,
             unlockCodeRequired,
@@ -104,6 +121,13 @@ export function SurveyCatalogModal({
     // Check prerequisite
     if (survey.prerequisiteId && !completedSurveyIds.has(survey.prerequisiteId) && !completedSurveyIds.has('hmsam')) {
       alert(`🔒 Locked: Please complete the "${survey.prerequisiteTitle || 'Prerequisite Survey'}" first to unlock this research instrument.`);
+      return;
+    }
+
+    // Check allowRedo policy
+    const isCompleted = completedSurveyIds.has(survey.id) || (survey.isHmsam && completedSurveyIds.has('hmsam'));
+    if (isCompleted && survey.accessPolicy && !survey.accessPolicy.allowRedo) {
+      alert(`🔒 Completed: This ${survey.kind || 'instrument'} has already been completed and retakes are restricted by the research protocol.`);
       return;
     }
 
@@ -224,16 +248,23 @@ export function SurveyCatalogModal({
                     onPress={() => handleSurveyClick(item)}
                   >
                     <View style={styles.cardHeader}>
-                      <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                      <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <Tag tone={item.isHmsam ? 'violet' : item.kind === 'quiz' ? 'gold' : 'teal'}>
+                          {item.kind ? item.kind.toUpperCase() : 'SURVEY'}
+                        </Tag>
                         <Tag tone={item.isHmsam ? 'violet' : 'teal'}>
                           {item.isHmsam ? 'HMSAM 38-ITEMS' : `${item.questionsCount} QUESTIONS`}
                         </Tag>
                         <Tag tone="slate">CODE: {item.accessCode}</Tag>
                         {isActive && <Tag tone="gold">ACTIVE NOW</Tag>}
-                        {isCompleted && <Tag tone="teal">✓ COMPLETED</Tag>}
+                        {isCompleted && (
+                          <Tag tone={item.accessPolicy?.allowRedo ? 'teal' : 'slate'}>
+                            {item.accessPolicy?.allowRedo ? '✓ DONE (RETAKE ALLOWED)' : '✓ LOCKED (COMPLETED)'}
+                          </Tag>
+                        )}
                       </View>
                       <Text style={styles.statusIndicator}>
-                        {isLocked ? '🔒' : isActive ? '🌟' : isCompleted ? '✅' : '→'}
+                        {isLocked ? '🔒' : isActive ? '🌟' : isCompleted ? (item.accessPolicy?.allowRedo ? '🔄' : '✅') : '→'}
                       </Text>
                     </View>
 

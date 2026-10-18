@@ -18,6 +18,8 @@ import {
   type IFeedbackNotifierPort,
   type RewardPayload,
   type QuestionMetadata,
+  BatteryEngine,
+  type FormAccessPolicy,
 } from '@intuitui-labs/form-builder-engine';
 import { StudioShareCodec } from '@intuitui-labs/form-builder-engine/studio';
 import {
@@ -132,6 +134,16 @@ export default function SurveyScreen() {
     }
     return HMSAM_FORM_SCHEMA;
   }, [airDropSchema, activeSurveyMeta]);
+
+  const completedSurveyIds = useMemo(() => {
+    const set = new Set<string | number>();
+    if (profile?.surveysCompleted && profile.surveysCompleted > 0) {
+      set.add(1);
+      set.add('hmsam');
+      set.add(HMSAM_FORM_SCHEMA.id);
+    }
+    return set;
+  }, [profile?.surveysCompleted]);
 
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -264,6 +276,14 @@ export default function SurveyScreen() {
           earned += pointsForAnswer(FEEDORA_FEATURES, field.type, value);
         }
       }
+
+      // Check if this survey was already completed previously
+      const isRepeatAttempt = completedSurveyIds.has(currentSchema.id) || (currentSchema.id === HMSAM_FORM_SCHEMA.id && completedSurveyIds.has('hmsam'));
+      if (isRepeatAttempt) {
+        const policy: FormAccessPolicy = currentSchema.accessPolicy ?? BatteryEngine.getDefaultAccessPolicy(currentSchema.kind ?? 'survey');
+        const sanitized = BatteryEngine.calculateSanitizedReward(policy, 2, earned, earned);
+        earned = sanitized.pointsAwarded;
+      }
     }
 
     let auditNote: string | null = null;
@@ -274,6 +294,8 @@ export default function SurveyScreen() {
       auditNote = `⚠️ Psychometric Notice: High answer uniformity detected (${Math.round(audit.metrics.longStringRatio * 100)}% identical scale items). Marked for reliability review.`;
     } else if (audit.flags.includes('SPEEDER')) {
       auditNote = `⚠️ Velocity Notice: Rapid completion speed (${audit.metrics.averageDwellMs}ms avg dwell). Flagged for research audit.`;
+    } else if (completedSurveyIds.has(currentSchema.id) && earned === 0) {
+      auditNote = 'ℹ️ Review Session: Answers recorded for longitudinal analysis. Redo points suppressed per research protocol.';
     }
     setAuditNotice(auditNote);
 
@@ -763,6 +785,14 @@ export default function SurveyScreen() {
                 label="View reliability in Insights →"
                 onPress={() => router.push('/dashboard')}
               />
+              {currentSchema.id === HMSAM_FORM_SCHEMA.id ? (
+                <View style={{ marginVertical: 4 }}>
+                  <ActionButton
+                    label="⏩ Continue to Next Study in Sequence →"
+                    onPress={() => setIsCatalogOpen(true)}
+                  />
+                </View>
+              ) : null}
               {activeSurveyMeta && (
                 <ActionButton
                   label="Return to Default Survey (HMSAM)"
@@ -773,7 +803,11 @@ export default function SurveyScreen() {
                   }}
                 />
               )}
-              <ActionButton label="Take another survey" secondary onPress={startOver} />
+              <ActionButton
+                label="Browse all studies in catalog 📚"
+                secondary
+                onPress={() => setIsCatalogOpen(true)}
+              />
             </View>
           </View>
         ) : (

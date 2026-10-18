@@ -244,10 +244,35 @@ export interface FormSettings {
 
 import type { FormGovernanceConfig } from '../governance/types.js';
 
+export type FormKind =
+  | 'survey'
+  | 'quiz'
+  | 'exam'
+  | 'assessment'
+  | 'poll'
+  | 'intake'
+  | 'feedback'
+  | 'form';
+
+export type RedoRewardStrategy =
+  | 'first_attempt_only'
+  | 'score_delta'
+  | 'unrestricted'
+  | 'blocked';
+
+export interface FormAccessPolicy {
+  allowRedo: boolean;
+  maxAttempts?: number;
+  rewardStrategy: RedoRewardStrategy;
+  cooldownMinutes?: number;
+}
+
 export interface FormSchema {
   v?: '1.0' | string;
   version?: string;
   id: string;
+  kind?: FormKind;
+  accessPolicy?: FormAccessPolicy;
   tenantId?: string;
   title: string;
   description?: string;
