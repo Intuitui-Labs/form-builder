@@ -104,6 +104,20 @@ export interface DashboardFeature {
   individual: boolean;
 }
 
+export interface RewardsFeature {
+  enabled: boolean;
+  mode?: 'fixed' | 'variable';
+  probability?: number;
+  minMultiplier?: number;
+  maxMultiplier?: number;
+}
+
+export interface NegativeReinforcementFeature {
+  enabled: boolean;
+  friction_removal?: boolean;
+  streak_shield?: boolean;
+}
+
 export interface SurveyFeatures {
   mascot: MascotFeature;
   progress: ProgressFeature;
@@ -112,6 +126,8 @@ export interface SurveyFeatures {
   voucher: VoucherFeature;
   collection: CollectionFeature;
   dashboard: DashboardFeature;
+  rewards?: RewardsFeature;
+  negative_reinforcement?: NegativeReinforcementFeature;
 }
 
 /** Her per-question-type default points (surveys/views.py DEFAULT_POINTS). */

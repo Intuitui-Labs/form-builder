@@ -72,6 +72,7 @@ export default function SurveyScreen() {
     openAirDropSurvey,
     resetToDefaultSurvey,
     openAuthModal,
+    outboxPort,
   } = useFeedora();
   const [runKey, setRunKey] = useState(0);
   const [toast, setToast] = useState<{ points: number; label: string } | null>(null);
@@ -296,14 +297,43 @@ export default function SurveyScreen() {
           qualityFlags: audit.flags,
           consentVersion: '1.0',
         });
-        setSyncNote(
-          result.ok
-            ? "Synced directly to Gihini's Django research database."
-            : `Saved locally — server responded ${result.status}.`,
-        );
+        if (result.ok) {
+          let note = "Synced directly to Gihini's Django research database.";
+          if (result.variableBonus && result.variableBonus > 0) {
+            note += ` (${result.bonusLabel ?? '🎲 Surprise Insight Boost!'} +${result.variableBonus} pts)`;
+          }
+          if (result.negativeReinforcement?.enabled && result.negativeReinforcement.perk_description) {
+            note += ` · ${result.negativeReinforcement.perk_description}`;
+          }
+          setSyncNote(note);
+        } else {
+          await outboxPort.enqueue({
+            id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+            formId: targetUuid,
+            values: values as Record<string, unknown>,
+            submittedAt: new Date().toISOString(),
+            retryCount: 0,
+            experimentMetadata: {
+              experimentKey: 'hmsam-gamification-study',
+              variantId: experimentVariant,
+            },
+          });
+          setSyncNote(`Saved to resilient offline outbox (server HTTP ${result.status}) — will auto-sync upon reconnection.`);
+        }
         await authPort.init();
       } catch {
-        setSyncNote('Saved locally — research server unreachable, will retry.');
+        await outboxPort.enqueue({
+          id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          formId: targetUuid,
+          values: values as Record<string, unknown>,
+          submittedAt: new Date().toISOString(),
+          retryCount: 0,
+          experimentMetadata: {
+            experimentKey: 'hmsam-gamification-study',
+            variantId: experimentVariant,
+          },
+        });
+        setSyncNote('Saved to resilient offline outbox — research server unreachable, will auto-sync upon reconnection.');
       }
     } else if (airDropSchema) {
       setSyncNote('Saved to local offline SQLite storage (AirDrop peer survey).');
@@ -427,6 +457,12 @@ export default function SurveyScreen() {
                 <Tag tone="violet">ACTIVE DJANGO SURVEY</Tag>
                 {activeSurveyMeta.survey.is_hmsam && <Tag tone="slate">HMSAM</Tag>}
                 <Tag tone={isGamified ? 'teal' : 'slate'}>ARM: {experimentVariant.toUpperCase()}</Tag>
+                {activeSurveyMeta.features?.rewards?.mode === 'variable' && (
+                  <Tag tone="gold">🎲 VARIABLE</Tag>
+                )}
+                {activeSurveyMeta.features?.negative_reinforcement?.enabled && (
+                  <Tag tone="teal">🛡️ RANK SHIELD</Tag>
+                )}
               </View>
               <Text style={styles.activeSurveyTitle}>{activeSurveyMeta.survey.title}</Text>
               <Text style={styles.activeSurveyDetail}>

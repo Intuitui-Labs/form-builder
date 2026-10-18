@@ -34,4 +34,7 @@ export interface ITransportPort {
       consentVersion?: string;
     },
   ): Promise<RemoteSubmitResult>;
+
+  /** Fetch authoritative server-side analysis including construct scores and arm comparisons. */
+  fetchSurveyAnalysis(accessUuid: string): Promise<import('./transportTypes').RemoteSurveyAnalysis>;
 }

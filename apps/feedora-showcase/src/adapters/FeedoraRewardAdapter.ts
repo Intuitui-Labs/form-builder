@@ -43,13 +43,28 @@ export class FeedoraRewardAdapter implements IRewardEnginePort {
 
     if (points <= 0) return null;
 
+    let title = `+${points} voice points`;
+    let bonus = 0;
+    if (this.features.rewards?.enabled && this.features.rewards?.mode === 'variable') {
+      const prob = this.features.rewards.probability ?? 0.4;
+      if (Math.random() < prob) {
+        const mult = Number(this.features.rewards.minMultiplier ?? 1.5);
+        bonus = Math.max(1, Math.round(points * (mult - 1)));
+        points += bonus;
+        title = `🎲 +${points} Voice Boost (${mult}x Lucky Insight!)`;
+      }
+    }
+
     return {
       id: `reward:${context.formId ?? 'form'}:${context.completedStepId}`,
       type: 'points',
-      title: `+${points} voice points`,
-      description: `${points} points earned for “${page.title ?? context.completedStepId}”.`,
+      title,
+      description: bonus > 0
+        ? `Surprise insight bonus! ${points} points earned for “${page.title ?? context.completedStepId}”.`
+        : `${points} points earned for “${page.title ?? context.completedStepId}”.`,
       data: {
         points,
+        bonus,
         breakdown,
         stepId: context.completedStepId,
         stepIndex: context.completedStepIndex,

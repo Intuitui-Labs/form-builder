@@ -25,6 +25,7 @@ import { AccountDrawer } from './components/AccountDrawer';
 import {
   DefaultPsychometricAuditor,
   QrAirDropAdapter,
+  OfflineOutboxQueue,
   type FormSchema,
 } from '@intuitui-labs/form-builder-engine';
 
@@ -47,9 +48,34 @@ export const rewardPort = new FeedoraRewardAdapter(FEEDORA_FEATURES);
 export const progressPort = new FeedoraProgressAdapter();
 export const measurementPort = new HmsamMeasurementAdapter();
 export const transportPort = new FeedoraHttpTransportAdapter(FEEDORA_REMOTE.baseUrl);
+
 export const psychometricAuditor = new DefaultPsychometricAuditor();
 export const qrAirDropPort = new QrAirDropAdapter();
 export const entities = FEEDORA_ENTITIES;
+
+export const outboxPort = new OfflineOutboxQueue<Record<string, unknown>>({
+  storageKey: 'feedora_mobile_outbox_queue',
+  transport: {
+    submit: async (envelope) => {
+      const res = await transportPort.submitResponse(
+        envelope.formId,
+        envelope.values,
+        {
+          variant: envelope.experimentMetadata?.variantId,
+          platform: 'mobile',
+        },
+      );
+      if (!res.ok) {
+        throw new Error(`Outbox submission failed with HTTP status ${res.status}`);
+      }
+      return {
+        receiptId: String(res.responseId ?? envelope.id),
+        status: 'synced',
+        timestamp: new Date().toISOString(),
+      };
+    },
+  },
+});
 
 // Tiny change bus so the three screens stay in sync without a global store.
 const listeners = new Set<() => void>();
@@ -89,6 +115,7 @@ interface FeedoraContextValue {
   openSurveyByCode: (code: string) => Promise<RemoteSurveyMeta>;
   openAirDropSurvey: (schema: FormSchema) => void;
   resetToDefaultSurvey: () => void;
+  outboxPort: OfflineOutboxQueue<Record<string, unknown>>;
 }
 
 const FeedoraContext = createContext<FeedoraContextValue | null>(null);
@@ -360,6 +387,7 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
         openSurveyByCode,
         openAirDropSurvey,
         resetToDefaultSurvey,
+        outboxPort,
       }}
     >
       {children}

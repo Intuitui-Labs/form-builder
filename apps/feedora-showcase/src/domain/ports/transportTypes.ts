@@ -39,4 +39,81 @@ export interface RemoteSurveyMeta {
 export interface RemoteSubmitResult {
   ok: boolean;
   status: number;
+  responseId?: number;
+  submissionId?: string;
+  pointsEarned?: number;
+  variableBonus?: number;
+  bonusLabel?: string;
+  negativeReinforcement?: {
+    enabled: boolean;
+    friction_removed: boolean;
+    streak_shielded: boolean;
+    perk_description?: string;
+  };
 }
+
+export interface RemoteSurveyAnalysis {
+  ok: boolean;
+  survey: {
+    id: number;
+    uuid: string;
+    title: string;
+    isHmsam: boolean;
+  };
+  totalResponses: number;
+  overallAdoption: number;
+  overallAlpha: {
+    value: number | null;
+    interpretation: string;
+  };
+  constructScores: Record<
+    string,
+    {
+      label: string;
+      score: number;
+      raw_percentage: number;
+      normalized_score: number;
+      mean: number;
+      scale_min: number;
+      scale_max: number;
+      count: number;
+      distribution: Record<string, number>;
+      interpretation: string;
+    }
+  >;
+  constructReliabilities: Record<
+    string,
+    {
+      label: string;
+      itemsCount: number;
+      sampleSize: number;
+      alpha: number;
+      interpretation: string;
+    }
+  >;
+  experimentalComparison: {
+    arms: Record<
+      string,
+      {
+        count: number;
+        constructScores: Record<string, any>;
+        overallScore: number;
+        reliabilities: Record<string, any>;
+      }
+    >;
+    constructDifferences: Record<string, number>;
+    statisticalComparison?: Record<
+      string,
+      {
+        tStatistic: number | null;
+        degreesOfFreedom: number | null;
+        pValue: number | null;
+        hedgesG: number | null;
+        effectSize: string;
+        isSignificant: boolean;
+        significanceMarker: string;
+      }
+    >;
+  };
+}
+

@@ -1,5 +1,9 @@
 import type { ITransportPort } from '../domain/ports/ITransportPort';
-import type { RemoteSurveyMeta, RemoteSubmitResult } from '../domain/ports/transportTypes';
+import type {
+  RemoteSurveyMeta,
+  RemoteSubmitResult,
+  RemoteSurveyAnalysis,
+} from '../domain/ports/transportTypes';
 
 /**
  * Outbound adapter -> Feedora's Django backend over plain HTTP.
@@ -101,10 +105,33 @@ export class FeedoraHttpTransportAdapter implements ITransportPort {
         },
       );
 
-      return { ok: response.ok, status: response.status };
+      let resData: any = null;
+      try {
+        resData = await response.json();
+      } catch {}
+
+      return {
+        ok: response.ok,
+        status: response.status,
+        responseId: resData?.responseId,
+        submissionId: resData?.submissionId,
+        pointsEarned: resData?.pointsEarned,
+        variableBonus: resData?.variableBonus,
+        bonusLabel: resData?.bonusLabel,
+        negativeReinforcement: resData?.negativeReinforcement,
+      };
     } catch {
       return { ok: false, status: 0 };
     }
+  }
+
+  async fetchSurveyAnalysis(accessUuid: string): Promise<RemoteSurveyAnalysis> {
+    const url = `${this.baseUrl.replace(/\/+$/, '')}/api/v1/surveys/${accessUuid}/analysis/`;
+    const response = await this.fetchImpl(url, { credentials: 'include' });
+    if (!response.ok) {
+      throw new Error(`Failed to fetch survey analysis for ${accessUuid} (${response.status})`);
+    }
+    return (await response.json()) as RemoteSurveyAnalysis;
   }
 
   private url(accessUuid: string, suffix: string): string {

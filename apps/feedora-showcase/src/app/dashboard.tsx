@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import {
   AppPage,
@@ -11,19 +12,44 @@ import {
 } from '../components/FeedoraUi';
 import { AccountBar } from '../components/AccountBar';
 import { FEEDORA_BADGES } from '../domain/types';
-import { measurementPort, useFeedora } from '../feedora';
+import { measurementPort, transportPort, useFeedora } from '../feedora';
+import { FEEDORA_REMOTE } from '../config';
+import type { RemoteSurveyAnalysis } from '../domain/ports/transportTypes';
 import { colors, radii, sansFont, serifFont } from '../theme';
 
 export default function InsightsScreen() {
-  const { profile, responses } = useFeedora();
+  const { profile, responses, activeSurveyUuid, authMode } = useFeedora();
+  const [serverAnalysis, setServerAnalysis] = useState<RemoteSurveyAnalysis | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const targetUuid = activeSurveyUuid || FEEDORA_REMOTE.surveyUuid;
+    if (authMode === 'django' && targetUuid) {
+      transportPort
+        .fetchSurveyAnalysis(targetUuid)
+        .then((data) => {
+          if (!cancelled && data.ok) {
+            setServerAnalysis(data);
+          }
+        })
+        .catch(() => {
+          // Fall back gracefully to client-side measurementPort
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSurveyUuid, authMode, responses.length]);
 
   const reliability = measurementPort.computeReliability(responses);
   const last = responses[responses.length - 1];
   const report = last ? measurementPort.score(last) : null;
   const interp = report ? measurementPort.interpretOverall(report.overall) : null;
 
+  const alphaVal = serverAnalysis?.overallAlpha?.value ?? reliability.cronbachAlpha;
+  const alphaInterp = serverAnalysis?.overallAlpha?.interpretation ?? reliability.interpretation;
   const alphaTone =
-    reliability.cronbachAlpha >= 0.8 ? 'teal' : reliability.cronbachAlpha >= 0.7 ? 'gold' : 'slate';
+    alphaVal >= 0.8 ? 'teal' : alphaVal >= 0.7 ? 'gold' : 'slate';
 
   return (
     <AppPage>
@@ -76,19 +102,74 @@ export default function InsightsScreen() {
           <Panel>
             <SectionHeading
               title="Reliability"
-              detail="Cronbach's α — how consistently the 38 items measure the same construct."
+              detail="Cronbach's α — internal consistency across respondents."
             />
             <View style={styles.alphaRow}>
               <Text style={styles.alphaValue}>
-                {reliability.sampleTooSmall ? '—' : reliability.cronbachAlpha.toFixed(2)}
+                {typeof alphaVal === 'number' ? alphaVal.toFixed(2) : '—'}
               </Text>
-              <Tag tone={alphaTone}>{reliability.interpretation.toUpperCase()}</Tag>
+              <Tag tone={alphaTone}>{alphaInterp.toUpperCase()}</Tag>
             </View>
             <Text style={styles.alphaNote}>
-              {reliability.note ??
-                `Based on ${reliability.sampleSize} complete responses × ${reliability.itemCount} items. α ≥ 0.70 is the usual acceptance threshold.`}
+              {serverAnalysis
+                ? `Authoritative research database metric across ${serverAnalysis.totalResponses} participants. α ≥ 0.70 indicates robust internal consistency.`
+                : reliability.note ??
+                  `Based on ${reliability.sampleSize} complete responses × ${reliability.itemCount} items. α ≥ 0.70 is the usual acceptance threshold.`}
             </Text>
           </Panel>
+
+          {serverAnalysis?.experimentalComparison && (
+            <Panel>
+              <SectionHeading
+                title="Experimental Arm Comparison"
+                detail="Comparative adoption between gamified treatment arm and non-gamified control arm."
+              />
+              <View style={styles.statRow}>
+                <Stat
+                  label="Gamified Responses"
+                  value={String(serverAnalysis.experimentalComparison.arms?.gamified?.count ?? 0)}
+                />
+                <Stat
+                  label="Control Responses"
+                  value={String(serverAnalysis.experimentalComparison.arms?.control?.count ?? 0)}
+                />
+              </View>
+              {serverAnalysis.experimentalComparison.statisticalComparison && (
+                <View style={{ marginTop: 14, gap: 8 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: colors.faint, letterSpacing: 0.8 }}>
+                    STATISTICAL SIGNIFICANCE (WELCH'S T & HEDGES' G)
+                  </Text>
+                  {Object.entries(serverAnalysis.experimentalComparison.statisticalComparison).map(
+                    ([code, stat]) => (
+                      <View
+                        key={code}
+                        style={{
+                          flexDirection: 'row',
+                          justifyContent: 'space-between',
+                          paddingVertical: 6,
+                          borderBottomWidth: 1,
+                          borderBottomColor: colors.line,
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: colors.ink }}>
+                          {code.toUpperCase()}
+                        </Text>
+                        <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                          <Tag tone={stat.isSignificant ? 'teal' : 'slate'}>
+                            {stat.isSignificant ? `p < 0.05 (${stat.significanceMarker})` : 'ns'}
+                          </Tag>
+                          <Text style={{ fontSize: 11, color: colors.muted }}>
+                            g = {stat.hedgesG ?? '—'} ({stat.effectSize})
+                          </Text>
+                        </View>
+                      </View>
+                    ),
+                  )}
+                </View>
+              )}
+            </Panel>
+          )}
         </>
       ) : (
         <Panel style={styles.emptyCard}>
