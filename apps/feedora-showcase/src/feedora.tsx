@@ -66,6 +66,9 @@ import type { RemoteSurveyMeta } from './domain/ports/transportTypes';
 interface FeedoraContextValue {
   entityId: string;
   setEntityId: (id: string) => void;
+  entitiesList: typeof FEEDORA_ENTITIES;
+  joinEntity: (id: string) => Promise<void>;
+  fetchEntitySurveys: (id: string) => Promise<any[]>;
   profile: ContributionProfile | null;
   contributorCounts: Record<string, number>;
   responses: Record<string, number>[];
@@ -91,6 +94,7 @@ interface FeedoraContextValue {
 const FeedoraContext = createContext<FeedoraContextValue | null>(null);
 
 export function FeedoraProvider({ children }: { children: ReactNode }) {
+  const [entitiesList, setEntitiesList] = useState(FEEDORA_ENTITIES);
   const [entityId, setEntityId] = useState(entities[0]!.id);
   const [profile, setProfile] = useState<ContributionProfile | null>(null);
   const [contributorCounts, setContributorCounts] = useState<Record<string, number>>({});
@@ -147,7 +151,30 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
         if (!cancelled) setProfile(joined);
       });
 
-    // Automatically claim & migrate points earned as guest when user signs in
+    // Fetch live entities from Django when in django mode
+    if (authMode === 'django') {
+      fetch(`${FEEDORA_REMOTE.baseUrl}/api/v1/entities/`, { credentials: 'include' })
+        .then((res) => res.json())
+        .then((data) => {
+          if (cancelled || !data.ok || !Array.isArray(data.entities)) return;
+          const liveEntities = data.entities.map((e: any) => ({
+            id: String(e.entityId || `org-${e.id}`),
+            name: String(e.name),
+            type: (e.type || 'university') as any,
+            slug: String(e.name).toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+            accent: e.type === 'university' ? '#7A4FA8' : '#1F4D8F',
+            tagline: e.userRole ? `${e.userRole} · ${e.country || 'Campus research'}` : 'Research organization',
+            userRole: e.userRole,
+            country: e.country,
+          }));
+          if (liveEntities.length > 0) {
+            setEntitiesList(liveEntities);
+          }
+        })
+        .catch(() => {});
+    }
+
+    // Automatically claim & migrate points and form history earned as guest when user signs in
     if (authUser && authUser.id !== 'guest-user') {
       (async () => {
         const guestProfile = await contributionPort.getProfile('guest-user', entityId);
@@ -163,6 +190,9 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
           guestProfile.surveysCompleted = 0;
           guestProfile.standing = contributionPort.standingFor(0);
           await store.putProfile(guestProfile);
+          if ('reassignUserHistory' in store) {
+            await (store as any).reassignUserHistory('guest-user', String(authUser.id));
+          }
           if (!cancelled) {
             setVersion((v) => v + 1);
           }
@@ -173,7 +203,7 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [entityId, authUser]);
+  }, [entityId, authUser, authMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -264,11 +294,54 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
     setVersion((v) => v + 1);
   }, []);
 
+  const joinEntity = useCallback(
+    async (targetEntityId: string) => {
+      setEntityId(targetEntityId);
+      if (authMode === 'django' && authUser) {
+        const numericId = targetEntityId.replace('org-', '');
+        try {
+          await fetch(`${FEEDORA_REMOTE.baseUrl}/api/v1/entities/${numericId}/join/`, {
+            method: 'POST',
+            credentials: 'include',
+          });
+        } catch {
+          // offline/local fallback
+        }
+      }
+      setVersion((v) => v + 1);
+    },
+    [authMode, authUser],
+  );
+
+  const fetchEntitySurveys = useCallback(
+    async (targetEntityId: string): Promise<any[]> => {
+      if (authMode === 'django') {
+        const numericId = targetEntityId.replace('org-', '');
+        try {
+          const res = await fetch(`${FEEDORA_REMOTE.baseUrl}/api/v1/entities/${numericId}/surveys/`, {
+            credentials: 'include',
+          });
+          const data = await res.json();
+          if (data.ok && Array.isArray(data.surveys)) {
+            return data.surveys;
+          }
+        } catch {
+          // offline fallback
+        }
+      }
+      return [];
+    },
+    [authMode],
+  );
+
   return (
     <FeedoraContext.Provider
       value={{
         entityId,
         setEntityId,
+        entitiesList,
+        joinEntity,
+        fetchEntitySurveys,
         profile,
         contributorCounts,
         responses,

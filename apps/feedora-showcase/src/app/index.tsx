@@ -43,6 +43,7 @@ import { pointsForAnswer } from '../domain/points';
 import { convertRemoteSurveyToSchema } from '../domain/surveySchemaConverter';
 import { colors, serifFont } from '../theme';
 import type { ConstructReport } from '../domain/ports/measurementTypes';
+import { FEEDORA_BADGES, type BadgeDefinition } from '../domain/types';
 
 type Values = Record<string, unknown>;
 
@@ -58,6 +59,8 @@ export default function SurveyScreen() {
   const {
     entityId,
     setEntityId,
+    entitiesList,
+    joinEntity,
     profile,
     contributorCounts,
     authUser,
@@ -77,6 +80,8 @@ export default function SurveyScreen() {
   const [lastConstructs, setLastConstructs] = useState<ConstructReport[] | null>(null);
   const [syncNote, setSyncNote] = useState<string | null>(null);
   const [auditNotice, setAuditNotice] = useState<string | null>(null);
+  const [unlockedBadge, setUnlockedBadge] = useState<BadgeDefinition | null>(null);
+  const [voucherCopied, setVoucherCopied] = useState(false);
 
   // AirDrop / QR Import Modal State
   const [isAirDropModalOpen, setIsAirDropModalOpen] = useState(false);
@@ -239,7 +244,8 @@ export default function SurveyScreen() {
     const currentName = authUser?.displayName || 'Contributor';
     const currentAvatar = authUser?.avatar || '🎙️';
 
-    await contributionPort.recordContribution({
+    const prevCompleted = profile?.surveysCompleted ?? 0;
+    const recordedProfile = await contributionPort.recordContribution({
       userId: currentUserId,
       displayName: currentName,
       avatar: currentAvatar,
@@ -248,6 +254,12 @@ export default function SurveyScreen() {
       points: earned,
       isCompletion: true,
     });
+    const newCompleted = recordedProfile.surveysCompleted;
+    const newlyUnlocked =
+      FEEDORA_BADGES.find(
+        (b) => prevCompleted < b.minResponses && newCompleted >= b.minResponses,
+      ) || null;
+    setUnlockedBadge(newlyUnlocked);
 
     await store.recordSurveyResponse({
       entityId,
@@ -339,6 +351,8 @@ export default function SurveyScreen() {
     setLastConstructs(null);
     setSyncNote(null);
     setAuditNotice(null);
+    setUnlockedBadge(null);
+    setVoucherCopied(false);
     setRunKey((k) => k + 1);
   };
 
@@ -423,13 +437,13 @@ export default function SurveyScreen() {
           title="Contributing as"
           detail="Pick the organization whose research you're supporting."
         />
-        {entities.map((entity) => (
+        {(entitiesList || entities).map((entity) => (
           <EntityCard
             key={entity.id}
             entity={entity}
             memberCount={contributorCounts[entity.id] ?? 0}
             selected={entity.id === entityId}
-            onSelect={() => setEntityId(entity.id)}
+            onSelect={() => joinEntity(entity.id)}
           />
         ))}
 
@@ -474,13 +488,67 @@ export default function SurveyScreen() {
 
         {submitted ? (
           <View style={styles.completedBox}>
-            <Text style={styles.completedEmoji}>🎉</Text>
+            {activeSurveyMeta?.features?.mascot?.enabled ? (
+              <View style={styles.mascotWrap}>
+                <Text style={styles.mascotAvatar}>🐱</Text>
+                <View style={styles.mascotBubble}>
+                  <Text style={styles.mascotBubbleText}>
+                    Thank you for your co-operation! Have a nice day! 🌟
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              <Text style={styles.completedEmoji}>🎉</Text>
+            )}
+
             <Text style={styles.completedTitle}>Response recorded</Text>
             <Text style={styles.completedBody}>
               Thank you! You earned{' '}
               <Text style={{ fontWeight: '800', color: colors.ink }}>{totalEarned} voice points</Text>{' '}
               for this submission. Your responses were scored and added to this session's dataset.
             </Text>
+
+            {unlockedBadge ? (
+              <View style={styles.badgeUnlockCard}>
+                <Text style={styles.badgeUnlockIcon}>{unlockedBadge.icon}</Text>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={styles.badgeUnlockTitle}>
+                    🎉 New Badge Unlocked: {unlockedBadge.label} Contributor!
+                  </Text>
+                  <Text style={styles.badgeUnlockRule}>{unlockedBadge.rule}</Text>
+                </View>
+              </View>
+            ) : null}
+
+            {Boolean(activeSurveyMeta?.features?.voucher?.enabled && activeSurveyMeta?.features?.voucher?.code) && (
+              <View style={styles.voucherCard}>
+                <Text style={styles.voucherHeading}>🎁 SURVEY REWARD VOUCHER</Text>
+                <Text style={styles.voucherSub}>Here's your reward voucher!:</Text>
+                <Text style={styles.voucherCode}>{String(activeSurveyMeta?.features?.voucher?.code || '')}</Text>
+                {activeSurveyMeta?.features?.voucher?.discount ? (
+                  <Text style={styles.voucherDiscount}>
+                    {String(activeSurveyMeta.features.voucher.discount)}% discount
+                  </Text>
+                ) : null}
+                <Pressable
+                  style={styles.voucherCopyBtn}
+                  onPress={() => {
+                    const code = String(activeSurveyMeta?.features?.voucher?.code || '');
+                    try {
+                      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                        navigator.clipboard.writeText(code);
+                      }
+                    } catch {}
+                    setVoucherCopied(true);
+                    setTimeout(() => setVoucherCopied(false), 2500);
+                  }}
+                >
+                  <Text style={styles.voucherCopyText}>
+                    {voucherCopied ? '✓ Copied to clipboard!' : 'Copy voucher code'}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
 
             {syncNote ? (
               <View style={styles.syncBox}>
@@ -807,5 +875,105 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     marginTop: 6,
+  },
+  mascotWrap: {
+    alignItems: 'center',
+    marginVertical: 10,
+    gap: 6,
+  },
+  mascotAvatar: {
+    fontSize: 48,
+  },
+  mascotBubble: {
+    backgroundColor: '#FAF5FF',
+    borderColor: '#7A4FA8',
+    borderWidth: 1.5,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    maxWidth: 320,
+    shadowColor: '#7A4FA8',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  mascotBubbleText: {
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: '#1A1A2E',
+    textAlign: 'center',
+    lineHeight: 19,
+  },
+  badgeUnlockCard: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+    borderWidth: 1.5,
+    borderRadius: 12,
+    padding: 14,
+    marginVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    width: '100%',
+  },
+  badgeUnlockIcon: {
+    fontSize: 32,
+  },
+  badgeUnlockTitle: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  badgeUnlockRule: {
+    fontSize: 11.5,
+    color: '#B45309',
+    marginTop: 2,
+  },
+  voucherCard: {
+    backgroundColor: '#FAF5FF',
+    borderColor: '#D8D4F0',
+    borderWidth: 1.5,
+    borderRadius: 12,
+    padding: 16,
+    marginVertical: 12,
+    alignItems: 'center',
+    gap: 6,
+    width: '100%',
+  },
+  voucherHeading: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    color: '#7A4FA8',
+    textTransform: 'uppercase',
+  },
+  voucherSub: {
+    fontSize: 12,
+    color: colors.muted,
+  },
+  voucherCode: {
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: 3,
+    color: '#7A4FA8',
+    marginVertical: 4,
+    fontFamily: serifFont,
+  },
+  voucherDiscount: {
+    fontSize: 12,
+    color: colors.muted,
+    fontWeight: '600',
+  },
+  voucherCopyBtn: {
+    marginTop: 6,
+    backgroundColor: '#7A4FA8',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+  },
+  voucherCopyText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

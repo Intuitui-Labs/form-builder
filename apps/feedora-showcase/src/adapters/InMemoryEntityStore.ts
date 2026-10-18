@@ -13,12 +13,60 @@ export class InMemoryEntityStore implements IEntityStore {
   private readonly profiles = new Map<string, ContributionProfile>();
   private responses: Record<string, number>[] = [];
 
+  private history: Array<{
+    id: number;
+    entityId: string;
+    surveyId: string;
+    surveyTitle: string;
+    userId: string;
+    pointsEarned: number;
+    completedAt: string;
+  }> = [];
+
   constructor(private readonly entities: Entity[], seed?: SeedBundle) {
     if (seed) {
       for (const profile of seed.profiles) {
         this.profiles.set(this.key(profile.userId, profile.entityId), profile);
       }
       this.responses = [...seed.responses];
+    }
+    this.restoreFromStorage();
+  }
+
+  private restoreFromStorage(): void {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const storedProfiles = window.localStorage.getItem('feedora:profiles');
+        if (storedProfiles) {
+          const entries = JSON.parse(storedProfiles) as [string, ContributionProfile][];
+          for (const [k, p] of entries) {
+            this.profiles.set(k, p);
+          }
+        }
+        const storedHistory = window.localStorage.getItem('feedora:history');
+        if (storedHistory) {
+          this.history = JSON.parse(storedHistory);
+        }
+      }
+    } catch {
+      // In private browsing or non-DOM
+    }
+  }
+
+  private persistStorage(): void {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(
+          'feedora:profiles',
+          JSON.stringify([...this.profiles.entries()]),
+        );
+        window.localStorage.setItem(
+          'feedora:history',
+          JSON.stringify(this.history.slice(0, 200)),
+        );
+      }
+    } catch {
+      // In private browsing or non-DOM
     }
   }
 
@@ -40,6 +88,7 @@ export class InMemoryEntityStore implements IEntityStore {
 
   async putProfile(profile: ContributionProfile): Promise<void> {
     this.profiles.set(this.key(profile.userId, profile.entityId), profile);
+    this.persistStorage();
   }
 
   async listProfiles(entityId: string): Promise<ContributionProfile[]> {
@@ -56,16 +105,6 @@ export class InMemoryEntityStore implements IEntityStore {
     return this.responses;
   }
 
-  private readonly history: Array<{
-    id: number;
-    entityId: string;
-    surveyId: string;
-    surveyTitle: string;
-    userId: string;
-    pointsEarned: number;
-    completedAt: string;
-  }> = [];
-
   async recordSurveyResponse(record: {
     id?: number;
     entityId: string;
@@ -79,10 +118,20 @@ export class InMemoryEntityStore implements IEntityStore {
       id: this.history.length + 1,
       ...record,
     });
+    this.persistStorage();
   }
 
   async listUserHistory(userId: string) {
     return this.history.filter((h) => h.userId === userId);
+  }
+
+  async reassignUserHistory(fromUserId: string, toUserId: string): Promise<void> {
+    for (const h of this.history) {
+      if (h.userId === fromUserId) {
+        h.userId = toUserId;
+      }
+    }
+    this.persistStorage();
   }
 
   async getPointsByEntity(userId: string): Promise<Record<string, number>> {

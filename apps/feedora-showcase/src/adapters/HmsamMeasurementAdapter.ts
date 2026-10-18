@@ -53,12 +53,21 @@ export class HmsamMeasurementAdapter implements IMeasurementPort {
       if (collected.length === 0) continue;
 
       const n = collected.length;
+      const maxVal = Math.max(HMSAM_SCALE_MAX, ...collected);
+      const minVal = Math.min(1, ...collected);
+      const span = Math.max(1, maxVal - minVal);
       const weightedSum = collected.reduce((sum, v) => sum + v, 0);
-      const maxPossible = HMSAM_SCALE_MAX * n;
-      const score = round((weightedSum / maxPossible) * 100, 1);
       const mean = round(weightedSum / n, 2);
 
-      const distribution = [1, 2, 3, 4, 5].map((value) => collected.filter((v) => v === value).length);
+      const rawPercentage = round((weightedSum / (maxVal * n)) * 100, 1);
+      const normalizedScore = round(Math.max(0, Math.min(100, ((mean - minVal) / span) * 100)), 1);
+      const score = minVal === 1 && maxVal === 5 ? rawPercentage : normalizedScore;
+
+      const distLen = Math.max(5, maxVal - minVal + 1);
+      const distribution = Array.from({ length: distLen }, (_, idx) => {
+        const val = minVal + idx;
+        return collected.filter((v) => v === val).length;
+      });
 
       const construct = HMSAM_CONSTRUCTS[constructId];
       constructs.push({
@@ -66,6 +75,10 @@ export class HmsamMeasurementAdapter implements IMeasurementPort {
         label: construct.label,
         color: construct.color,
         score,
+        rawPercentage,
+        normalizedScore,
+        scaleMin: minVal,
+        scaleMax: maxVal,
         mean,
         count: n,
         itemCount: items.length,

@@ -10,13 +10,19 @@ export interface ConstructReport {
   color: string;
   /** Percentage score: (weighted_sum / (max_scale × n)) × 100, 1 decimal. */
   score: number;
+  /** Raw percentage before normalization. */
+  rawPercentage?: number;
+  /** Normalized interval score (0..100%). */
+  normalizedScore?: number;
+  scaleMin?: number;
+  scaleMax?: number;
   /** Raw mean of the construct's items, 2 decimals. */
   mean: number;
   /** Number of answers contributing to this construct. */
   count: number;
   /** Total items in this construct. */
   itemCount: number;
-  /** Response distribution for values 1..5 (index 0 == value 1). */
+  /** Response distribution for values in the scale. */
   distribution: number[];
   /** get_score_interpretation(score) — "Strongly Agree" … "Strongly Disagree". */
   interpretation: string;

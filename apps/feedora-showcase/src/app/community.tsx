@@ -12,11 +12,19 @@ import {
 } from '../components/FeedoraUi';
 import { AccountBar } from '../components/AccountBar';
 import { contributionPort, entities, useFeedora } from '../feedora';
-import type { ContributionProfile } from '../domain/types';
+import { FEEDORA_BADGES, type ContributionProfile } from '../domain/types';
 import { colors } from '../theme';
 
 export default function CommunityScreen() {
-  const { entityId, setEntityId, profile, contributorCounts, version } = useFeedora();
+  const {
+    entityId,
+    setEntityId,
+    entitiesList,
+    joinEntity,
+    profile,
+    contributorCounts,
+    version,
+  } = useFeedora();
   const [contributors, setContributors] = useState<ContributionProfile[]>([]);
 
   useEffect(() => {
@@ -43,13 +51,13 @@ export default function CommunityScreen() {
 
       <Panel>
         <SectionHeading title="Organizations" detail="Choose whose community you're contributing to." />
-        {entities.map((item) => (
+        {(entitiesList || entities).map((item) => (
           <EntityCard
             key={item.id}
             entity={item}
             memberCount={contributorCounts[item.id] ?? 0}
             selected={item.id === entityId}
-            onSelect={() => setEntityId(item.id)}
+            onSelect={() => joinEntity(item.id)}
           />
         ))}
       </Panel>
@@ -72,6 +80,49 @@ export default function CommunityScreen() {
           <LevelProgress standing={profile.standing} totalPoints={profile.totalPoints} />
         </Panel>
       ) : null}
+
+      <Panel>
+        <SectionHeading
+          title="Badges & recognition"
+          detail="Participation milestones earned across surveys."
+        />
+        <View style={styles.badgesRow}>
+          {FEEDORA_BADGES.map((b) => {
+            const completedCount = profile?.surveysCompleted ?? 0;
+            const isUnlocked = completedCount >= b.minResponses;
+            return (
+              <View
+                key={b.id}
+                style={[
+                  styles.badgeCard,
+                  isUnlocked ? styles.badgeCardUnlocked : styles.badgeCardLocked,
+                ]}
+              >
+                <Text style={[styles.badgeIcon, !isUnlocked && styles.badgeIconLocked]}>
+                  {b.icon}
+                </Text>
+                <Text style={styles.badgeName}>{b.label}</Text>
+                <Text style={styles.badgeRule}>{b.rule}</Text>
+                <View
+                  style={[
+                    styles.badgePill,
+                    isUnlocked ? styles.badgePillUnlocked : styles.badgePillLocked,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.badgePillText,
+                      isUnlocked ? styles.badgePillTextUnlocked : styles.badgePillTextLocked,
+                    ]}
+                  >
+                    {isUnlocked ? '✓ Unlocked' : `${completedCount}/${b.minResponses}`}
+                  </Text>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      </Panel>
 
       <Panel>
         <SectionHeading
@@ -103,4 +154,67 @@ const styles = StyleSheet.create({
   entityName: { fontSize: 17, fontWeight: '700', color: colors.ink },
   entityTagline: { fontSize: 12, color: colors.muted, marginTop: 2 },
   empty: { fontSize: 12, color: colors.muted, fontStyle: 'italic', paddingVertical: 8 },
+  badgesRow: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  badgeCard: {
+    flex: 1,
+    minWidth: 95,
+    backgroundColor: colors.paper,
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1.5,
+    borderColor: colors.line,
+    alignItems: 'center',
+    gap: 4,
+  },
+  badgeCardUnlocked: {
+    borderColor: '#FDE68A',
+    backgroundColor: '#FFFBEB',
+  },
+  badgeCardLocked: {
+    opacity: 0.6,
+  },
+  badgeIcon: {
+    fontSize: 26,
+    marginBottom: 2,
+  },
+  badgeIconLocked: {
+    opacity: 0.35,
+  },
+  badgeName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  badgeRule: {
+    fontSize: 10,
+    color: colors.muted,
+    textAlign: 'center',
+    minHeight: 24,
+  },
+  badgePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 100,
+    marginTop: 4,
+  },
+  badgePillUnlocked: {
+    backgroundColor: '#DCFCE7',
+  },
+  badgePillLocked: {
+    backgroundColor: '#F3F4F6',
+  },
+  badgePillText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+  },
+  badgePillTextUnlocked: {
+    color: '#166534',
+  },
+  badgePillTextLocked: {
+    color: '#6B7280',
+  },
 });

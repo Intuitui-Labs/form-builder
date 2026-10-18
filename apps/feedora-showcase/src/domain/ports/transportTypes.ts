@@ -17,6 +17,8 @@ export interface RemoteSurveyQuestion {
   sectionNum: number;
 }
 
+import type { SurveyFeatures } from '../types';
+
 export interface RemoteSurveyMeta {
   survey: {
     id: number;
@@ -26,7 +28,7 @@ export interface RemoteSurveyMeta {
     is_hmsam: boolean;
     access_code: string;
   };
-  features: Record<string, unknown>;
+  features: Partial<SurveyFeatures> & Record<string, any>;
   questions: RemoteSurveyQuestion[];
 }
 

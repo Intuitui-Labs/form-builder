@@ -13,6 +13,7 @@ import { standingFor } from '../domain/levels';
 import { authPort, store, useFeedora } from '../feedora';
 import { FEEDORA_REMOTE } from '../config';
 import type { SubmissionHistoryRecord } from '../domain/ports/IEntityStore';
+import { FEEDORA_BADGES } from '../domain/types';
 import { colors, radii, serifFont } from '../theme';
 
 interface AccountDrawerProps {
@@ -167,6 +168,53 @@ export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerPro
                   <View style={styles.statCol}>
                     <Text style={styles.statNum}>{surveysCount}</Text>
                     <Text style={styles.statLbl}>Surveys</Text>
+                  </View>
+                </View>
+
+                {/* Badges & Rewards (Web Parity) */}
+                <View style={styles.section}>
+                  <Text style={styles.sectionHeading}>BADGES & ACHIEVEMENTS</Text>
+                  <Text style={styles.sectionSub}>
+                    Participation badges awarded for contributing research responses.
+                  </Text>
+                  <View style={styles.badgesRow}>
+                    {FEEDORA_BADGES.map((b) => {
+                      const isUnlocked = surveysCount >= b.minResponses;
+                      return (
+                        <View
+                          key={b.id}
+                          style={[
+                            styles.badgeCard,
+                            isUnlocked ? styles.badgeCardUnlocked : styles.badgeCardLocked,
+                          ]}
+                        >
+                          <Text style={[styles.badgeIcon, !isUnlocked && styles.badgeIconLocked]}>
+                            {b.icon}
+                          </Text>
+                          <Text style={styles.badgeName}>{b.label}</Text>
+                          <Text style={styles.badgeRule}>{b.rule}</Text>
+                          <View
+                            style={[
+                              styles.badgeStatusPill,
+                              isUnlocked
+                                ? styles.badgeStatusPillUnlocked
+                                : styles.badgeStatusPillLocked,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.badgeStatusText,
+                                isUnlocked
+                                  ? styles.badgeStatusTextUnlocked
+                                  : styles.badgeStatusTextLocked,
+                              ]}
+                            >
+                              {isUnlocked ? '✓ UNLOCKED' : `${surveysCount}/${b.minResponses}`}
+                            </Text>
+                          </View>
+                        </View>
+                      );
+                    })}
                   </View>
                 </View>
 
@@ -661,5 +709,68 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     color: colors.muted,
     textAlign: 'center',
+  },
+  badgesRow: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  badgeCard: {
+    flex: 1,
+    minWidth: 100,
+    backgroundColor: colors.paper,
+    borderRadius: radii.medium,
+    padding: 12,
+    borderWidth: 1.5,
+    borderColor: colors.line,
+    alignItems: 'center',
+    gap: 4,
+  },
+  badgeCardUnlocked: {
+    borderColor: '#FDE68A',
+    backgroundColor: '#FFFBEB',
+  },
+  badgeCardLocked: {
+    opacity: 0.65,
+  },
+  badgeIcon: {
+    fontSize: 28,
+    marginBottom: 2,
+  },
+  badgeIconLocked: {
+    opacity: 0.4,
+  },
+  badgeName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  badgeRule: {
+    fontSize: 10,
+    color: colors.muted,
+    textAlign: 'center',
+    minHeight: 26,
+  },
+  badgeStatusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radii.pill,
+    marginTop: 4,
+  },
+  badgeStatusPillUnlocked: {
+    backgroundColor: '#DCFCE7',
+  },
+  badgeStatusPillLocked: {
+    backgroundColor: '#F3F4F6',
+  },
+  badgeStatusText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+  },
+  badgeStatusTextUnlocked: {
+    color: '#166534',
+  },
+  badgeStatusTextLocked: {
+    color: '#6B7280',
   },
 });
