@@ -23,11 +23,22 @@ interface AccountDrawerProps {
 }
 
 export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerProps) {
-  const { authUser, authMode, setAuthMode, profile, refresh } = useFeedora();
+  const { authUser, authMode, setAuthMode, profile, refresh, outboxPort } = useFeedora();
   const [exportResult, setExportResult] = useState<ExportDataPayload | null>(null);
   const [copied, setCopied] = useState(false);
   const [historyItems, setHistoryItems] = useState<SubmissionHistoryRecord[]>([]);
   const [entityPoints, setEntityPoints] = useState<{ name: string; points: number }[]>([]);
+  const [pendingOutboxCount, setPendingOutboxCount] = useState(0);
+  const [isFlushingOutbox, setIsFlushingOutbox] = useState(false);
+
+  useEffect(() => {
+    if (!visible || !outboxPort) return;
+    outboxPort.getPendingCount().then(setPendingOutboxCount);
+    const unsub = outboxPort.subscribe((q) => {
+      q.getPendingCount().then(setPendingOutboxCount);
+    });
+    return unsub;
+  }, [visible, outboxPort]);
 
   useEffect(() => {
     if (!visible || !authUser) return;
@@ -426,6 +437,47 @@ export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerPro
                         🐍 Django API
                       </Text>
                     </Pressable>
+                  </View>
+                </View>
+
+                <View style={styles.section}>
+                  <Text style={styles.sectionHeading}>OFFLINE OUTBOX & SYNC</Text>
+                  <Text style={styles.sectionSub}>
+                    Persistent queue ensuring zero survey loss in campus Wi-Fi dropouts.
+                  </Text>
+                  <View style={styles.outboxBox}>
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text style={styles.outboxTitle}>
+                        {pendingOutboxCount === 0
+                          ? '✓ Outbox Synced'
+                          : `📦 ${pendingOutboxCount} Offline Submission${pendingOutboxCount > 1 ? 's' : ''}`}
+                      </Text>
+                      <Text style={styles.outboxDesc}>
+                        {pendingOutboxCount === 0
+                          ? 'All responses safely recorded in research database.'
+                          : 'Queued locally — auto-flushes on reconnect.'}
+                      </Text>
+                    </View>
+                    {pendingOutboxCount > 0 ? (
+                      <Pressable
+                        style={styles.flushBtn}
+                        disabled={isFlushingOutbox}
+                        onPress={async () => {
+                          setIsFlushingOutbox(true);
+                          try {
+                            await outboxPort.flush(true);
+                            const count = await outboxPort.getPendingCount();
+                            setPendingOutboxCount(count);
+                          } finally {
+                            setIsFlushingOutbox(false);
+                          }
+                        }}
+                      >
+                        <Text style={styles.flushBtnText}>
+                          {isFlushingOutbox ? 'Syncing…' : 'Sync Now ⚡'}
+                        </Text>
+                      </Pressable>
+                    ) : null}
                   </View>
                 </View>
 
@@ -887,5 +939,36 @@ const styles = StyleSheet.create({
   },
   badgeStatusTextLocked: {
     color: '#6B7280',
+  },
+  outboxBox: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radii.medium,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  outboxTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  outboxDesc: {
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: 2,
+  },
+  flushBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: radii.small,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  flushBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

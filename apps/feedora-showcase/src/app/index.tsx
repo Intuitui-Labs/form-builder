@@ -1,6 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Text, View, StyleSheet, Modal, TextInput, Pressable } from 'react-native';
+import {
+  Text,
+  View,
+  StyleSheet,
+  Modal,
+  TextInput,
+  Pressable,
+  LayoutAnimation,
+  Platform,
+  UIManager,
+} from 'react-native';
 import { router } from 'expo-router';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 import {
   MultiStepFormManager,
   type IFeedbackNotifierPort,
@@ -343,6 +357,7 @@ export default function SurveyScreen() {
 
     notifyDataChanged();
     setTotalEarned(earned);
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
     setSubmitted(true);
   };
 
@@ -389,13 +404,16 @@ export default function SurveyScreen() {
 
   const moveForward = async () => {
     if (manager.isLastStep()) {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
       await manager.submit();
     } else {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       manager.nextStep();
     }
   };
 
   const startOver = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setToast(null);
     setSubmitted(false);
     setTotalEarned(0);

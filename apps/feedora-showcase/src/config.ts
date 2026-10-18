@@ -13,6 +13,9 @@ const DJANGO_PORT = 8000;
 const DEV_MACHINE_LAN_IP = '10.10.66.76'; // Local machine LAN address for physical phone / Expo Go
 
 export function getDjangoBaseUrl(): string {
+  if (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_API_BASE_URL) {
+    return process.env.EXPO_PUBLIC_API_BASE_URL.replace(/\/+$/, '');
+  }
   if (Platform.OS === 'web') {
     return `http://127.0.0.1:${DJANGO_PORT}`;
   }
