@@ -67,6 +67,8 @@ export class DjangoStudioAdapter implements ICreatorStudioPort {
     accessCode: string;
     surveyId: number;
     questionsCount: number;
+    isDraft?: boolean;
+    isActive?: boolean;
   }> {
     const res = await this.fetchImpl(this.url('/api/v1/surveys/create/'), {
       method: 'POST',
@@ -90,6 +92,33 @@ export class DjangoStudioAdapter implements ICreatorStudioPort {
       accessCode: data.accessCode,
       surveyId: data.surveyId,
       questionsCount: data.questionsCount || payload.questions.length,
+      isDraft: data.isDraft,
+      isActive: data.isActive,
     };
+  }
+
+  async togglePublish(uuid: string, isDraft?: boolean): Promise<{
+    ok: boolean;
+    uuid: string;
+    accessCode: string;
+    isDraft: boolean;
+    isActive: boolean;
+    status: 'draft' | 'published';
+  }> {
+    const res = await this.fetchImpl(this.url(`/api/v1/surveys/${uuid}/publish/`), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(isDraft !== undefined ? { is_draft: isDraft } : {}),
+      credentials: 'include',
+    });
+
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.ok) {
+      throw new Error(data?.error || `Failed to update survey status (HTTP ${res.status})`);
+    }
+
+    return data;
   }
 }

@@ -62,17 +62,7 @@ export const HMSAM_FORM_SCHEMA: FormSchema = {
         title: construct.label,
         description: `${hmsamItemsFor(constructId).length} items · ${construct.shortLabel}`,
         badge: construct.shortLabel.toUpperCase(),
-        fields: [
-          {
-            id: `${constructId}-heading`,
-            name: `${constructId}-heading`,
-            type: 'heading' as const,
-            label: construct.label,
-            required: false,
-            order: 0,
-          },
-          ...hmsamItemsFor(constructId).map((item, index) => likertField(item, index + 1)),
-        ],
+        fields: hmsamItemsFor(constructId).map((item, index) => likertField(item, index + 1)),
       };
     }),
   ],

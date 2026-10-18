@@ -128,17 +128,7 @@ export function convertRemoteSurveyToSchema(meta: RemoteSurveyMeta): FormSchema 
         title: sectionName,
         description: `${qList.length} items · Section ${pIdx}`,
         badge: `SECTION ${pIdx}`,
-        fields: [
-          {
-            id: `sec-${pIdx}-heading`,
-            name: `sec-${pIdx}-heading`,
-            type: 'heading',
-            label: sectionName,
-            required: false,
-            order: 0,
-          },
-          ...qList.map((q, idx) => toFormField(q, idx)),
-        ],
+        fields: qList.map((q, idx) => toFormField(q, idx)),
       });
       pIdx++;
     }

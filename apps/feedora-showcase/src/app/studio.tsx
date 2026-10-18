@@ -914,6 +914,31 @@ export default function StudioScreen() {
                       >
                         <Text style={styles.cardActionAirDropText}>📲 QR & Share</Text>
                       </Pressable>
+                      {studioPort.togglePublish ? (
+                        <Pressable
+                          style={[
+                            styles.cardActionSecondary,
+                            { backgroundColor: s.isDraft ? '#F0FDF4' : '#FEF3C7', borderColor: s.isDraft ? '#86EFAC' : '#FDE68A' },
+                          ]}
+                          onPress={async () => {
+                            try {
+                              await studioPort.togglePublish!(s.uuid, !s.isDraft);
+                              await loadSurveys();
+                            } catch (err) {
+                              Alert.alert('Update Error', (err as Error).message);
+                            }
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.cardActionSecondaryText,
+                              { color: s.isDraft ? '#166534' : '#92400E' },
+                            ]}
+                          >
+                            {s.isDraft ? '🌐 Make Public' : '🔒 Keep Private'}
+                          </Text>
+                        </Pressable>
+                      ) : null}
                     </View>
                   </View>
                 ))}

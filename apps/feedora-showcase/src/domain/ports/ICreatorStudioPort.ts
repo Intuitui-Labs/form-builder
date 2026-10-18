@@ -40,5 +40,15 @@ export interface ICreatorStudioPort {
     accessCode: string;
     surveyId: number;
     questionsCount: number;
+    isDraft?: boolean;
+    isActive?: boolean;
+  }>;
+  togglePublish?(uuid: string, isDraft?: boolean): Promise<{
+    ok: boolean;
+    uuid: string;
+    accessCode: string;
+    isDraft: boolean;
+    isActive: boolean;
+    status: 'draft' | 'published';
   }>;
 }

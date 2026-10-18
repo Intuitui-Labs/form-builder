@@ -387,7 +387,9 @@ export function FieldControl({
         <Text style={styles.fieldLabel}>{field.label ?? field.name}</Text>
         {field.required ? <Text style={styles.requiredMark}>REQUIRED</Text> : null}
       </View>
-      {field.helperText ? <Text style={styles.fieldHelperText}>{field.helperText}</Text> : null}
+      {field.helperText && field.type !== 'likert' && field.type !== 'slider' ? (
+        <Text style={styles.fieldHelperText}>{field.helperText}</Text>
+      ) : null}
 
       {field.type === 'likert' || field.type === 'slider' ? (
         <View>
