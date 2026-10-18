@@ -62,6 +62,28 @@ export class FeedoraHttpTransportAdapter implements ITransportPort {
     return meta;
   }
 
+  async fetchPublicSurveys(): Promise<Array<{
+    id: number;
+    uuid: string;
+    accessCode: string;
+    title: string;
+    description: string;
+    isHmsam: boolean;
+    questionsCount: number;
+  }>> {
+    try {
+      const response = await this.fetchImpl(`${this.baseUrl.replace(/\/+$/, '')}/api/v1/surveys/`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+      if (!response.ok) return [];
+      const data = await response.json();
+      return Array.isArray(data?.surveys) ? data.surveys : [];
+    } catch {
+      return [];
+    }
+  }
+
   async submitResponse(
     accessUuid: string,
     answersByCode: Record<string, unknown>,

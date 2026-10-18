@@ -17,12 +17,12 @@ export function OfflineSyncBanner() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 2500);
       const res = await fetch(`${FEEDORA_REMOTE.baseUrl}/api/v1/openapi.json`, {
-        method: 'HEAD',
+        method: 'GET',
         signal: controller.signal,
       }).catch(() => null);
       clearTimeout(timeoutId);
 
-      const online = res !== null && (res.status === 200 || res.status === 404);
+      const online = res !== null && res.status >= 200 && res.status < 500;
       setIsOnline(online);
       return online;
     } catch {

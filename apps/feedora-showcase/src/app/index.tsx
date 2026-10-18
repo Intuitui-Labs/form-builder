@@ -34,6 +34,7 @@ import {
   Tag,
 } from '../components/FeedoraUi';
 import { AccountBar } from '../components/AccountBar';
+import { SurveyCatalogModal } from '../components/SurveyCatalogModal';
 import { HMSAM_FORM_SCHEMA, HMSAM_ITEM_COUNT } from '../fixtures/hmsam';
 import { FEEDORA_FEATURES } from '../fixtures/seed';
 import {
@@ -107,6 +108,7 @@ export default function SurveyScreen() {
 
   // AirDrop / QR Import Modal State
   const [isAirDropModalOpen, setIsAirDropModalOpen] = useState(false);
+  const [isCatalogOpen, setIsCatalogOpen] = useState(false);
   const [airDropInput, setAirDropInput] = useState('');
   const [airDropError, setAirDropError] = useState<string | null>(null);
   const [importingLoading, setImportingLoading] = useState(false);
@@ -565,13 +567,23 @@ export default function SurveyScreen() {
         </Pressable>
 
         <Pressable
+          style={styles.catalogPillBtn}
+          onPress={() => setIsCatalogOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Browse all available research surveys"
+        >
+          <Text style={styles.catalogPillIcon}>📚</Text>
+          <Text style={styles.catalogPillText}>All Surveys</Text>
+        </Pressable>
+
+        <Pressable
           style={styles.scanCodePillBtn}
           onPress={() => setIsAirDropModalOpen(true)}
           accessibilityRole="button"
           accessibilityLabel="Scan QR or enter survey access code"
         >
           <Text style={styles.scanCodePillIcon}>📲</Text>
-          <Text style={styles.scanCodePillText}>Join by QR / Code</Text>
+          <Text style={styles.scanCodePillText}>Join</Text>
         </Pressable>
       </View>
 
@@ -917,6 +929,16 @@ export default function SurveyScreen() {
           </View>
         </View>
       </Modal>
+
+      <SurveyCatalogModal
+        visible={isCatalogOpen}
+        onClose={() => setIsCatalogOpen(false)}
+        onSelectSurvey={async (uuid) => {
+          await openSurvey(uuid);
+          startOver();
+        }}
+        completedSurveyIds={new Set(profile?.surveysCompleted && profile.surveysCompleted > 0 ? [1, 'hmsam'] : [])}
+      />
     </AppPage>
   );
 }
@@ -1218,6 +1240,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.muted,
     fontWeight: '800',
+  },
+  catalogPillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: radii.small,
+    paddingHorizontal: 11,
+    minHeight: 44,
+  },
+  catalogPillIcon: {
+    fontSize: 14,
+  },
+  catalogPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#166534',
   },
   scanCodePillBtn: {
     flexDirection: 'row',
