@@ -36,10 +36,12 @@ export function BrandHeader({
   eyebrow,
   title,
   subtitle,
+  rightAction,
 }: {
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
-  subtitle: string;
+  subtitle?: string;
+  rightAction?: ReactNode;
 }) {
   return (
     <View style={styles.brandHeader}>
@@ -47,16 +49,17 @@ export function BrandHeader({
         <View style={styles.brandGroup}>
           <FeedoraMark />
           <Text style={styles.brandLogo}>Feedora</Text>
-          <Text style={styles.brandNameMuted}>/ VOICE ECONOMY</Text>
+          <Text style={styles.brandNameMuted}>/ VOICE</Text>
         </View>
-        <View style={styles.livePill}>
-          <View style={styles.liveDot} />
-          <Text style={styles.liveText}>HMSAM</Text>
-        </View>
+        {rightAction ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {rightAction}
+          </View>
+        ) : null}
       </View>
-      <Text style={styles.eyebrow}>{eyebrow.toUpperCase()}</Text>
+      {eyebrow && <Text style={styles.eyebrow}>{eyebrow.toUpperCase()}</Text>}
       <Text style={styles.heroTitle}>{title}</Text>
-      <Text style={styles.heroSubtitle}>{subtitle}</Text>
+      {subtitle && <Text style={styles.heroSubtitle}>{subtitle}</Text>}
     </View>
   );
 }
@@ -180,14 +183,10 @@ export function StepMeter({
 }) {
   return (
     <View style={styles.stepMeter}>
-      <View style={styles.stepMeterRow}>
-        <Text style={styles.stepMeterLabel}>Survey progress</Text>
-        <Text style={styles.stepMeterValue}>{percent}%</Text>
-      </View>
-      <Meter percent={percent} color={colors.primary} height={8} />
+      <Meter percent={percent} color={colors.primary} height={6} />
       <View style={styles.stepMeterFootRow}>
         <Text style={styles.stepMeterFoot}>
-          {effortCompleted} / {effortTotal} items answered
+          {percent}% · {effortCompleted} of {effortTotal}
         </Text>
         {eta ? <Text style={styles.stepMeterFoot}>{eta}</Text> : null}
       </View>

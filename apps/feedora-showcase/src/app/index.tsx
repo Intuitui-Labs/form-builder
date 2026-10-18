@@ -492,9 +492,7 @@ export default function SurveyScreen() {
   return (
     <AppPage>
       <BrandHeader
-        eyebrow="HMSAM voice economy"
         title="Your voice matters"
-        subtitle="Contribute to real HMSAM research, earn voice points as you go, and climb your entity's leaderboard."
       />
 
       <AccountBar />
@@ -504,12 +502,12 @@ export default function SurveyScreen() {
           <View style={styles.activeSurveyRow}>
             <View style={{ flex: 1, gap: 4 }}>
               <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-                <Tag tone="teal">OFFLINE AIRDROP SURVEY</Tag>
+                <Tag tone="teal">OFFLINE AIRDROP</Tag>
                 <Tag tone="slate">CRC32 VERIFIED</Tag>
               </View>
               <Text style={styles.activeSurveyTitle}>{airDropSchema.title}</Text>
               <Text style={styles.activeSurveyDetail}>
-                Peer-to-peer schema loaded · {airDropSchema.pages.reduce((acc, p) => acc + p.fields.length, 0)} Questions
+                Peer-to-peer · {airDropSchema.pages.reduce((acc, p) => acc + p.fields.length, 0)} questions
               </Text>
             </View>
             <View style={{ alignSelf: 'center' }}>
@@ -563,12 +561,12 @@ export default function SurveyScreen() {
         <Panel style={styles.creatorBanner}>
           <SectionHeading
             title="🔬 Researcher Studio"
-            detail={`Logged in as ${authUser.displayName}. Live responses update psychometric reliability (Cronbach's α) on Insights.`}
+            detail={`Logged in as ${authUser.displayName}. Live responses update psychometric reliability (Cronbach's α).`}
           />
         </Panel>
       )}
 
-      {/* Sleek, Spacious Study Bar & QR Scanner Action */}
+      {/* Spacious, Elegant Study Header Bar */}
       <View style={styles.studyHeaderBar}>
         <Pressable
           style={styles.studyEntityPill}
@@ -594,7 +592,7 @@ export default function SurveyScreen() {
           accessibilityLabel="Browse all available research surveys"
         >
           <Text style={styles.catalogPillIcon}>📚</Text>
-          <Text style={styles.catalogPillText}>All Surveys</Text>
+          <Text style={styles.catalogPillText}>Surveys</Text>
         </Pressable>
 
         <Pressable
@@ -626,26 +624,6 @@ export default function SurveyScreen() {
           ))}
         </Panel>
       )}
-
-      {/* Guest voice points advisory card (only if guest has earned points) */}
-      {isGamified && profile && !authUser && profile.totalPoints > 0 ? (
-        <Panel style={styles.guestClaimCard}>
-          <View style={styles.guestClaimRow}>
-            <Text style={styles.guestClaimIcon}>💎</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.guestClaimTitle}>
-                {profile.totalPoints} Unsaved Points
-              </Text>
-              <Text style={styles.guestClaimDesc}>
-                Sign in to save your rank on your institution's leaderboard.
-              </Text>
-            </View>
-          </View>
-          <View style={{ marginTop: 8 }}>
-            <ActionButton label="Sign In to Claim →" compact onPress={openAuthModal} />
-          </View>
-        </Panel>
-      ) : null}
 
       {/* Academic Ethics / Participant Consent (Task 3.5 in Agent Brief) */}
       {!consented && !submitted && (
@@ -812,15 +790,15 @@ export default function SurveyScreen() {
         ) : (
           <>
             <View style={styles.meterHeader}>
-              <Tag tone="violet">
+              <Text style={styles.surveyKindTitle}>
                 {activeSurveyMeta
                   ? activeSurveyMeta.survey.is_hmsam
-                    ? 'HMSAM SURVEY'
-                    : 'CUSTOM SURVEY'
-                  : `HMSAM · ${HMSAM_ITEM_COUNT} ITEMS`}
-              </Tag>
+                    ? 'HMSAM Instrument'
+                    : activeSurveyMeta.survey.title
+                  : 'HMSAM Survey'}
+              </Text>
               <Text style={styles.stepCount}>
-                {stepIndex + 1} / {manager.getTotalPages()}
+                Step {stepIndex + 1} of {manager.getTotalPages()}
               </Text>
             </View>
 
@@ -840,22 +818,20 @@ export default function SurveyScreen() {
                 </View>
                 <View style={styles.livePerksRow}>
                   {activeSurveyMeta?.features?.rewards?.mode === 'variable' && (
-                    <Tag tone="gold">🎲 2x Boost</Tag>
+                    <Text style={styles.perkChip}>🎲 2x Boost</Text>
                   )}
                   {activeSurveyMeta?.features?.negative_reinforcement?.enabled && (
-                    <Tag tone="teal">🛡️ Shield</Tag>
+                    <Text style={styles.perkChip}>🛡️ Shield</Text>
                   )}
                   {liveAnsweredCount >= 3 ? (
-                    <Tag tone="teal">🔥 Streak</Tag>
-                  ) : (
-                    <Tag tone="slate">⚡ Active</Tag>
-                  )}
+                    <Text style={styles.perkChip}>🔥 Streak</Text>
+                  ) : null}
                 </View>
               </View>
             ) : (
               <View style={styles.controlArmBanner}>
                 <Text style={styles.controlArmText}>
-                  ⚖️ CONTROL ARM · Baseline Research Protocol (Zero Gamification)
+                  ⚖️ Control Arm · Standard Academic Protocol
                 </Text>
               </View>
             )}
@@ -1004,8 +980,19 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   standingWrap: { marginTop: 12, paddingTop: 14, borderTopColor: colors.line, borderTopWidth: 1 },
-  meterHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  stepCount: { fontSize: 11, fontWeight: '700', color: colors.faint },
+  meterHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  surveyKindTitle: { fontSize: 13, fontWeight: '700', color: colors.ink, letterSpacing: -0.2 },
+  stepCount: { fontSize: 12, fontWeight: '600', color: colors.muted },
+  perkChip: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#6B21A8',
+    backgroundColor: '#F3E8FF',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
   pageTitle: { fontSize: 22, fontWeight: '400', color: colors.ink, fontFamily: serifFont, marginTop: 4, marginBottom: 4 },
   pageDesc: { fontSize: 13, lineHeight: 19, color: colors.muted, marginBottom: 16 },
   fieldsContainer: { marginTop: 6 },

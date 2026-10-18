@@ -6,10 +6,13 @@ export function AccountBar() {
   const { authUser, authMode, profile, openAccountDrawer, openWelcome, effectiveRole, previewRole } = useFeedora();
 
   if (!authUser) {
+    const unsavedPoints = profile?.totalPoints ?? 0;
     return (
       <View style={styles.container}>
         <View style={styles.guestRow}>
-          <Text style={styles.guestText}>🎓 Guest Respondent · Voice Points active</Text>
+          <Text style={styles.guestText}>
+            🎓 Guest{unsavedPoints > 0 ? ` · 💎 ${unsavedPoints} pts` : ''}
+          </Text>
           <Pressable style={styles.signInBtn} onPress={openWelcome}>
             <Text style={styles.signInBtnText}>Sign In / Register →</Text>
           </Pressable>

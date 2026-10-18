@@ -155,9 +155,7 @@ export function WelcomeScreen({ visible, onClose }: WelcomeScreenProps) {
         >
           {/* Top Close / Dismiss button */}
           <View style={styles.topBar}>
-            <View style={styles.brandingBadge}>
-              <Text style={styles.brandingBadgeText}>ACADEMIC RESEARCH PLATFORM</Text>
-            </View>
+            <View />
             <Pressable style={styles.closeBtn} onPress={onClose} hitSlop={10}>
               <Text style={styles.closeBtnText}>✕</Text>
             </Pressable>
@@ -166,25 +164,17 @@ export function WelcomeScreen({ visible, onClose }: WelcomeScreenProps) {
           {/* Hero Welcome Header */}
           <View style={styles.heroSection}>
             <Text style={styles.heroLogo}>🎙️ feedora</Text>
-            <Text style={styles.heroTitle}>Hedonic-Motivation Research & Voice Economy</Text>
-            <Text style={styles.heroSubtitle}>
-              Empirical psychometric study of user adoption, immersion, and behavioral intention.
-            </Text>
+            <Text style={styles.heroTitle}>Hedonic Research & Voice Economy</Text>
           </View>
 
-          {/* Quick Flow: Continue as Guest (Immediately Visible at the Top) */}
+          {/* Quick Flow: Continue as Guest */}
           <Pressable style={styles.topGuestCard} onPress={handleGuestContinue}>
             <View style={styles.topGuestHeader}>
               <Text style={styles.topGuestEmoji}>🚀</Text>
               <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.topGuestTitle}>Explore Immediately as Guest</Text>
-                  <View style={styles.instantPill}>
-                    <Text style={styles.instantPillText}>INSTANT</Text>
-                  </View>
-                </View>
+                <Text style={styles.topGuestTitle}>Explore as Guest</Text>
                 <Text style={styles.topGuestSub}>
-                  No registration needed. Jump straight into active academic surveys now.
+                  Take surveys instantly without registering.
                 </Text>
               </View>
               <Text style={styles.topGuestArrow}>→</Text>
@@ -193,7 +183,7 @@ export function WelcomeScreen({ visible, onClose }: WelcomeScreenProps) {
 
           {/* Step 1: Choose Your Role */}
           <View style={styles.sectionWrap}>
-            <Text style={styles.sectionLabel}>STEP 1: CHOOSE YOUR ROLE (OR SIGN IN)</Text>
+            <Text style={styles.sectionLabel}>CHOOSE YOUR ROLE</Text>
             <View style={styles.roleCardRow}>
               {/* Respondent Card (Default) */}
               <Pressable
@@ -208,15 +198,10 @@ export function WelcomeScreen({ visible, onClose }: WelcomeScreenProps) {
               >
                 <View style={styles.roleHeaderRow}>
                   <Text style={styles.roleEmoji}>🎓</Text>
-                  {role === 'respondent' && (
-                    <View style={styles.defaultBadge}>
-                      <Text style={styles.defaultBadgeText}>DEFAULT</Text>
-                    </View>
-                  )}
                 </View>
                 <Text style={styles.roleTitle}>Respondent</Text>
                 <Text style={styles.roleDesc}>
-                  Contribute survey data, earn Voice Points, unlock milestone badges & track streaks.
+                  Earn Voice Points, unlock badges & build your streak.
                 </Text>
                 <View
                   style={[
@@ -241,15 +226,10 @@ export function WelcomeScreen({ visible, onClose }: WelcomeScreenProps) {
               >
                 <View style={styles.roleHeaderRow}>
                   <Text style={styles.roleEmoji}>🔬</Text>
-                  {role === 'creator' && (
-                    <View style={styles.creatorBadge}>
-                      <Text style={styles.creatorBadgeText}>RESEARCHER</Text>
-                    </View>
-                  )}
                 </View>
-                <Text style={styles.roleTitle}>Survey Creator</Text>
+                <Text style={styles.roleTitle}>Researcher</Text>
                 <Text style={styles.roleDesc}>
-                  Author instruments in Creator Studio, deploy live experiments & view Welch's t analytics.
+                  Author instruments, run experiments & view analytics.
                 </Text>
                 <View
                   style={[
