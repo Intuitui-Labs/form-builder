@@ -168,14 +168,7 @@ export function SurveyCatalogModal({
         {/* Header */}
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={styles.eyebrow}>RESEARCH COMMONS</Text>
-              <Tag tone="teal">LIVE SYNC · {lastRefreshedAt}</Tag>
-            </View>
-            <Text style={styles.title}>All Available Surveys</Text>
-            <Text style={styles.subtitle}>
-              Browse all instruments created by researchers. Choose a study to begin or view its requirements.
-            </Text>
+            <Text style={styles.title}>Research Surveys</Text>
           </View>
           <Pressable style={styles.refreshBtn} onPress={reloadSurveys} hitSlop={10}>
             <Text style={styles.refreshText}>🔄</Text>
@@ -190,7 +183,7 @@ export function SurveyCatalogModal({
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
             style={styles.searchInput}
-            placeholder="Search by title, access code (e.g. XIHJLP), or topic…"
+            placeholder="Search by title, access code, or topic…"
             placeholderTextColor={colors.faint}
             value={search}
             onChangeText={setSearch}
@@ -203,7 +196,7 @@ export function SurveyCatalogModal({
             onPress={() => setActiveTab('all')}
           >
             <Text style={[styles.tabText, activeTab === 'all' && styles.tabTextActive]}>
-              All Studies ({surveys.length})
+              All ({surveys.length})
             </Text>
           </Pressable>
           <Pressable
@@ -211,7 +204,7 @@ export function SurveyCatalogModal({
             onPress={() => setActiveTab('hmsam')}
           >
             <Text style={[styles.tabText, activeTab === 'hmsam' && styles.tabTextActive]}>
-              HMSAM Validated
+              HMSAM
             </Text>
           </Pressable>
           <Pressable
@@ -219,7 +212,7 @@ export function SurveyCatalogModal({
             onPress={() => setActiveTab('custom')}
           >
             <Text style={[styles.tabText, activeTab === 'custom' && styles.tabTextActive]}>
-              Custom Lab Surveys
+              Custom
             </Text>
           </Pressable>
         </View>

@@ -42,15 +42,13 @@ export default function CommunityScreen() {
   return (
     <AppPage>
       <BrandHeader
-        eyebrow="Voice economy"
         title="Contributors & standing"
-        subtitle="People join an organization, contribute voice across surveys, and accumulate points that unlock levels and badges."
       />
 
       <AccountBar />
 
       <Panel>
-        <SectionHeading title="Organizations" detail="Choose whose community you're contributing to." />
+        <SectionHeading title="Organizations" />
         {(entitiesList || entities).map((item) => (
           <EntityCard
             key={item.id}
@@ -84,7 +82,6 @@ export default function CommunityScreen() {
       <Panel>
         <SectionHeading
           title="Badges & recognition"
-          detail="Participation milestones earned across surveys."
         />
         <View style={styles.badgesRow}>
           {FEEDORA_BADGES.map((b) => {
@@ -103,21 +100,14 @@ export default function CommunityScreen() {
                 </Text>
                 <Text style={styles.badgeName}>{b.label}</Text>
                 <Text style={styles.badgeRule}>{b.rule}</Text>
-                <View
+                <Text
                   style={[
-                    styles.badgePill,
-                    isUnlocked ? styles.badgePillUnlocked : styles.badgePillLocked,
+                    styles.badgeStatusText,
+                    isUnlocked ? styles.badgeStatusUnlocked : styles.badgeStatusLocked,
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.badgePillText,
-                      isUnlocked ? styles.badgePillTextUnlocked : styles.badgePillTextLocked,
-                    ]}
-                  >
-                    {isUnlocked ? '✓ Unlocked' : `${completedCount}/${b.minResponses}`}
-                  </Text>
-                </View>
+                  {isUnlocked ? '✓ Unlocked' : `${completedCount}/${b.minResponses}`}
+                </Text>
               </View>
             );
           })}
@@ -127,7 +117,6 @@ export default function CommunityScreen() {
       <Panel>
         <SectionHeading
           title="Leaderboard"
-          detail="Strongest contributors in this entity, by cumulative voice points."
         />
         {contributors.length === 0 ? (
           <Text style={styles.empty}>No contributors yet — be the first.</Text>
@@ -195,26 +184,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     minHeight: 24,
   },
-  badgePill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 100,
+  badgeStatusText: {
+    fontSize: 10,
+    fontWeight: '700',
     marginTop: 4,
   },
-  badgePillUnlocked: {
-    backgroundColor: '#DCFCE7',
-  },
-  badgePillLocked: {
-    backgroundColor: '#F3F4F6',
-  },
-  badgePillText: {
-    fontSize: 9.5,
-    fontWeight: '800',
-  },
-  badgePillTextUnlocked: {
+  badgeStatusUnlocked: {
     color: '#166534',
   },
-  badgePillTextLocked: {
-    color: '#6B7280',
+  badgeStatusLocked: {
+    color: '#9CA3AF',
   },
 });

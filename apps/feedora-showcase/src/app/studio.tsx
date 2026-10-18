@@ -710,8 +710,8 @@ export default function StudioScreen() {
           <Text style={styles.appBarBrand}>Feedora Studio</Text>
           <Text style={styles.appBarSubtitle} numberOfLines={1}>
             {isCreatorOrStaff
-              ? `🔬 Creator Suite • ${authUser?.organizationName || 'Research Lab'}`
-              : '🎙️ Respondent Preview Mode'}
+              ? authUser?.organizationName || 'Research Lab'
+              : 'Respondent Preview'}
           </Text>
         </View>
 
@@ -726,11 +726,11 @@ export default function StudioScreen() {
           <View style={styles.advisoryTextCol}>
             <Text style={styles.advisoryTitle}>Creator Permissions Available</Text>
             <Text style={styles.advisoryDesc}>
-              You are currently viewing in Respondent persona. Switch to Creator / Admin to scaffold studies directly to Django.
+              Switch to Creator to scaffold studies directly to Django.
             </Text>
           </View>
           <Pressable style={styles.advisoryBtn} onPress={openAuthModal}>
-            <Text style={styles.advisoryBtnText}>Switch Persona</Text>
+            <Text style={styles.advisoryBtnText}>Switch</Text>
           </Pressable>
         </View>
       )}
@@ -742,7 +742,7 @@ export default function StudioScreen() {
           onPress={() => setActiveTab('surveys')}
         >
           <Text style={[styles.tabText, activeTab === 'surveys' && styles.tabTextActive]}>
-            📚 Django Fleet ({surveys.length})
+            📚 Fleet ({surveys.length})
           </Text>
         </Pressable>
         <Pressable
@@ -750,7 +750,7 @@ export default function StudioScreen() {
           onPress={() => setActiveTab('builder')}
         >
           <Text style={[styles.tabText, activeTab === 'builder' && styles.tabTextActive]}>
-            ⚡ Instrument Scaffolder ({questions.length})
+            ⚡ Scaffolder ({questions.length})
           </Text>
         </Pressable>
       </View>
@@ -761,9 +761,9 @@ export default function StudioScreen() {
           <View style={styles.celebrationCard}>
             <Text style={styles.celebrationEmoji}>🎉</Text>
             <View style={styles.celebrationTextCol}>
-              <Text style={styles.celebrationTitle}>Survey Published to Django!</Text>
+              <Text style={styles.celebrationTitle}>Survey Published</Text>
               <Text style={styles.celebrationSubtitle}>
-                "{publishSuccess.title}" is live. Access Code:{' '}
+                "{publishSuccess.title}" is live · Code:{' '}
                 <Text style={styles.codeHighlight}>{publishSuccess.accessCode}</Text>
               </Text>
               <Pressable
@@ -777,7 +777,7 @@ export default function StudioScreen() {
                   }
                 }}
               >
-                <Text style={styles.celebrationShareBtnText}>📲 Show QR Code & P2P Share</Text>
+                <Text style={styles.celebrationShareBtnText}>📲 Share QR Code</Text>
               </Pressable>
             </View>
             <Pressable
@@ -794,10 +794,7 @@ export default function StudioScreen() {
           <View style={styles.section}>
             <View style={styles.sectionHeaderRow}>
               <View>
-                <Text style={styles.sectionTitle}>Django Research Database</Text>
-                <Text style={styles.sectionSubtitle}>
-                  Surveys live in Gihini's SQLite/PostgreSQL research backend
-                </Text>
+                <Text style={styles.sectionTitle}>Research Database</Text>
               </View>
               <Pressable style={styles.refreshBtn} onPress={loadSurveys}>
                 <Text style={styles.refreshBtnText}>🔄 Refresh</Text>

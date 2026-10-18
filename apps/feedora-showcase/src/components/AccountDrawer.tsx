@@ -145,23 +145,8 @@ export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerPro
 
           {/* Role Badge & Org */}
           <View style={styles.badgeBanner}>
-            <View
-              style={[
-                styles.rolePill,
-                isCreator ? styles.rolePillCreator : styles.rolePillRespondent,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.rolePillText,
-                  isCreator ? styles.rolePillTextCreator : styles.rolePillTextRespondent,
-                ]}
-              >
-                {isCreator ? '🔬 FORM CREATOR' : '🎙️ FORM RESPONDENT'}
-              </Text>
-            </View>
             <Text style={styles.orgText}>
-              {authUser.organizationName || 'University of Moratuwa'}
+              {authUser.organizationName || 'University of Moratuwa'} · {isCreator ? 'Researcher' : 'Respondent'}
             </Text>
           </View>
 
@@ -235,7 +220,7 @@ export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerPro
                   </View>
                   <View style={styles.statCol}>
                     <Text style={styles.statNum}>{standing.title}</Text>
-                    <Text style={styles.statLbl}>Level Standing</Text>
+                    <Text style={styles.statLbl}>Level</Text>
                   </View>
                   <View style={styles.statCol}>
                     <Text style={styles.statNum}>{surveysCount}</Text>
@@ -245,9 +230,6 @@ export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerPro
 
                 <View style={styles.section}>
                   <Text style={styles.sectionHeading}>BADGES & ACHIEVEMENTS</Text>
-                  <Text style={styles.sectionSub}>
-                    Participation badges awarded for contributing research responses.
-                  </Text>
                   <View style={styles.badgesRow}>
                     {FEEDORA_BADGES.map((b) => {
                       const isUnlocked = surveysCount >= b.minResponses;

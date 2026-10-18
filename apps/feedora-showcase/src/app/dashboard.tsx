@@ -123,28 +123,10 @@ export default function InsightsScreen() {
   return (
     <AppPage>
       <BrandHeader
-        eyebrow="Academic analytics & insights"
-        title={isCreator ? "🔬 Creator Research & Arm Telemetry" : "📊 Your Insights & Standing"}
-        subtitle={
-          isCreator
-            ? "Full inferential comparative statistics across experimental arms, Welch's t, Hedges' g, and reliability metrics."
-            : "Review your personal cognitive construct scores, voice points, rank progress, and research standing."
-        }
+        title={isCreator ? "Research & Arm Telemetry" : "Your Insights & Standing"}
       />
 
       <AccountBar />
-
-      {/* ── Role Identity Pill ── */}
-      <View style={styles.roleNoticeRow}>
-        <Tag tone={isCreator ? "gold" : "teal"}>
-          {isCreator ? "VIEWING AS: RESEARCH CREATOR (FULL ACCESS)" : "VIEWING AS: PARTICIPANT (PERSONAL REPORT)"}
-        </Tag>
-        <Text style={styles.roleNoticeSub}>
-          {isCreator
-            ? "Statistical significance & inferential arms are fully unlocked."
-            : "Showing your personal scores and plain-language summary."}
-        </Text>
-      </View>
 
       {/* ── 1. Personal Profile (Primary Focus for Respondents) ── */}
       {report && interp ? (
@@ -152,12 +134,7 @@ export default function InsightsScreen() {
           <Panel>
             <View style={styles.overallRow}>
               <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.overallLabel}>YOUR HEDONIC ADOPTION</Text>
-                  <Pressable style={styles.infoBadge} onPress={() => showInfo('joy')}>
-                    <Text style={styles.infoBadgeText}>i</Text>
-                  </Pressable>
-                </View>
+                <Text style={styles.overallLabel}>YOUR HEDONIC ADOPTION</Text>
                 <Text style={[styles.overallValue, { color: interp.color }]}>
                   {report.overall}
                   <Text style={styles.overallMax}> %</Text>
@@ -167,7 +144,7 @@ export default function InsightsScreen() {
                 {interp.level.toUpperCase()}
               </Tag>
             </View>
-            <Meter percent={report.overall} color={interp.color} height={8} />
+            <Meter percent={report.overall} color={interp.color} height={6} />
             <Text style={styles.overallFoot}>{interp.description}</Text>
             <Text style={styles.overallSubFoot}>
               {report.answeredItems} of {measurementPort.itemCount} items · {measurementPort.instrumentVersion}
@@ -178,25 +155,22 @@ export default function InsightsScreen() {
             <View style={styles.sectionHeaderRow}>
               <SectionHeading
                 title="Construct breakdown"
-                detail={measurementPort.instrument}
               />
+              <Pressable style={styles.infoBadge} onPress={() => showInfo('joy')}>
+                <Text style={styles.infoBadgeText}>i</Text>
+              </Pressable>
             </View>
             {report.constructs.map((construct) => (
               <View key={construct.constructId} style={{ marginBottom: 12 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <ConstructBar
-                    label={construct.label}
-                    mean={construct.mean}
-                    score={construct.score}
-                    interpretation={construct.interpretation}
-                    color={construct.color}
-                    answered={construct.count}
-                    itemCount={construct.itemCount}
-                  />
-                  <Pressable style={styles.infoBadgeInline} onPress={() => showInfo(construct.constructId)}>
-                    <Text style={styles.infoBadgeText}>i</Text>
-                  </Pressable>
-                </View>
+                <ConstructBar
+                  label={construct.label}
+                  mean={construct.mean}
+                  score={construct.score}
+                  interpretation={construct.interpretation}
+                  color={construct.color}
+                  answered={construct.count}
+                  itemCount={construct.itemCount}
+                />
               </View>
             ))}
           </Panel>
@@ -218,8 +192,7 @@ export default function InsightsScreen() {
       <Panel>
         <View style={styles.sectionHeaderRow}>
           <SectionHeading
-            title="🔬 Experimental Arms & Conditions"
-            detail="Evaluation across treatment arms to measure hedonic motivation and psychometric adoption."
+            title="🔬 Experimental Arms"
           />
           <Pressable style={styles.infoBadge} onPress={() => showInfo('welch')}>
             <Text style={styles.infoBadgeText}>i</Text>
@@ -304,34 +277,26 @@ export default function InsightsScreen() {
           </View>
         </View>
 
-        {/* Statistical Significance Table — Detailed for Creator, Summary for Respondent */}
+        {/* Statistical Significance Table — Clean and Spacious */}
         {expComp?.statisticalComparison && Object.keys(expComp.statisticalComparison).length > 0 && (
           <View style={{ marginTop: 18, gap: 8 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={styles.significanceHeader}>
-                {isCreator ? "STATISTICAL SIGNIFICANCE (WELCH'S T & HEDGES' G)" : "RESEARCH COMPARISON SUMMARY"}
+                {isCreator ? "STATISTICAL SIGNIFICANCE (WELCH'S T & HEDGES' G)" : "RESEARCH COMPARISON"}
               </Text>
-              <Pressable style={styles.infoBadge} onPress={() => showInfo('welch')}>
-                <Text style={styles.infoBadgeText}>i</Text>
-              </Pressable>
             </View>
 
             {Object.entries(expComp.statisticalComparison).map(([code, stat]) => (
               <View key={code} style={styles.statRowItem}>
                 <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={styles.constructCodeText}>{code.toUpperCase()}</Text>
-                    <Pressable style={styles.infoBadgeInline} onPress={() => showInfo(code)}>
-                      <Text style={styles.infoBadgeText}>i</Text>
-                    </Pressable>
-                  </View>
+                  <Text style={styles.constructCodeText}>{code.toUpperCase()}</Text>
                   {isCreator ? (
                     <Text style={styles.constructSubDetail}>
                       t({stat.degreesOfFreedom ?? '—'}) = {stat.tStatistic ?? '—'}
                     </Text>
                   ) : (
                     <Text style={styles.constructSubDetail}>
-                      {stat.isSignificant ? "Strong positive treatment effect" : "Equivalent baseline"}
+                      {stat.isSignificant ? "Strong treatment effect" : "Equivalent baseline"}
                     </Text>
                   )}
                 </View>
@@ -354,7 +319,6 @@ export default function InsightsScreen() {
         <View style={styles.sectionHeaderRow}>
           <SectionHeading
             title="Psychometric Reliability"
-            detail="Cronbach's α — measure of internal consistency across respondents."
           />
           <Pressable style={styles.infoBadge} onPress={() => showInfo('alpha')}>
             <Text style={styles.infoBadgeText}>i</Text>
