@@ -25,5 +25,13 @@ export interface ITransportPort {
   submitResponse(
     accessUuid: string,
     answersByCode: Record<string, unknown>,
+    options?: {
+      variant?: string;
+      platform?: string;
+      durationMs?: number;
+      dwellMs?: Record<string, number>;
+      qualityFlags?: string[];
+      consentVersion?: string;
+    },
   ): Promise<RemoteSubmitResult>;
 }

@@ -29,6 +29,10 @@ export interface RemoteSurveyMeta {
     access_code: string;
   };
   features: Partial<SurveyFeatures> & Record<string, any>;
+  experiment?: {
+    experimentKey: string;
+    variant: string;
+  };
   questions: RemoteSurveyQuestion[];
 }
 

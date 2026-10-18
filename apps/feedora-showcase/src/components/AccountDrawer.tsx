@@ -103,6 +103,8 @@ export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerPro
     setCopied(false);
   };
 
+  const [activeTab, setActiveTab] = useState<'standing' | 'history' | 'settings'>('standing');
+
   if (!authUser) {
     return null;
   }
@@ -116,45 +118,104 @@ export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerPro
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View style={styles.sheet}>
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-            {/* Header */}
-            <View style={styles.headerRow}>
-              <View style={styles.userHead}>
-                <Text style={styles.userAvatar}>{authUser.avatar}</Text>
-                <View>
-                  <Text style={styles.userName}>{authUser.displayName}</Text>
-                  <Text style={styles.userEmail}>{authUser.email}</Text>
-                </View>
+          {/* Header */}
+          <View style={styles.headerRow}>
+            <View style={styles.userHead}>
+              <Text style={styles.userAvatar}>{authUser.avatar}</Text>
+              <View>
+                <Text style={styles.userName}>{authUser.displayName}</Text>
+                <Text style={styles.userEmail}>{authUser.email}</Text>
               </View>
-              <Pressable style={styles.closeBtn} onPress={onClose}>
-                <Text style={styles.closeText}>✕</Text>
-              </Pressable>
             </View>
+            <Pressable style={styles.closeBtn} onPress={onClose}>
+              <Text style={styles.closeText}>✕</Text>
+            </Pressable>
+          </View>
 
-            {/* Role Badge & Org */}
-            <View style={styles.badgeBanner}>
-              <View
+          {/* Role Badge & Org */}
+          <View style={styles.badgeBanner}>
+            <View
+              style={[
+                styles.rolePill,
+                isCreator ? styles.rolePillCreator : styles.rolePillRespondent,
+              ]}
+            >
+              <Text
                 style={[
-                  styles.rolePill,
-                  isCreator ? styles.rolePillCreator : styles.rolePillRespondent,
+                  styles.rolePillText,
+                  isCreator ? styles.rolePillTextCreator : styles.rolePillTextRespondent,
                 ]}
               >
-                <Text
-                  style={[
-                    styles.rolePillText,
-                    isCreator ? styles.rolePillTextCreator : styles.rolePillTextRespondent,
-                  ]}
-                >
-                  {isCreator ? '🔬 FORM CREATOR' : '🎙️ FORM RESPONDENT'}
-                </Text>
-              </View>
-              <Text style={styles.orgText}>
-                {authUser.organizationName || 'University of Moratuwa'}
+                {isCreator ? '🔬 FORM CREATOR' : '🎙️ FORM RESPONDENT'}
               </Text>
             </View>
+            <Text style={styles.orgText}>
+              {authUser.organizationName || 'University of Moratuwa'}
+            </Text>
+          </View>
 
-            {/* Respondent Stats or Creator Stats */}
+          {/* Segmented Tab Navigation for spacious, uncluttered UX */}
+          <View style={styles.tabBar}>
             {!isCreator ? (
+              <>
+                <Pressable
+                  style={[styles.tabBtn, activeTab === 'standing' && styles.tabBtnActive]}
+                  onPress={() => setActiveTab('standing')}
+                >
+                  <Text style={[styles.tabBtnText, activeTab === 'standing' && styles.tabBtnTextActive]}>
+                    🏆 Standing
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.tabBtn, activeTab === 'history' && styles.tabBtnActive]}
+                  onPress={() => setActiveTab('history')}
+                >
+                  <Text style={[styles.tabBtnText, activeTab === 'history' && styles.tabBtnTextActive]}>
+                    📜 History
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.tabBtn, activeTab === 'settings' && styles.tabBtnActive]}
+                  onPress={() => setActiveTab('settings')}
+                >
+                  <Text style={[styles.tabBtnText, activeTab === 'settings' && styles.tabBtnTextActive]}>
+                    ⚙️ Settings
+                  </Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <Pressable
+                  style={[styles.tabBtn, activeTab === 'standing' && styles.tabBtnActive]}
+                  onPress={() => setActiveTab('standing')}
+                >
+                  <Text style={[styles.tabBtnText, activeTab === 'standing' && styles.tabBtnTextActive]}>
+                    🔬 Profile
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.tabBtn, activeTab === 'history' && styles.tabBtnActive]}
+                  onPress={() => setActiveTab('history')}
+                >
+                  <Text style={[styles.tabBtnText, activeTab === 'history' && styles.tabBtnTextActive]}>
+                    📥 Export
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.tabBtn, activeTab === 'settings' && styles.tabBtnActive]}
+                  onPress={() => setActiveTab('settings')}
+                >
+                  <Text style={[styles.tabBtnText, activeTab === 'settings' && styles.tabBtnTextActive]}>
+                    ⚡ Engine
+                  </Text>
+                </Pressable>
+              </>
+            )}
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+            {/* TAB 1: STANDING & BADGES (or Lab Profile for creator) */}
+            {activeTab === 'standing' && !isCreator && (
               <>
                 <View style={styles.statsCard}>
                   <View style={styles.statCol}>
@@ -171,7 +232,6 @@ export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerPro
                   </View>
                 </View>
 
-                {/* Badges & Rewards (Web Parity) */}
                 <View style={styles.section}>
                   <Text style={styles.sectionHeading}>BADGES & ACHIEVEMENTS</Text>
                   <Text style={styles.sectionSub}>
@@ -217,8 +277,24 @@ export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerPro
                     })}
                   </View>
                 </View>
+              </>
+            )}
 
-                {/* Contributions by Organization (mirrors her points_by_company) */}
+            {activeTab === 'standing' && isCreator && (
+              <View style={styles.creatorCard}>
+                <Text style={styles.creatorOrgTitle}>
+                  {authUser.organizationName || 'University of Moratuwa'}
+                </Text>
+                <Text style={styles.creatorOrgRole}>
+                  {authUser.userRoleInOrg || 'Principal Investigator'} · {authUser.country || 'Sri Lanka'}
+                </Text>
+                {authUser.bio ? <Text style={styles.creatorBio}>{authUser.bio}</Text> : null}
+              </View>
+            )}
+
+            {/* TAB 2: HISTORY & CONTRIBUTIONS (or Data Export for creator) */}
+            {activeTab === 'history' && !isCreator && (
+              <>
                 <View style={styles.section}>
                   <Text style={styles.sectionHeading}>CONTRIBUTIONS BY ORGANIZATION</Text>
                   <Text style={styles.sectionSub}>
@@ -242,7 +318,6 @@ export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerPro
                   )}
                 </View>
 
-                {/* Submissions & Survey History (mirrors her respondent_profile.html) */}
                 <View style={styles.section}>
                   <Text style={styles.sectionHeading}>RECENT SUBMISSIONS & RESPONSES</Text>
                   <Text style={styles.sectionSub}>
@@ -273,23 +348,59 @@ export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerPro
                   )}
                 </View>
               </>
-            ) : (
-              <View style={styles.creatorCard}>
-                <Text style={styles.creatorOrgTitle}>
-                  {authUser.organizationName || 'University of Moratuwa'}
+            )}
+
+            {activeTab === 'history' && isCreator && (
+              <View style={styles.section}>
+                <Text style={styles.sectionHeading}>SCHEMA EXPORT & MIGRATION</Text>
+                <Text style={styles.sectionSub}>
+                  Export data aligned 1:1 with Gihini's Django models for instant migration.
                 </Text>
-                <Text style={styles.creatorOrgRole}>
-                  {authUser.userRoleInOrg || 'Principal Investigator'} · {authUser.country || 'Sri Lanka'}
-                </Text>
-                {authUser.bio ? <Text style={styles.creatorBio}>{authUser.bio}</Text> : null}
+                <View style={styles.exportRow}>
+                  <Pressable style={styles.exportBtn} onPress={() => handleExport('json')}>
+                    <Text style={styles.exportBtnText}>📥 Export JSON</Text>
+                  </Pressable>
+                  <Pressable style={styles.exportBtn} onPress={() => handleExport('csv')}>
+                    <Text style={styles.exportBtnText}>📊 Export CSV</Text>
+                  </Pressable>
+                  <Pressable style={styles.exportBtn} onPress={() => handleExport('sql')}>
+                    <Text style={styles.exportBtnText}>🗄️ Export SQL</Text>
+                  </Pressable>
+                </View>
+
+                {exportResult && (
+                  <View style={styles.exportBox}>
+                    <View style={styles.exportHead}>
+                      <Text style={styles.exportFormat}>
+                        {exportResult.format.toUpperCase()} EXPORT ({exportResult.userCount} users)
+                      </Text>
+                      <Pressable
+                        onPress={() => {
+                          setCopied(true);
+                        }}
+                      >
+                        <Text style={styles.copyText}>{copied ? '✓ Saved' : 'Copy Preview'}</Text>
+                      </Pressable>
+                    </View>
+                    <TextInput
+                      style={styles.exportText}
+                      value={exportResult.content}
+                      multiline
+                      editable={false}
+                    />
+                  </View>
+                )}
               </View>
             )}
 
-            {/* Engine Switcher & Developer Tools — Creators / Admins Only */}
-            {isCreator && (
+            {/* TAB 3: SETTINGS & ENGINE */}
+            {activeTab === 'settings' && (
               <>
                 <View style={styles.section}>
-                  <Text style={styles.sectionHeading}>ACTIVE BACKEND ENGINE (CREATOR TOOLS)</Text>
+                  <Text style={styles.sectionHeading}>ACTIVE BACKEND ENGINE</Text>
+                  <Text style={styles.sectionSub}>
+                    Choose which backend ledger synchronizes voice points and responses.
+                  </Text>
                   <View style={styles.modeRow}>
                     <Pressable
                       style={[styles.modeBtn, authMode === 'local' && styles.modeBtnActive]}
@@ -318,65 +429,37 @@ export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerPro
                   </View>
                 </View>
 
-                {/* Data Migration & Export (Aligned with Gihini's schema) */}
-                <View style={styles.section}>
-                  <Text style={styles.sectionHeading}>SCHEMA EXPORT & MIGRATION</Text>
-                  <Text style={styles.sectionSub}>
-                    Export data aligned 1:1 with Gihini's Django models for instant migration.
-                  </Text>
-                  <View style={styles.exportRow}>
-                    <Pressable style={styles.exportBtn} onPress={() => handleExport('json')}>
-                      <Text style={styles.exportBtnText}>📥 Export JSON</Text>
-                    </Pressable>
-                    <Pressable style={styles.exportBtn} onPress={() => handleExport('csv')}>
-                      <Text style={styles.exportBtnText}>📊 Export CSV</Text>
-                    </Pressable>
-                    <Pressable style={styles.exportBtn} onPress={() => handleExport('sql')}>
-                      <Text style={styles.exportBtnText}>🗄️ Export SQL</Text>
-                    </Pressable>
-                  </View>
-
-                  {exportResult && (
-                    <View style={styles.exportBox}>
-                      <View style={styles.exportHead}>
-                        <Text style={styles.exportFormat}>
-                          {exportResult.format.toUpperCase()} EXPORT ({exportResult.userCount} users)
-                        </Text>
-                        <Pressable
-                          onPress={() => {
-                            setCopied(true);
-                          }}
-                        >
-                          <Text style={styles.copyText}>{copied ? '✓ Saved' : 'Copy Preview'}</Text>
-                        </Pressable>
-                      </View>
-                      <TextInput
-                        style={styles.exportText}
-                        value={exportResult.content}
-                        multiline
-                        editable={false}
-                      />
+                {!isCreator && (
+                  <View style={styles.section}>
+                    <Text style={styles.sectionHeading}>RESEARCH EXPORT</Text>
+                    <Text style={styles.sectionSub}>Export your personal research participation record.</Text>
+                    <View style={styles.exportRow}>
+                      <Pressable style={styles.exportBtn} onPress={() => handleExport('json')}>
+                        <Text style={styles.exportBtnText}>📥 Export JSON</Text>
+                      </Pressable>
+                      <Pressable style={styles.exportBtn} onPress={() => handleExport('csv')}>
+                        <Text style={styles.exportBtnText}>📊 Export CSV</Text>
+                      </Pressable>
                     </View>
-                  )}
+                  </View>
+                )}
+
+                <View style={styles.actionRow}>
+                  <Pressable
+                    style={styles.switchAccountBtn}
+                    onPress={() => {
+                      onClose();
+                      onOpenAuth();
+                    }}
+                  >
+                    <Text style={styles.switchAccountText}>Switch Account / Sign In</Text>
+                  </Pressable>
+                  <Pressable style={styles.signOutBtn} onPress={handleSignOut}>
+                    <Text style={styles.signOutText}>Sign Out</Text>
+                  </Pressable>
                 </View>
               </>
             )}
-
-            {/* Actions */}
-            <View style={styles.actionRow}>
-              <Pressable
-                style={styles.switchAccountBtn}
-                onPress={() => {
-                  onClose();
-                  onOpenAuth();
-                }}
-              >
-                <Text style={styles.switchAccountText}>Switch Account / Sign In</Text>
-              </Pressable>
-              <Pressable style={styles.signOutBtn} onPress={handleSignOut}>
-                <Text style={styles.signOutText}>Sign Out</Text>
-              </Pressable>
-            </View>
           </ScrollView>
         </View>
       </View>
@@ -447,6 +530,38 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: radii.small,
     marginBottom: 16,
+  },
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: colors.canvas,
+    borderRadius: radii.medium,
+    padding: 4,
+    marginBottom: 18,
+    gap: 4,
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.small,
+  },
+  tabBtnActive: {
+    backgroundColor: colors.paper,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  tabBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.muted,
+  },
+  tabBtnTextActive: {
+    color: colors.ink,
+    fontWeight: '800',
   },
   rolePill: {
     paddingVertical: 4,

@@ -61,6 +61,14 @@ export class FeedoraHttpTransportAdapter implements ITransportPort {
   async submitResponse(
     accessUuid: string,
     answersByCode: Record<string, unknown>,
+    options?: {
+      variant?: string;
+      platform?: string;
+      durationMs?: number;
+      dwellMs?: Record<string, number>;
+      qualityFlags?: string[];
+      consentVersion?: string;
+    },
   ): Promise<RemoteSubmitResult> {
     const meta = this.metaCache.get(accessUuid) ?? (await this.fetchSurveyMeta(accessUuid));
 
@@ -80,7 +88,15 @@ export class FeedoraHttpTransportAdapter implements ITransportPort {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ answers: answersPayload }),
+          body: JSON.stringify({
+            answers: answersPayload,
+            variant: options?.variant ?? 'gamified',
+            platform: options?.platform ?? 'mobile',
+            durationMs: options?.durationMs,
+            dwellMs: options?.dwellMs,
+            qualityFlags: options?.qualityFlags ?? [],
+            consentVersion: options?.consentVersion ?? '1.0',
+          }),
           credentials: 'include',
         },
       );

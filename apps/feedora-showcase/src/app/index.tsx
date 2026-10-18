@@ -41,7 +41,7 @@ import {
 import { FEEDORA_REMOTE, remoteEnabled } from '../config';
 import { pointsForAnswer } from '../domain/points';
 import { convertRemoteSurveyToSchema } from '../domain/surveySchemaConverter';
-import { colors, serifFont } from '../theme';
+import { colors, radii, serifFont } from '../theme';
 import type { ConstructReport } from '../domain/ports/measurementTypes';
 import { FEEDORA_BADGES, type BadgeDefinition } from '../domain/types';
 
@@ -83,6 +83,15 @@ export default function SurveyScreen() {
   const [unlockedBadge, setUnlockedBadge] = useState<BadgeDefinition | null>(null);
   const [voucherCopied, setVoucherCopied] = useState(false);
 
+  // Institution Selector & Research Arm State (Defects 1 & 15 UX)
+  const [isInstitutionPickerOpen, setIsInstitutionPickerOpen] = useState(false);
+  const [consented, setConsented] = useState(true);
+  const [researchArm, setResearchArm] = useState<'gamified' | 'control'>('gamified');
+  const surveyStartTimeRef = useRef(Date.now());
+
+  const experimentVariant = activeSurveyMeta?.experiment?.variant ?? researchArm;
+  const isGamified = experimentVariant === 'gamified';
+
   // AirDrop / QR Import Modal State
   const [isAirDropModalOpen, setIsAirDropModalOpen] = useState(false);
   const [airDropInput, setAirDropInput] = useState('');
@@ -102,6 +111,7 @@ export default function SurveyScreen() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleReward = (reward: RewardPayload) => {
+    if (!isGamified) return;
     const data = reward.data as Record<string, unknown>;
     const points = Number(data?.points ?? 0);
     setToast({ points, label: reward.title });
@@ -221,11 +231,13 @@ export default function SurveyScreen() {
     });
 
     let earned = 0;
-    for (const page of currentSchema.pages) {
-      for (const field of page.fields) {
-        const value = values[field.name];
-        if (value === undefined || value === null || value === '') continue;
-        earned += pointsForAnswer(FEEDORA_FEATURES, field.type, value);
+    if (isGamified) {
+      for (const page of currentSchema.pages) {
+        for (const field of page.fields) {
+          const value = values[field.name];
+          if (value === undefined || value === null || value === '') continue;
+          earned += pointsForAnswer(FEEDORA_FEATURES, field.type, value);
+        }
       }
     }
 
@@ -255,10 +267,11 @@ export default function SurveyScreen() {
       isCompletion: true,
     });
     const newCompleted = recordedProfile.surveysCompleted;
-    const newlyUnlocked =
-      FEEDORA_BADGES.find(
-        (b) => prevCompleted < b.minResponses && newCompleted >= b.minResponses,
-      ) || null;
+    const newlyUnlocked = isGamified
+      ? (FEEDORA_BADGES.find(
+          (b) => prevCompleted < b.minResponses && newCompleted >= b.minResponses,
+        ) || null)
+      : null;
     setUnlockedBadge(newlyUnlocked);
 
     await store.recordSurveyResponse({
@@ -274,7 +287,15 @@ export default function SurveyScreen() {
 
     if (remoteEnabled && !airDropSchema) {
       try {
-        const result = await transportPort.submitResponse(targetUuid, values);
+        const durationMs = Date.now() - surveyStartTimeRef.current;
+        const result = await transportPort.submitResponse(targetUuid, values, {
+          variant: experimentVariant,
+          platform: 'mobile',
+          durationMs,
+          dwellMs: audit.metrics ? { avgDwellMs: audit.metrics.averageDwellMs } : {},
+          qualityFlags: audit.flags,
+          consentVersion: '1.0',
+        });
         setSyncNote(
           result.ok
             ? "Synced directly to Gihini's Django research database."
@@ -353,10 +374,13 @@ export default function SurveyScreen() {
     setAuditNotice(null);
     setUnlockedBadge(null);
     setVoucherCopied(false);
+    surveyStartTimeRef.current = Date.now();
     setRunKey((k) => k + 1);
   };
 
   const isCover = currentPage?.role === 'cover';
+  const allEntities = entitiesList || entities;
+  const currentEntity = allEntities.find((e) => e.id === entityId) || allEntities[0];
 
   return (
     <AppPage>
@@ -402,6 +426,7 @@ export default function SurveyScreen() {
               <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
                 <Tag tone="violet">ACTIVE DJANGO SURVEY</Tag>
                 {activeSurveyMeta.survey.is_hmsam && <Tag tone="slate">HMSAM</Tag>}
+                <Tag tone={isGamified ? 'teal' : 'slate'}>ARM: {experimentVariant.toUpperCase()}</Tag>
               </View>
               <Text style={styles.activeSurveyTitle}>{activeSurveyMeta.survey.title}</Text>
               <Text style={styles.activeSurveyDetail}>
@@ -431,32 +456,61 @@ export default function SurveyScreen() {
         </Panel>
       )}
 
-      {/* Entity switcher */}
-      <Panel>
-        <SectionHeading
-          title="Contributing as"
-          detail="Pick the organization whose research you're supporting."
-        />
-        {(entitiesList || entities).map((entity) => (
-          <EntityCard
-            key={entity.id}
-            entity={entity}
-            memberCount={contributorCounts[entity.id] ?? 0}
-            selected={entity.id === entityId}
-            onSelect={() => joinEntity(entity.id)}
-          />
-        ))}
-
-        <View style={styles.airDropRow}>
-          <Text style={styles.airDropPrompt}>Have a survey QR code, access code, or offline file?</Text>
-          <ActionButton label="📲 Scan / Enter Code" secondary onPress={() => setIsAirDropModalOpen(true)} />
+      {/* Spacious Active Institution & Research Identity Banner */}
+      <Panel style={styles.institutionBannerPanel}>
+        <View style={styles.activeInstitutionRow}>
+          <Text style={styles.institutionEmoji}>
+            {currentEntity?.type === 'university' ? '🏛️' : currentEntity?.type === 'research' ? '🔬' : '🏢'}
+          </Text>
+          <View style={{ flex: 1, gap: 2 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.institutionEyebrow}>CONTRIBUTING AS</Text>
+              <Tag tone="teal">PARTNER LAB</Tag>
+            </View>
+            <Text style={styles.institutionName}>{currentEntity?.name || 'University of Moratuwa'}</Text>
+            <Text style={styles.institutionDetail}>
+              {contributorCounts[entityId] ?? 0} active members · {currentEntity?.tagline || currentEntity?.country || 'Academic Partner'}
+            </Text>
+          </View>
+          <Pressable
+            style={styles.switchInstitutionBtn}
+            onPress={() => setIsInstitutionPickerOpen((v) => !v)}
+          >
+            <Text style={styles.switchInstitutionText}>
+              {isInstitutionPickerOpen ? 'Done ▲' : 'Change ▾'}
+            </Text>
+          </Pressable>
         </View>
 
-        {profile && authUser ? (
+        {/* Collapsible Institution Selector */}
+        {isInstitutionPickerOpen && (
+          <View style={styles.institutionPickerAccordion}>
+            <Text style={styles.pickerSectionHeader}>SELECT RESEARCH INSTITUTION</Text>
+            {allEntities.map((entity) => (
+              <EntityCard
+                key={entity.id}
+                entity={entity}
+                memberCount={contributorCounts[entity.id] ?? 0}
+                selected={entity.id === entityId}
+                onSelect={() => {
+                  joinEntity(entity.id);
+                  setIsInstitutionPickerOpen(false);
+                }}
+              />
+            ))}
+          </View>
+        )}
+
+        <View style={styles.airDropCompactRow}>
+          <Text style={styles.airDropPrompt}>Have a survey QR code, access code, or offline file?</Text>
+          <ActionButton label="📲 Scan / Enter" secondary onPress={() => setIsAirDropModalOpen(true)} />
+        </View>
+
+        {isGamified && profile && authUser ? (
           <View style={styles.standingWrap}>
             <LevelProgress standing={profile.standing} totalPoints={profile.totalPoints} />
           </View>
-        ) : profile && !authUser && profile.totalPoints > 0 ? (
+        ) : isGamified && profile && !authUser && profile.totalPoints > 0 ? (
           <View style={styles.guestClaimCard}>
             <View style={styles.guestClaimRow}>
               <Text style={styles.guestClaimIcon}>💎</Text>
@@ -476,9 +530,31 @@ export default function SurveyScreen() {
         ) : null}
       </Panel>
 
+      {/* Academic Ethics / Participant Consent (Task 3.5 in Agent Brief) */}
+      {!consented && !submitted && (
+        <Panel style={styles.consentPanel}>
+          <View style={{ gap: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Tag tone="violet">ETHICS PROTOCOL · V1.0</Tag>
+              <Tag tone="slate">ANONYMOUS</Tag>
+            </View>
+            <Text style={styles.consentTitle}>HMSAM Study Participant Consent</Text>
+            <Text style={styles.consentDesc}>
+              You are invited to contribute data to our empirical study on hedonic-motivation systems. All responses are cryptographically pseudonymized, completely voluntary, and stored securely under academic research guidelines.
+            </Text>
+            <View style={{ marginTop: 8 }}>
+              <ActionButton
+                label="✓ I Agree & Begin Survey"
+                onPress={() => setConsented(true)}
+              />
+            </View>
+          </View>
+        </Panel>
+      )}
+
       {/* Main survey card */}
       <Panel>
-        {toast ? (
+        {isGamified && toast ? (
           <PointsToast
             points={toast.points}
             label={toast.label}
@@ -488,66 +564,78 @@ export default function SurveyScreen() {
 
         {submitted ? (
           <View style={styles.completedBox}>
-            {activeSurveyMeta?.features?.mascot?.enabled ? (
-              <View style={styles.mascotWrap}>
-                <Text style={styles.mascotAvatar}>🐱</Text>
-                <View style={styles.mascotBubble}>
-                  <Text style={styles.mascotBubbleText}>
-                    Thank you for your co-operation! Have a nice day! 🌟
-                  </Text>
-                </View>
+            {!isGamified ? (
+              <View style={styles.academicSuccessCard}>
+                <Text style={styles.academicSuccessIcon}>🎓</Text>
+                <Text style={styles.completedTitle}>Response Recorded (Control Arm)</Text>
+                <Text style={styles.completedBody}>
+                  Thank you! Your survey responses have been cryptographically pseudonymized and submitted to the HMSAM research study database.
+                </Text>
               </View>
             ) : (
-              <Text style={styles.completedEmoji}>🎉</Text>
-            )}
+              <>
+                {activeSurveyMeta?.features?.mascot?.enabled ? (
+                  <View style={styles.mascotWrap}>
+                    <Text style={styles.mascotAvatar}>🐱</Text>
+                    <View style={styles.mascotBubble}>
+                      <Text style={styles.mascotBubbleText}>
+                        Thank you for your co-operation! Have a nice day! 🌟
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  <Text style={styles.completedEmoji}>🎉</Text>
+                )}
 
-            <Text style={styles.completedTitle}>Response recorded</Text>
-            <Text style={styles.completedBody}>
-              Thank you! You earned{' '}
-              <Text style={{ fontWeight: '800', color: colors.ink }}>{totalEarned} voice points</Text>{' '}
-              for this submission. Your responses were scored and added to this session's dataset.
-            </Text>
+                <Text style={styles.completedTitle}>Response recorded</Text>
+                <Text style={styles.completedBody}>
+                  Thank you! You earned{' '}
+                  <Text style={{ fontWeight: '800', color: colors.ink }}>{totalEarned} voice points</Text>{' '}
+                  for this submission. Your responses were scored and added to this session's dataset.
+                </Text>
 
-            {unlockedBadge ? (
-              <View style={styles.badgeUnlockCard}>
-                <Text style={styles.badgeUnlockIcon}>{unlockedBadge.icon}</Text>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={styles.badgeUnlockTitle}>
-                    🎉 New Badge Unlocked: {unlockedBadge.label} Contributor!
-                  </Text>
-                  <Text style={styles.badgeUnlockRule}>{unlockedBadge.rule}</Text>
-                </View>
-              </View>
-            ) : null}
-
-            {Boolean(activeSurveyMeta?.features?.voucher?.enabled && activeSurveyMeta?.features?.voucher?.code) && (
-              <View style={styles.voucherCard}>
-                <Text style={styles.voucherHeading}>🎁 SURVEY REWARD VOUCHER</Text>
-                <Text style={styles.voucherSub}>Here's your reward voucher!:</Text>
-                <Text style={styles.voucherCode}>{String(activeSurveyMeta?.features?.voucher?.code || '')}</Text>
-                {activeSurveyMeta?.features?.voucher?.discount ? (
-                  <Text style={styles.voucherDiscount}>
-                    {String(activeSurveyMeta.features.voucher.discount)}% discount
-                  </Text>
+                {unlockedBadge ? (
+                  <View style={styles.badgeUnlockCard}>
+                    <Text style={styles.badgeUnlockIcon}>{unlockedBadge.icon}</Text>
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text style={styles.badgeUnlockTitle}>
+                        🎉 New Badge Unlocked: {unlockedBadge.label} Contributor!
+                      </Text>
+                      <Text style={styles.badgeUnlockRule}>{unlockedBadge.rule}</Text>
+                    </View>
+                  </View>
                 ) : null}
-                <Pressable
-                  style={styles.voucherCopyBtn}
-                  onPress={() => {
-                    const code = String(activeSurveyMeta?.features?.voucher?.code || '');
-                    try {
-                      if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                        navigator.clipboard.writeText(code);
-                      }
-                    } catch {}
-                    setVoucherCopied(true);
-                    setTimeout(() => setVoucherCopied(false), 2500);
-                  }}
-                >
-                  <Text style={styles.voucherCopyText}>
-                    {voucherCopied ? '✓ Copied to clipboard!' : 'Copy voucher code'}
-                  </Text>
-                </Pressable>
-              </View>
+
+                {Boolean(activeSurveyMeta?.features?.voucher?.enabled && activeSurveyMeta?.features?.voucher?.code) && (
+                  <View style={styles.voucherCard}>
+                    <Text style={styles.voucherHeading}>🎁 SURVEY REWARD VOUCHER</Text>
+                    <Text style={styles.voucherSub}>Here's your reward voucher!:</Text>
+                    <Text style={styles.voucherCode}>{String(activeSurveyMeta?.features?.voucher?.code || '')}</Text>
+                    {activeSurveyMeta?.features?.voucher?.discount ? (
+                      <Text style={styles.voucherDiscount}>
+                        {String(activeSurveyMeta.features.voucher.discount)}% discount
+                      </Text>
+                    ) : null}
+                    <Pressable
+                      style={styles.voucherCopyBtn}
+                      onPress={() => {
+                        const code = String(activeSurveyMeta?.features?.voucher?.code || '');
+                        try {
+                          if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                            navigator.clipboard.writeText(code);
+                          }
+                        } catch {}
+                        setVoucherCopied(true);
+                        setTimeout(() => setVoucherCopied(false), 2500);
+                      }}
+                    >
+                      <Text style={styles.voucherCopyText}>
+                        {voucherCopied ? '✓ Copied to clipboard!' : 'Copy voucher code'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                )}
+              </>
             )}
 
             {syncNote ? (
@@ -975,5 +1063,90 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '600',
+  },
+  institutionBannerPanel: {
+    padding: 16,
+  },
+  activeInstitutionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  institutionEmoji: {
+    fontSize: 32,
+  },
+  institutionEyebrow: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: colors.faint,
+    letterSpacing: 0.8,
+  },
+  institutionName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.ink,
+    fontFamily: serifFont,
+  },
+  institutionDetail: {
+    fontSize: 11,
+    color: colors.muted,
+  },
+  switchInstitutionBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: colors.slateSoft,
+    borderRadius: radii.small,
+  },
+  switchInstitutionText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  institutionPickerAccordion: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+    gap: 6,
+  },
+  pickerSectionHeader: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    color: colors.faint,
+    marginBottom: 4,
+  },
+  airDropCompactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+  },
+  consentPanel: {
+    backgroundColor: '#FAF5FF',
+    borderColor: '#E9D5FF',
+    borderWidth: 1.5,
+  },
+  consentTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#6B21A8',
+    fontFamily: serifFont,
+  },
+  consentDesc: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#581C87',
+  },
+  academicSuccessCard: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    gap: 8,
+  },
+  academicSuccessIcon: {
+    fontSize: 44,
   },
 });
