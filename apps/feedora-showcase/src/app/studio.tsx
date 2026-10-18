@@ -12,7 +12,6 @@ import {
   View,
   Image,
 } from 'react-native';
-import QRCode from 'qrcode';
 import { router } from 'expo-router';
 import {
   MultiStepFormManager,
@@ -596,34 +595,10 @@ export default function StudioScreen() {
   }, []);
 
   const updateQrImage = useCallback(
-    async (mode: 'link' | 'offline', code: string, slug: string) => {
-      setGeneratingQr(true);
-      try {
-        if (mode === 'link') {
-          const targetUrl = getShareLink(code);
-          const url = await QRCode.toDataURL(targetUrl, {
-            width: 260,
-            margin: 2,
-            errorCorrectionLevel: 'M',
-            color: { dark: '#0F172A', light: '#FFFFFF' },
-          });
-          setAirDropQrDataUrl(url);
-        } else {
-          const url = await QRCode.toDataURL(slug, {
-            width: 280,
-            margin: 2,
-            errorCorrectionLevel: 'L',
-            color: { dark: '#0F172A', light: '#FFFFFF' },
-          });
-          setAirDropQrDataUrl(url);
-        }
-      } catch (err) {
-        console.error('Failed to generate QR code', err);
-      } finally {
-        setGeneratingQr(false);
-      }
+    (_mode: 'link' | 'offline', _code: string, _slug: string) => {
+      // Dynamic rendering handled reactively by NativeQrView
     },
-    [getShareLink],
+    [],
   );
 
   const handleOpenAirDrop = (customMeta?: RemoteSurveyMeta, customCode?: string) => {
