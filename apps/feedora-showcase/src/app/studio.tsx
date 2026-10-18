@@ -46,6 +46,8 @@ import type {
   StudioSurvey,
 } from '../domain/ports/ICreatorStudioPort';
 import type { RemoteSurveyMeta } from '../domain/ports/transportTypes';
+import { getSharableSurveyUrl } from '../config';
+import { NativeQrView } from '../components/NativeQrView';
 import { colors, radii, serifFont } from '../theme';
 
 // ---------------------------------------------------------------------------
@@ -207,10 +209,20 @@ const QUESTION_TYPES = [
 ] as const;
 
 export default function StudioScreen() {
-  const { authUser, studioPort, openAuthModal, openAccountDrawer, openSurvey, openAirDropSurvey } = useFeedora();
+  const {
+    authUser,
+    effectiveRole,
+    switchPreviewRole,
+    openWelcome,
+    studioPort,
+    openAuthModal,
+    openAccountDrawer,
+    openSurvey,
+    openAirDropSurvey,
+  } = useFeedora();
 
   const isCreatorOrStaff =
-    authUser?.role === 'creator' || Boolean(authUser?.isStaff);
+    effectiveRole === 'creator' || Boolean(authUser?.isStaff);
 
   const [activeTab, setActiveTab] = useState<'surveys' | 'builder'>('surveys');
   const [surveys, setSurveys] = useState<StudioSurvey[]>([]);
@@ -580,14 +592,7 @@ export default function StudioScreen() {
   }), [formTitle, formDesc, isHmsam, questions]);
 
   const getShareLink = useCallback((code: string) => {
-    const host =
-      typeof window !== 'undefined' && window.location?.hostname
-        ? window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-          ? '10.10.66.76'
-          : window.location.hostname
-        : '10.10.66.76';
-    const port = typeof window !== 'undefined' && window.location?.port ? window.location.port : '8081';
-    return `http://${host}:${port}/?code=${encodeURIComponent(code || 'PREVIEW')}`;
+    return getSharableSurveyUrl(code).webUrl;
   }, []);
 
   const updateQrImage = useCallback(
@@ -635,6 +640,92 @@ export default function StudioScreen() {
     setCopiedLink(false);
     updateQrImage('link', code, manifest);
   };
+
+  if (!isCreatorOrStaff) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.appBar}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.appBarBrand}>Feedora Studio</Text>
+            <Text style={styles.appBarSubtitle}>🔒 Creator Suite Restricted</Text>
+          </View>
+          <Pressable style={styles.avatarBtn} onPress={openAccountDrawer}>
+            <Text style={styles.avatarEmoji}>{authUser?.avatar || '🎓'}</Text>
+          </Pressable>
+        </View>
+
+        <View style={{ flex: 1, padding: 24, alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+          <View
+            style={{
+              width: 72,
+              height: 72,
+              borderRadius: 36,
+              backgroundColor: '#FAF5FF',
+              justifyContent: 'center',
+              alignItems: 'center',
+              borderWidth: 2,
+              borderColor: '#E9D5FF',
+            }}
+          >
+            <Text style={{ fontSize: 36 }}>🔬🔒</Text>
+          </View>
+          <Text
+            style={{
+              fontSize: 22,
+              fontWeight: '800',
+              color: colors.ink,
+              fontFamily: serifFont,
+              textAlign: 'center',
+            }}
+          >
+            Researcher Studio Restricted
+          </Text>
+          <Text
+            style={{
+              fontSize: 13,
+              color: colors.muted,
+              textAlign: 'center',
+              lineHeight: 20,
+              maxWidth: 380,
+            }}
+          >
+            Creator Studio is exclusively available for research creators, faculty, and PIs. As a Respondent, you can participate in active surveys on the Survey tab.
+          </Text>
+          {authUser?.role === 'creator' ? (
+            <Pressable
+              style={{
+                backgroundColor: colors.primary,
+                borderRadius: radii.medium,
+                paddingHorizontal: 20,
+                paddingVertical: 12,
+                marginTop: 8,
+              }}
+              onPress={() => switchPreviewRole(null)}
+            >
+              <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>
+                Exit Respondent Preview & Return to Creator Suite 🔬
+              </Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              style={{
+                backgroundColor: colors.primary,
+                borderRadius: radii.medium,
+                paddingHorizontal: 20,
+                paddingVertical: 12,
+                marginTop: 8,
+              }}
+              onPress={openWelcome}
+            >
+              <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>
+                Sign In as Research Creator →
+              </Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -1411,16 +1502,8 @@ export default function StudioScreen() {
                 </Text>
 
                 <View style={styles.qrDisplayBox}>
-                  {generatingQr || !airDropQrDataUrl ? (
-                    <ActivityIndicator size="large" color={colors.primary} style={{ height: 200 }} />
-                  ) : (
-                    <Image
-                      source={{ uri: airDropQrDataUrl }}
-                      style={styles.qrImage}
-                      resizeMode="contain"
-                    />
-                  )}
-                  <Text style={styles.qrHintText}>Scan with phone camera · No app download required</Text>
+                  <NativeQrView value={getShareLink(airDropAccessCode)} size={220} />
+                  <Text style={styles.qrHintText}>Scan with phone camera or Expo Go · Launches instantly</Text>
                 </View>
 
                 {/* Prominent Access Code Display */}
@@ -1445,7 +1528,7 @@ export default function StudioScreen() {
                   </Pressable>
                 </View>
 
-                {/* Shareable URL Row */}
+                {/* Shareable Universal Web URL Row */}
                 <View style={styles.urlCard}>
                   <Text style={styles.urlText} numberOfLines={1}>
                     {getShareLink(airDropAccessCode)}
@@ -1466,6 +1549,28 @@ export default function StudioScreen() {
                     </Text>
                   </Pressable>
                 </View>
+
+                {/* Shareable Expo Go Deep Link Row */}
+                <View style={[styles.urlCard, { marginTop: 6 }]}>
+                  <Text style={styles.urlText} numberOfLines={1}>
+                    {getSharableSurveyUrl(airDropAccessCode).appDeepLink}
+                  </Text>
+                  <Pressable
+                    style={styles.copyUrlBtn}
+                    onPress={() => {
+                      const link = getSharableSurveyUrl(airDropAccessCode).appDeepLink;
+                      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                        navigator.clipboard.writeText(link);
+                      }
+                      setCopiedLink(true);
+                      setTimeout(() => setCopiedLink(false), 2000);
+                    }}
+                  >
+                    <Text style={styles.copyUrlBtnText}>
+                      {copiedLink ? '✓ Link Copied!' : '📲 Copy Expo Go Link'}
+                    </Text>
+                  </Pressable>
+                </View>
               </>
             ) : (
               <>
@@ -1474,15 +1579,7 @@ export default function StudioScreen() {
                 </Text>
 
                 <View style={styles.qrDisplayBox}>
-                  {generatingQr || !airDropQrDataUrl ? (
-                    <ActivityIndicator size="large" color={colors.primary} style={{ height: 200 }} />
-                  ) : (
-                    <Image
-                      source={{ uri: airDropQrDataUrl }}
-                      style={styles.qrImage}
-                      resizeMode="contain"
-                    />
-                  )}
+                  <NativeQrView value={airDropSlug} size={220} />
                   <Text style={styles.qrHintText}>High-density offline barcode · 100% network free</Text>
                 </View>
 

@@ -10,7 +10,7 @@ import {
   Platform,
   UIManager,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -112,6 +112,16 @@ export default function SurveyScreen() {
   const [airDropInput, setAirDropInput] = useState('');
   const [airDropError, setAirDropError] = useState<string | null>(null);
   const [importingLoading, setImportingLoading] = useState(false);
+
+  // Universal Link & QR Deep Linking Auto-Loader
+  const params = useLocalSearchParams<{ code?: string; survey?: string }>();
+  useEffect(() => {
+    if (params.code) {
+      openSurveyByCode(params.code).catch(() => {});
+    } else if (params.survey) {
+      openSurvey(params.survey).catch(() => {});
+    }
+  }, [params.code, params.survey]);
 
   const currentSchema = useMemo(() => {
     if (airDropSchema) {
@@ -555,9 +565,22 @@ export default function SurveyScreen() {
           </View>
         )}
 
-        <View style={styles.airDropCompactRow}>
-          <Text style={styles.airDropPrompt}>Have a survey QR code, access code, or offline file?</Text>
-          <ActionButton label="📲 Scan / Enter" secondary onPress={() => setIsAirDropModalOpen(true)} />
+        <View style={styles.scanCodeCard}>
+          <View style={styles.scanCodeHeader}>
+            <Text style={styles.scanCodeIcon}>📲</Text>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={styles.scanCodeTitle}>Join Study by QR or Code</Text>
+              <Text style={styles.scanCodeSub}>
+                Scan a researcher's QR code or enter a 6-character access code (e.g. HMSAM1)
+              </Text>
+            </View>
+          </View>
+          <Pressable
+            style={styles.scanCodeBtn}
+            onPress={() => setIsAirDropModalOpen(true)}
+          >
+            <Text style={styles.scanCodeBtnText}>📲 Open Code & Link Scanner</Text>
+          </Pressable>
         </View>
 
         {isGamified && profile && authUser ? (
@@ -1170,14 +1193,43 @@ const styles = StyleSheet.create({
     color: colors.faint,
     marginBottom: 4,
   },
-  airDropCompactRow: {
+  scanCodeCard: {
+    backgroundColor: '#FAF5FF',
+    borderWidth: 1.5,
+    borderColor: '#E9D5FF',
+    borderRadius: radii.medium,
+    padding: 14,
+    marginTop: 14,
+    gap: 12,
+  },
+  scanCodeHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 12,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
+    gap: 12,
+  },
+  scanCodeIcon: {
+    fontSize: 26,
+  },
+  scanCodeTitle: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: colors.ink,
+  },
+  scanCodeSub: {
+    fontSize: 11.5,
+    lineHeight: 16,
+    color: colors.muted,
+  },
+  scanCodeBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: radii.small,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  scanCodeBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontWeight: '800',
   },
   consentPanel: {
     backgroundColor: '#FAF5FF',

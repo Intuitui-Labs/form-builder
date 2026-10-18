@@ -23,7 +23,7 @@ interface AccountDrawerProps {
 }
 
 export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerProps) {
-  const { authUser, authMode, setAuthMode, profile, refresh, outboxPort } = useFeedora();
+  const { authUser, authMode, setAuthMode, profile, refresh, outboxPort, previewRole, switchPreviewRole } = useFeedora();
   const [exportResult, setExportResult] = useState<ExportDataPayload | null>(null);
   const [copied, setCopied] = useState(false);
   const [historyItems, setHistoryItems] = useState<SubmissionHistoryRecord[]>([]);
@@ -407,6 +407,50 @@ export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerPro
             {/* TAB 3: SETTINGS & ENGINE */}
             {activeTab === 'settings' && (
               <>
+                {isCreator ? (
+                  <View style={styles.section}>
+                    <Text style={styles.sectionHeading}>PERSONA & PREVIEW MODE</Text>
+                    <Text style={styles.sectionSub}>
+                      Switch between your Researcher Creator Suite and Respondent survey preview.
+                    </Text>
+                    <View style={styles.modeRow}>
+                      <Pressable
+                        style={[styles.modeBtn, previewRole !== 'respondent' && styles.modeBtnActive]}
+                        onPress={() => switchPreviewRole(null)}
+                      >
+                        <Text
+                          style={[
+                            styles.modeBtnText,
+                            previewRole !== 'respondent' && styles.modeBtnTextActive,
+                          ]}
+                        >
+                          🔬 Creator Suite
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.modeBtn, previewRole === 'respondent' && styles.modeBtnActive]}
+                        onPress={() => switchPreviewRole('respondent')}
+                      >
+                        <Text
+                          style={[
+                            styles.modeBtnText,
+                            previewRole === 'respondent' && styles.modeBtnTextActive,
+                          ]}
+                        >
+                          👁️ Respondent Preview
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.section}>
+                    <Text style={styles.sectionHeading}>RESEARCH ROLE</Text>
+                    <Text style={styles.sectionSub}>
+                      You are contributing as an academic survey Respondent. To author surveys, sign in with a Creator account.
+                    </Text>
+                  </View>
+                )}
+
                 <View style={styles.section}>
                   <Text style={styles.sectionHeading}>ACTIVE BACKEND ENGINE</Text>
                   <Text style={styles.sectionSub}>

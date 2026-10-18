@@ -3,15 +3,15 @@ import { useFeedora } from '../feedora';
 import { colors, radii } from '../theme';
 
 export function AccountBar() {
-  const { authUser, authMode, profile, openAccountDrawer, openAuthModal } = useFeedora();
+  const { authUser, authMode, profile, openAccountDrawer, openWelcome, effectiveRole, previewRole } = useFeedora();
 
   if (!authUser) {
     return (
       <View style={styles.container}>
         <View style={styles.guestRow}>
-          <Text style={styles.guestText}>Browsing as Guest · Choose auth engine</Text>
-          <Pressable style={styles.signInBtn} onPress={openAuthModal}>
-            <Text style={styles.signInBtnText}>Sign In / Register</Text>
+          <Text style={styles.guestText}>🎓 Guest Respondent · Voice Points active</Text>
+          <Pressable style={styles.signInBtn} onPress={openWelcome}>
+            <Text style={styles.signInBtnText}>Sign In / Register →</Text>
           </Pressable>
         </View>
       </View>
@@ -19,6 +19,7 @@ export function AccountBar() {
   }
 
   const isCreator = authUser.role === 'creator';
+  const isPreviewing = isCreator && previewRole === 'respondent';
   const engineLabel =
     authMode === 'local' ? '⚡ SQLite' : authMode === 'supabase' ? '☁️ Supabase' : '🐍 Django';
   const displayedPoints = Math.max(profile?.totalPoints ?? 0, authUser.totalPoints ?? 0);
@@ -44,7 +45,7 @@ export function AccountBar() {
                   isCreator ? styles.rolePillTextCreator : styles.rolePillTextRespondent,
                 ]}
               >
-                {isCreator ? 'CREATOR' : 'RESPONDENT'}
+                {isPreviewing ? '👁️ PREVIEWING' : isCreator ? '🔬 CREATOR' : '🎓 RESPONDENT'}
               </Text>
             </View>
           </View>

@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
   type ReactNode,
 } from 'react';
@@ -17,10 +18,11 @@ import { CompositeAuthAdapter } from './adapters/CompositeAuthAdapter';
 import { DjangoStudioAdapter } from './adapters/DjangoStudioAdapter';
 import { FEEDORA_REMOTE } from './config';
 import type { ContributionProfile } from './domain/types';
-import type { AuthMode, AuthUser } from './domain/authTypes';
+import type { AuthMode, AuthUser, UserRole } from './domain/authTypes';
 import type { ICreatorStudioPort } from './domain/ports/ICreatorStudioPort';
 import { AuthModal } from './components/AuthModal';
 import { AccountDrawer } from './components/AccountDrawer';
+import { WelcomeScreen } from './components/WelcomeScreen';
 
 import {
   DefaultPsychometricAuditor,
@@ -107,6 +109,13 @@ interface FeedoraContextValue {
   openAuthModal: () => void;
   openAccountDrawer: () => void;
   studioPort: ICreatorStudioPort;
+  // Role & Preview Mode
+  previewRole: UserRole | null;
+  switchPreviewRole: (role: UserRole | null) => void;
+  effectiveRole: UserRole;
+  isWelcomeOpen: boolean;
+  openWelcome: () => void;
+  closeWelcome: () => void;
   // Dynamic Survey Selection
   activeSurveyUuid: string | null;
   activeSurveyMeta: RemoteSurveyMeta | null;
@@ -133,6 +142,25 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
   const [authMode, setAuthModeState] = useState<AuthMode>(() => authPort.mode);
   const [isAuthModalOpen, setAuthModalOpen] = useState(false);
   const [isAccountDrawerOpen, setAccountDrawerOpen] = useState(false);
+  const [isWelcomeOpen, setIsWelcomeOpen] = useState(false);
+  const [previewRole, setPreviewRole] = useState<UserRole | null>(null);
+
+  const effectiveRole: UserRole = useMemo(() => {
+    if (authUser?.role === 'creator') {
+      return previewRole === 'respondent' ? 'respondent' : 'creator';
+    }
+    return 'respondent';
+  }, [authUser, previewRole]);
+
+  const switchPreviewRole = useCallback((newRole: UserRole | null) => {
+    if (authUser?.role === 'creator') {
+      setPreviewRole(newRole);
+      setVersion((v) => v + 1);
+    }
+  }, [authUser]);
+
+  const openWelcome = useCallback(() => setIsWelcomeOpen(true), []);
+  const closeWelcome = useCallback(() => setIsWelcomeOpen(false), []);
 
   useEffect(() => {
     // Bootstrap auth session from server cookie
@@ -379,6 +407,12 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
         setAuthMode,
         openAuthModal,
         openAccountDrawer,
+        previewRole,
+        switchPreviewRole,
+        effectiveRole,
+        isWelcomeOpen,
+        openWelcome,
+        closeWelcome,
         studioPort,
         activeSurveyUuid,
         activeSurveyMeta,
@@ -392,10 +426,11 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
     >
       {children}
       <AuthModal visible={isAuthModalOpen} onClose={() => setAuthModalOpen(false)} />
+      <WelcomeScreen visible={isWelcomeOpen} onClose={closeWelcome} />
       <AccountDrawer
         visible={isAccountDrawerOpen}
         onClose={() => setAccountDrawerOpen(false)}
-        onOpenAuth={() => setAuthModalOpen(true)}
+        onOpenAuth={() => setIsWelcomeOpen(true)}
       />
     </FeedoraContext.Provider>
   );

@@ -10,7 +10,7 @@ import { Platform } from 'react-native';
  * refers to the device itself. We provide automatic LAN fallback.
  */
 const DJANGO_PORT = 8000;
-const DEV_MACHINE_LAN_IP = '10.10.66.76'; // Local machine LAN address for physical phone / Expo Go
+const DEV_MACHINE_LAN_IP = '10.99.171.54'; // Local machine LAN address for physical phone / Expo Go
 
 export function getDjangoBaseUrl(): string {
   if (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_API_BASE_URL) {
@@ -32,3 +32,31 @@ export const FEEDORA_REMOTE = {
 } as const;
 
 export const remoteEnabled = FEEDORA_REMOTE.surveyUuid.length > 0;
+
+export function getDevMachineLanIp(): string {
+  return DEV_MACHINE_LAN_IP;
+}
+
+export function getSharableSurveyUrl(accessCode: string, surveyUuid?: string): {
+  webUrl: string;
+  appDeepLink: string;
+  backendUrl: string;
+} {
+  const host =
+    typeof window !== 'undefined' &&
+    window.location?.hostname &&
+    window.location.hostname !== 'localhost' &&
+    window.location.hostname !== '127.0.0.1'
+      ? window.location.hostname
+      : DEV_MACHINE_LAN_IP;
+  const port =
+    typeof window !== 'undefined' && window.location?.port ? window.location.port : '8081';
+  const cleanCode = encodeURIComponent(accessCode || 'HMSAM1');
+
+  return {
+    webUrl: `http://${host}:${port}/?code=${cleanCode}`,
+    appDeepLink: `exp://${host}:${port}/--/?code=${cleanCode}`,
+    backendUrl: `${getDjangoBaseUrl()}/surveys/code/${cleanCode}/`,
+  };
+}
+
