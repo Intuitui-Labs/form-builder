@@ -530,20 +530,19 @@ export default function SurveyScreen() {
         <Panel style={styles.activeSurveyBanner}>
           <View style={styles.activeSurveyRow}>
             <View style={{ flex: 1, gap: 4 }}>
-              <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-                <Tag tone="violet">ACTIVE DJANGO SURVEY</Tag>
-                {activeSurveyMeta.survey.is_hmsam && <Tag tone="slate">HMSAM</Tag>}
-                <Tag tone={isGamified ? 'teal' : 'slate'}>ARM: {experimentVariant.toUpperCase()}</Tag>
+              <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                <Tag tone="violet">🔬 {activeSurveyMeta.survey.is_hmsam ? 'HMSAM' : 'STUDY'}</Tag>
+                <Tag tone={isGamified ? 'teal' : 'slate'}>{isGamified ? '🎮 Gamified' : '⚖️ Control'}</Tag>
                 {activeSurveyMeta.features?.rewards?.mode === 'variable' && (
-                  <Tag tone="gold">🎲 VARIABLE</Tag>
+                  <Tag tone="gold">🎲 Variable</Tag>
                 )}
                 {activeSurveyMeta.features?.negative_reinforcement?.enabled && (
-                  <Tag tone="teal">🛡️ RANK SHIELD</Tag>
+                  <Tag tone="teal">🛡️ Shield</Tag>
                 )}
               </View>
               <Text style={styles.activeSurveyTitle}>{activeSurveyMeta.survey.title}</Text>
               <Text style={styles.activeSurveyDetail}>
-                Code: {activeSurveyMeta.survey.access_code || activeSurveyMeta.survey.uuid.slice(0, 8)} · {activeSurveyMeta.questions.length} Questions
+                Code: {activeSurveyMeta.survey.access_code || activeSurveyMeta.survey.uuid.slice(0, 8)} · {activeSurveyMeta.questions.length} items
               </Text>
             </View>
             <View style={{ alignSelf: 'center' }}>
@@ -563,8 +562,8 @@ export default function SurveyScreen() {
       {authUser?.role === 'creator' && (
         <Panel style={styles.creatorBanner}>
           <SectionHeading
-            title="🔬 Form Creator Dashboard"
-            detail={`Logged in as ${authUser.displayName} (${authUser.organizationName || 'Organization'}). Below is your active HMSAM research instrument. Live respondent answers update your Cronbach's α report on the Insights tab.`}
+            title="🔬 Researcher Studio"
+            detail={`Logged in as ${authUser.displayName}. Live responses update psychometric reliability (Cronbach's α) on Insights.`}
           />
         </Panel>
       )}
@@ -635,15 +634,15 @@ export default function SurveyScreen() {
             <Text style={styles.guestClaimIcon}>💎</Text>
             <View style={{ flex: 1 }}>
               <Text style={styles.guestClaimTitle}>
-                {profile.totalPoints} Unsaved Voice Points (Guest Session)
+                {profile.totalPoints} Unsaved Points
               </Text>
               <Text style={styles.guestClaimDesc}>
-                Your responses earned voice points! Sign in to permanently save your rank.
+                Sign in to save your rank on your institution's leaderboard.
               </Text>
             </View>
           </View>
           <View style={{ marginTop: 8 }}>
-            <ActionButton label="Sign In to Claim Points →" onPress={openAuthModal} />
+            <ActionButton label="Sign In to Claim →" compact onPress={openAuthModal} />
           </View>
         </Panel>
       ) : null}
@@ -653,16 +652,16 @@ export default function SurveyScreen() {
         <Panel style={styles.consentPanel}>
           <View style={{ gap: 6 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Tag tone="violet">ETHICS PROTOCOL · V1.0</Tag>
+              <Tag tone="violet">ETHICS · V1.0</Tag>
               <Tag tone="slate">ANONYMOUS</Tag>
             </View>
-            <Text style={styles.consentTitle}>HMSAM Study Participant Consent</Text>
+            <Text style={styles.consentTitle}>Participant Consent</Text>
             <Text style={styles.consentDesc}>
-              You are invited to contribute data to our empirical study on hedonic-motivation systems. All responses are cryptographically pseudonymized, completely voluntary, and stored securely under academic research guidelines.
+              Voluntary, pseudonymized research on hedonic motivation adoption. Responses are securely analyzed under academic guidelines.
             </Text>
             <View style={{ marginTop: 8 }}>
               <ActionButton
-                label="✓ I Agree & Begin Survey"
+                label="✓ Agree & Begin"
                 onPress={() => setConsented(true)}
               />
             </View>
@@ -837,19 +836,19 @@ export default function SurveyScreen() {
                 <View style={styles.livePointsBadge}>
                   <Text style={styles.livePointsEmoji}>💎</Text>
                   <Text style={styles.livePointsNum}>{liveEarnedPoints}</Text>
-                  <Text style={styles.livePointsLabel}>pts earned</Text>
+                  <Text style={styles.livePointsLabel}>pts</Text>
                 </View>
                 <View style={styles.livePerksRow}>
                   {activeSurveyMeta?.features?.rewards?.mode === 'variable' && (
-                    <Tag tone="gold">🎲 VARIABLE MULTIPLIER</Tag>
+                    <Tag tone="gold">🎲 2x Boost</Tag>
                   )}
                   {activeSurveyMeta?.features?.negative_reinforcement?.enabled && (
-                    <Tag tone="teal">🛡️ STREAK SHIELD</Tag>
+                    <Tag tone="teal">🛡️ Shield</Tag>
                   )}
                   {liveAnsweredCount >= 3 ? (
-                    <Tag tone="teal">🔥 1.25x STREAK</Tag>
+                    <Tag tone="teal">🔥 Streak</Tag>
                   ) : (
-                    <Tag tone="slate">⚡ LIVE POINTS</Tag>
+                    <Tag tone="slate">⚡ Active</Tag>
                   )}
                 </View>
               </View>

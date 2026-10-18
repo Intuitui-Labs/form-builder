@@ -255,18 +255,14 @@ export function SurveyCatalogModal({
                     onPress={() => handleSurveyClick(item)}
                   >
                     <View style={styles.cardHeader}>
-                      <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
                         <Tag tone={item.isHmsam ? 'violet' : item.kind === 'quiz' ? 'gold' : 'teal'}>
-                          {item.kind ? item.kind.toUpperCase() : 'SURVEY'}
+                          {item.isHmsam ? 'HMSAM' : item.kind ? item.kind.toUpperCase() : 'STUDY'}
                         </Tag>
-                        <Tag tone={item.isHmsam ? 'violet' : 'teal'}>
-                          {item.isHmsam ? 'HMSAM 38-ITEMS' : `${item.questionsCount} QUESTIONS`}
-                        </Tag>
-                        <Tag tone="slate">CODE: {item.accessCode}</Tag>
-                        {isActive && <Tag tone="gold">ACTIVE NOW</Tag>}
+                        {isActive && <Tag tone="gold">🌟 ACTIVE</Tag>}
                         {isCompleted && (
                           <Tag tone={item.accessPolicy?.allowRedo ? 'teal' : 'slate'}>
-                            {item.accessPolicy?.allowRedo ? '✓ DONE (RETAKE ALLOWED)' : '✓ LOCKED (COMPLETED)'}
+                            {item.accessPolicy?.allowRedo ? '✓ RETAKE' : '✓ DONE'}
                           </Tag>
                         )}
                       </View>
