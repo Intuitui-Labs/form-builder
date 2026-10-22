@@ -8,12 +8,11 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import type { AuthMode, ExportDataPayload } from '../domain/authTypes';
+import type { ExportDataPayload } from '../domain/authTypes';
 import { standingFor } from '../domain/levels';
-import { authPort, store, useFeedora } from '../feedora';
+import { store, useFeedora } from '../feedora';
 import { FEEDORA_REMOTE } from '../config';
 import type { SubmissionHistoryRecord } from '../domain/ports/IEntityStore';
-import { FEEDORA_BADGES } from '../domain/types';
 import { colors, radii, serifFont } from '../theme';
 
 interface AccountDrawerProps {
@@ -23,7 +22,7 @@ interface AccountDrawerProps {
 }
 
 export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerProps) {
-  const { authUser, authMode, setAuthMode, profile, refresh, outboxPort, previewRole, switchPreviewRole } = useFeedora();
+  const { authUser, profile, refresh, outboxPort, previewRole, switchPreviewRole, entitiesList, entityId, signOut, exportUserData } = useFeedora();
   const [exportResult, setExportResult] = useState<ExportDataPayload | null>(null);
   const [copied, setCopied] = useState(false);
   const [historyItems, setHistoryItems] = useState<SubmissionHistoryRecord[]>([]);
@@ -44,11 +43,13 @@ export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerPro
     if (!visible || !authUser) return;
     let isMounted = true;
 
-    if (authMode === 'django') {
-      fetch(`${FEEDORA_REMOTE.baseUrl}/api/v1/respondent/history/`, {
+    fetch(`${FEEDORA_REMOTE.baseUrl}/api/v1/respondent/history/`, {
         credentials: 'include',
       })
-        .then((res) => res.json())
+        .then((res) => {
+          if (!res.ok) throw new Error(`Respondent history failed with HTTP ${res.status}`);
+          return res.json();
+        })
         .then((data) => {
           if (!isMounted || !data.ok) return;
           if (Array.isArray(data.history)) {
@@ -74,8 +75,6 @@ export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerPro
           }
         })
         .catch(() => {});
-    }
-
     store.listUserHistory(String(authUser.id)).then((items) => {
       if (!isMounted) return;
       if (items.length > 0) {
@@ -100,16 +99,16 @@ export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerPro
     return () => {
       isMounted = false;
     };
-  }, [visible, authUser, authMode]);
+  }, [visible, authUser]);
 
   const handleSignOut = async () => {
-    await authPort.signOut();
+    await signOut();
     refresh();
     onClose();
   };
 
   const handleExport = async (format: 'json' | 'csv' | 'sql') => {
-    const res = await authPort.exportData(format);
+    const res = await exportUserData(format);
     setExportResult(res);
     setCopied(false);
   };
@@ -121,9 +120,12 @@ export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerPro
   }
 
   const isCreator = authUser.role === 'creator';
-  const displayedPoints = Math.max(profile?.totalPoints ?? 0, authUser.totalPoints ?? 0);
+  const organizationName = entitiesList.find((entity) => entity.id === entityId)?.name
+    ?? authUser.organizationName
+    ?? 'Organization';
+  const displayedPoints = profile?.totalPoints ?? 0;
   const standing = standingFor(displayedPoints);
-  const surveysCount = profile?.surveysCompleted ?? authUser.surveysCompleted ?? 0;
+  const surveysCount = profile?.surveysCompleted ?? 0;
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -146,7 +148,7 @@ export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerPro
           {/* Role Badge & Org */}
           <View style={styles.badgeBanner}>
             <Text style={styles.orgText}>
-              {authUser.organizationName || 'University of Moratuwa'} · {isCreator ? 'Researcher' : 'Respondent'}
+              {organizationName} · {isCreator ? 'Researcher' : 'Respondent'}
             </Text>
           </View>
 
@@ -213,74 +215,39 @@ export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerPro
             {/* TAB 1: STANDING & BADGES (or Lab Profile for creator) */}
             {activeTab === 'standing' && !isCreator && (
               <>
-                <View style={styles.statsCard}>
-                  <View style={styles.statCol}>
-                    <Text style={styles.statNum}>{displayedPoints.toLocaleString()}</Text>
-                    <Text style={styles.statLbl}>Voice Points</Text>
+                {profile && (surveysCount > 0 || displayedPoints > 0) ? (
+                  <View style={styles.statsCard}>
+                    <View style={styles.statCol}>
+                      <Text style={styles.statNum}>{displayedPoints.toLocaleString()}</Text>
+                      <Text style={styles.statLbl}>Organization points</Text>
+                    </View>
+                    <View style={styles.statCol}>
+                      <Text style={styles.statNum}>{standing.title}</Text>
+                      <Text style={styles.statLbl}>Standing</Text>
+                    </View>
+                    <View style={styles.statCol}>
+                      <Text style={styles.statNum}>{surveysCount}</Text>
+                      <Text style={styles.statLbl}>Completed</Text>
+                    </View>
                   </View>
-                  <View style={styles.statCol}>
-                    <Text style={styles.statNum}>{standing.title}</Text>
-                    <Text style={styles.statLbl}>Level</Text>
+                ) : (
+                  <View style={styles.emptyHistoryBox}>
+                    <Text style={styles.emptyHistoryText}>Your organization standing will appear after your first completed survey.</Text>
                   </View>
-                  <View style={styles.statCol}>
-                    <Text style={styles.statNum}>{surveysCount}</Text>
-                    <Text style={styles.statLbl}>Surveys</Text>
-                  </View>
-                </View>
-
-                <View style={styles.section}>
-                  <Text style={styles.sectionHeading}>BADGES & ACHIEVEMENTS</Text>
-                  <View style={styles.badgesRow}>
-                    {FEEDORA_BADGES.map((b) => {
-                      const isUnlocked = surveysCount >= b.minResponses;
-                      return (
-                        <View
-                          key={b.id}
-                          style={[
-                            styles.badgeCard,
-                            isUnlocked ? styles.badgeCardUnlocked : styles.badgeCardLocked,
-                          ]}
-                        >
-                          <Text style={[styles.badgeIcon, !isUnlocked && styles.badgeIconLocked]}>
-                            {b.icon}
-                          </Text>
-                          <Text style={styles.badgeName}>{b.label}</Text>
-                          <Text style={styles.badgeRule}>{b.rule}</Text>
-                          <View
-                            style={[
-                              styles.badgeStatusPill,
-                              isUnlocked
-                                ? styles.badgeStatusPillUnlocked
-                                : styles.badgeStatusPillLocked,
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.badgeStatusText,
-                                isUnlocked
-                                  ? styles.badgeStatusTextUnlocked
-                                  : styles.badgeStatusTextLocked,
-                              ]}
-                            >
-                              {isUnlocked ? '✓ UNLOCKED' : `${surveysCount}/${b.minResponses}`}
-                            </Text>
-                          </View>
-                        </View>
-                      );
-                    })}
-                  </View>
-                </View>
+                )}
               </>
             )}
 
             {activeTab === 'standing' && isCreator && (
               <View style={styles.creatorCard}>
                 <Text style={styles.creatorOrgTitle}>
-                  {authUser.organizationName || 'University of Moratuwa'}
+                  {organizationName}
                 </Text>
-                <Text style={styles.creatorOrgRole}>
-                  {authUser.userRoleInOrg || 'Principal Investigator'} · {authUser.country || 'Sri Lanka'}
-                </Text>
+                {[authUser.userRoleInOrg, authUser.country].filter(Boolean).length > 0 ? (
+                  <Text style={styles.creatorOrgRole}>
+                    {[authUser.userRoleInOrg, authUser.country].filter(Boolean).join(' · ')}
+                  </Text>
+                ) : null}
                 {authUser.bio ? <Text style={styles.creatorBio}>{authUser.bio}</Text> : null}
               </View>
             )}
@@ -432,39 +399,6 @@ export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerPro
                     </Text>
                   </View>
                 )}
-
-                <View style={styles.section}>
-                  <Text style={styles.sectionHeading}>ACTIVE BACKEND ENGINE</Text>
-                  <Text style={styles.sectionSub}>
-                    Choose which backend ledger synchronizes voice points and responses.
-                  </Text>
-                  <View style={styles.modeRow}>
-                    <Pressable
-                      style={[styles.modeBtn, authMode === 'local' && styles.modeBtnActive]}
-                      onPress={() => setAuthMode('local')}
-                    >
-                      <Text style={[styles.modeBtnText, authMode === 'local' && styles.modeBtnTextActive]}>
-                        ⚡ Local SQLite
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      style={[styles.modeBtn, authMode === 'supabase' && styles.modeBtnActive]}
-                      onPress={() => setAuthMode('supabase')}
-                    >
-                      <Text style={[styles.modeBtnText, authMode === 'supabase' && styles.modeBtnTextActive]}>
-                        ☁️ Supabase
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      style={[styles.modeBtn, authMode === 'django' && styles.modeBtnActive]}
-                      onPress={() => setAuthMode('django')}
-                    >
-                      <Text style={[styles.modeBtnText, authMode === 'django' && styles.modeBtnTextActive]}>
-                        🐍 Django API
-                      </Text>
-                    </Pressable>
-                  </View>
-                </View>
 
                 <View style={styles.section}>
                   <Text style={styles.sectionHeading}>OFFLINE OUTBOX & SYNC</Text>

@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { FEEDORA_ENTITIES, FEEDORA_FEATURES } from './fixtures/seed';
 import { createStore } from './adapters/store';
 import { FeedoraContributionAdapter } from './adapters/FeedoraContributionAdapter';
@@ -14,11 +15,22 @@ import { FeedoraProgressAdapter } from './adapters/FeedoraProgressAdapter';
 import { FeedoraRewardAdapter } from './adapters/FeedoraRewardAdapter';
 import { FeedoraHttpTransportAdapter } from './adapters/FeedoraHttpTransportAdapter';
 import { HmsamMeasurementAdapter } from './adapters/HmsamMeasurementAdapter';
-import { CompositeAuthAdapter } from './adapters/CompositeAuthAdapter';
+import { LocalAuthAdapter } from './adapters/LocalAuthAdapter';
+import { SupabaseAuthAdapter } from './adapters/SupabaseAuthAdapter';
+import { DjangoAuthAdapter } from './adapters/DjangoAuthAdapter';
+import { selectAuthPorts } from './authComposition';
 import { DjangoStudioAdapter } from './adapters/DjangoStudioAdapter';
-import { FEEDORA_REMOTE } from './config';
+import { FEEDORA_AUTH_PROVIDER, FEEDORA_REMOTE } from './config';
 import type { ContributionProfile } from './domain/types';
-import type { AuthMode, AuthUser, UserRole } from './domain/authTypes';
+import { canonicalEntityId, uniqueEntities } from './domain/entities';
+import type {
+  AuthUser,
+  ExportDataPayload,
+  SignInInput,
+  SignUpCreatorInput,
+  SignUpRespondentInput,
+  UserRole,
+} from './domain/authTypes';
 import type { ICreatorStudioPort } from './domain/ports/ICreatorStudioPort';
 
 
@@ -31,16 +43,13 @@ import {
 
 // ---------------------------------------------------------------------------
 // Composition root: the app owns its adapters. The engine stays headless.
-// Supports 3 live engines:
-//   1. Local SQLite / In-Memory (Zero-config offline-first)
-//   2. Supabase Cloud (PostgreSQL + RLS + Schema-aligned auth)
-//   3. Django API (Direct HTTP to gihini-research backend)
+// One configured identity provider is selected here; research transport remains independent.
 // ---------------------------------------------------------------------------
 export const store = createStore();
-export const authPort = new CompositeAuthAdapter({
-  store,
-  djangoBaseUrl: FEEDORA_REMOTE.baseUrl,
-  initialMode: 'django',
+const { identity: authPort, dataExport: userDataExportPort } = selectAuthPorts(FEEDORA_AUTH_PROVIDER, {
+  local: () => Object.assign(new LocalAuthAdapter(store), { mode: 'local' as const }),
+  supabase: () => Object.assign(new SupabaseAuthAdapter(), { mode: 'supabase' as const }),
+  django: () => Object.assign(new DjangoAuthAdapter(FEEDORA_REMOTE.baseUrl), { mode: 'django' as const }),
 });
 export const studioPort = new DjangoStudioAdapter(FEEDORA_REMOTE.baseUrl);
 export const contributionPort = new FeedoraContributionAdapter(store);
@@ -51,7 +60,7 @@ export const transportPort = new FeedoraHttpTransportAdapter(FEEDORA_REMOTE.base
 
 export const psychometricAuditor = new DefaultPsychometricAuditor();
 export const qrAirDropPort = new QrAirDropAdapter();
-export const entities = FEEDORA_ENTITIES;
+export const entities = uniqueEntities(FEEDORA_ENTITIES);
 
 export const outboxPort = new OfflineOutboxQueue<Record<string, unknown>>({
   storageKey: 'feedora_mobile_outbox_queue',
@@ -93,6 +102,7 @@ interface FeedoraContextValue {
   entityId: string;
   setEntityId: (id: string) => void;
   entitiesList: typeof FEEDORA_ENTITIES;
+  membershipIds: string[];
   joinEntity: (id: string) => Promise<void>;
   fetchEntitySurveys: (id: string) => Promise<any[]>;
   profile: ContributionProfile | null;
@@ -102,11 +112,14 @@ interface FeedoraContextValue {
   refresh: () => void;
   // Auth state & actions
   authUser: AuthUser | null;
-  authMode: AuthMode;
-  setAuthMode: (mode: AuthMode) => void;
-  isAuthModalOpen: boolean;
+  guestUserId: string;
+  signIn: (input: SignInInput) => Promise<AuthUser>;
+  signUpRespondent: (input: SignUpRespondentInput) => Promise<AuthUser>;
+  signUpCreator: (input: SignUpCreatorInput) => Promise<AuthUser>;
+  signOut: () => Promise<void>;
+  exportUserData: (format: 'json' | 'csv' | 'sql') => Promise<ExportDataPayload>;
+  restoreAuthSession: () => Promise<AuthUser | null>;
   openAuthModal: () => void;
-  closeAuthModal: () => void;
   isAccountDrawerOpen: boolean;
   openAccountDrawer: () => void;
   closeAccountDrawer: () => void;
@@ -133,23 +146,24 @@ interface FeedoraContextValue {
 const FeedoraContext = createContext<FeedoraContextValue | null>(null);
 
 export function FeedoraProvider({ children }: { children: ReactNode }) {
-  const [entitiesList, setEntitiesList] = useState(FEEDORA_ENTITIES);
+  const [entitiesList, setEntitiesList] = useState(entities);
+  const [membershipIds, setMembershipIds] = useState<string[]>([]);
   const [entityId, setEntityId] = useState(entities[0]!.id);
   const [profile, setProfile] = useState<ContributionProfile | null>(null);
   const [contributorCounts, setContributorCounts] = useState<Record<string, number>>({});
   const [responses, setResponses] = useState<Record<string, number>[]>([]);
   const [submissionHistory, setSubmissionHistory] = useState<import('./domain/ports/IEntityStore').SubmissionHistoryRecord[]>([]);
   const [version, setVersion] = useState(0);
+  const [selectionHydratedFor, setSelectionHydratedFor] = useState<string | null>(null);
+  const [guestUserId, setGuestUserId] = useState<string | null>(null);
 
   // Auth management
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => authPort.getCurrentUser());
-  const [authMode, setAuthModeState] = useState<AuthMode>(() => authPort.mode);
-  const [isAuthModalOpen, setAuthModalOpen] = useState(false);
   const [isAccountDrawerOpen, setAccountDrawerOpen] = useState(false);
   const [isWelcomeOpen, setIsWelcomeOpen] = useState(() => !authPort.getCurrentUser());
   const [previewRole, setPreviewRole] = useState<UserRole | null>(null);
+  const selectionOwnerId = authUser?.id ?? guestUserId ?? 'guest-user';
 
-  const closeAuthModal = useCallback(() => setAuthModalOpen(false), []);
   const closeAccountDrawer = useCallback(() => setAccountDrawerOpen(false), []);
 
   const effectiveRole: UserRole = useMemo(() => {
@@ -170,16 +184,34 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
   const closeWelcome = useCallback(() => setIsWelcomeOpen(false), []);
 
   useEffect(() => {
+    let cancelled = false;
+    const initializeGuestIdentity = async () => {
+      let identity = await store.getItem('feedora_guest_identity');
+      if (!identity) {
+        identity = `guest-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+        await store.claimGuestIdentity('guest-user', identity);
+        await store.setItem('feedora_guest_identity', identity);
+      }
+      if (!cancelled) setGuestUserId(identity);
+    };
+
+    initializeGuestIdentity().catch(() => {
+      if (!cancelled) setGuestUserId(`guest-${Date.now().toString(36)}`);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     // Bootstrap auth session from server cookie
-    authPort.init();
+    void authPort.init().catch((error) => {
+      console.warn('Failed to restore the configured identity session:', error);
+    });
 
     // Listen to auth changes
     const unsubAuth = authPort.onAuthStateChange((user) => {
       setAuthUser(user);
-      setAuthModeState(authPort.mode);
-      if (user?.organizationId) {
-        setEntityId(user.organizationId);
-      }
       setVersion((v) => v + 1);
     });
 
@@ -191,36 +223,61 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const setAuthMode = useCallback((mode: AuthMode) => {
-    authPort.setMode(mode);
-    setAuthModeState(mode);
-    setAuthUser(authPort.getCurrentUser());
-    setVersion((v) => v + 1);
-  }, []);
+  useEffect(() => {
+    let cancelled = false;
+    store.getItem(`feedora:selected-entity:${selectionOwnerId}`)
+      .then((savedEntityId) => {
+        if (cancelled) return;
+        if (savedEntityId) setEntityId(canonicalEntityId(savedEntityId));
+        setSelectionHydratedFor(selectionOwnerId);
+      })
+      .catch(() => {
+        if (!cancelled) setSelectionHydratedFor(selectionOwnerId);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [guestUserId, selectionOwnerId]);
 
-  const openAuthModal = useCallback(() => setAuthModalOpen(true), []);
+  useEffect(() => {
+    if (!guestUserId) return;
+    if (selectionHydratedFor !== selectionOwnerId) return;
+    void store.setItem(`feedora:selected-entity:${selectionOwnerId}`, entityId);
+  }, [entityId, guestUserId, selectionHydratedFor, selectionOwnerId]);
+
+  const signIn = useCallback((input: SignInInput) => authPort.signIn(input), []);
+  const signUpRespondent = useCallback((input: SignUpRespondentInput) => authPort.signUpRespondent(input), []);
+  const signUpCreator = useCallback((input: SignUpCreatorInput) => authPort.signUpCreator(input), []);
+  const signOut = useCallback(() => authPort.signOut(), []);
+  const exportUserData = useCallback((format: 'json' | 'csv' | 'sql') => userDataExportPort.exportData(format), []);
+  const restoreAuthSession = useCallback(() => authPort.init(), []);
+
+  const openAuthModal = useCallback(() => setIsWelcomeOpen(true), []);
   const openAccountDrawer = useCallback(() => setAccountDrawerOpen(true), []);
 
   useEffect(() => {
+    if (!guestUserId) return;
     let cancelled = false;
-    const currentUserId = authUser?.id || 'guest-user';
-    const currentName = authUser?.displayName || 'Contributor';
-    const currentAvatar = authUser?.avatar || '🎙️';
+    const currentUserId = authUser?.id || guestUserId;
 
-    contributionPort
-      .join(currentUserId, currentName, currentAvatar, entityId, authUser?.totalPoints ?? 0)
-      .then((joined) => {
-        if (!cancelled) setProfile(joined);
-      });
+    (async () => {
+      if (authUser && authUser.id !== guestUserId) {
+        await store.claimGuestIdentity(guestUserId, String(authUser.id));
+        if (!cancelled) setVersion((v) => v + 1);
+      }
+      const existing = await contributionPort.getProfile(currentUserId, entityId);
+      if (!cancelled) setProfile(existing);
+    })().catch((error) => {
+      console.warn('Failed to initialize organization profile:', error);
+    });
 
-    // Fetch live entities from Django when in django mode
-    if (authMode === 'django') {
-      fetch(`${FEEDORA_REMOTE.baseUrl}/api/v1/entities/`, { credentials: 'include' })
+    // Public organization catalog uses the research API, independent of identity.
+    fetch(`${FEEDORA_REMOTE.baseUrl}/api/v1/entities/`, { credentials: 'include' })
         .then((res) => res.json())
         .then((data) => {
           if (cancelled || !data.ok || !Array.isArray(data.entities)) return;
-          const liveEntities = data.entities.map((e: any) => ({
-            id: String(e.entityId || `org-${e.id}`),
+          const liveEntities = uniqueEntities(data.entities.map((e: any) => ({
+            id: canonicalEntityId(String(e.entityId || `org-${e.id}`)),
             name: String(e.name),
             type: (e.type || 'university') as any,
             slug: String(e.name).toLowerCase().replace(/[^a-z0-9]+/g, '-'),
@@ -228,48 +285,50 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
             tagline: e.userRole ? `${e.userRole} · ${e.country || 'Campus research'}` : 'Research organization',
             userRole: e.userRole,
             country: e.country,
-          }));
+          })));
           if (liveEntities.length > 0) {
             setEntitiesList(liveEntities);
           }
         })
         .catch(() => {});
-    }
-
-    // Automatically claim & migrate points and form history earned as guest when user signs in
-    if (authUser && authUser.id !== 'guest-user') {
-      (async () => {
-        const guestProfile = await contributionPort.getProfile('guest-user', entityId);
-        if (guestProfile && guestProfile.totalPoints > 0) {
-          const userProf = await contributionPort.getProfile(authUser.id, entityId);
-          if (userProf) {
-            userProf.totalPoints += guestProfile.totalPoints;
-            userProf.surveysCompleted += guestProfile.surveysCompleted;
-            userProf.standing = contributionPort.standingFor(userProf.totalPoints);
-            await store.putProfile(userProf);
-          }
-          guestProfile.totalPoints = 0;
-          guestProfile.surveysCompleted = 0;
-          guestProfile.standing = contributionPort.standingFor(0);
-          await store.putProfile(guestProfile);
-          if ('reassignUserHistory' in store) {
-            await (store as any).reassignUserHistory('guest-user', String(authUser.id));
-          }
-          if (!cancelled) {
-            setVersion((v) => v + 1);
-          }
-        }
-      })();
-    }
 
     return () => {
       cancelled = true;
     };
-  }, [entityId, authUser, authMode]);
+  }, [entityId, authUser, guestUserId]);
 
   useEffect(() => {
     let cancelled = false;
-    const currentUserId = authUser?.id || 'guest-user';
+    if (!authUser || authUser.id === 'guest-user') {
+      setMembershipIds([]);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    fetch(`${FEEDORA_REMOTE.baseUrl}/api/v1/entities/mine/`, { credentials: 'include' })
+      .then((res) => {
+        if (!res.ok) throw new Error(`Organization catalog failed with HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((data) => {
+        if (!cancelled && data.ok && Array.isArray(data.entities)) {
+          setMembershipIds(data.entities.map((item: { entityId: string }) => canonicalEntityId(item.entityId)));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setMembershipIds([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser?.id]);
+
+  useEffect(() => {
+    if (!guestUserId) return;
+    let cancelled = false;
+    const currentUserId = authUser?.id || guestUserId;
 
     (async () => {
       const counts: Record<string, number> = {};
@@ -277,12 +336,28 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
         counts[entity.id] = (await contributionPort.listContributors(entity.id)).length;
       }
       const loadedResponses = await store.listResponses();
-      const refreshedProfile = await contributionPort.getProfile(currentUserId, entityId);
+      let refreshedProfile = await contributionPort.getProfile(currentUserId, entityId);
+      if (authUser) {
+        try {
+          const leaderboard = await transportPort.fetchLeaderboard(entityId);
+          const remoteProfile = leaderboard.contributors.find(
+            (item) => item.userId === `user-${authUser.id}`,
+          );
+          if (remoteProfile) {
+            refreshedProfile = {
+              ...remoteProfile,
+              updatedAt: new Date().toISOString(),
+            };
+          }
+        } catch {
+          // Keep locally persisted, completed offline progress available.
+        }
+      }
       const localHistory = await store.listUserHistory(currentUserId);
 
-      // In Django mode, also fetch remote history if authenticated
+      // The configured Django identity uses its own server session cookie.
       let mergedHistory = [...localHistory];
-      if (authMode === 'django' && authUser && authUser.id !== 'guest-user') {
+      if (authUser) {
         try {
           const res = await fetch(`${FEEDORA_REMOTE.baseUrl}/api/v1/respondent/history/`, {
             credentials: 'include',
@@ -293,7 +368,7 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
             for (const item of hData.history) {
               if (item.surveyUuid && !seenIds.has(item.surveyUuid)) {
                 mergedHistory.push({
-                  entityId,
+                  entityId: item.entityId ? canonicalEntityId(String(item.entityId)) : entityId,
                   surveyId: item.surveyUuid,
                   surveyTitle: item.surveyTitle,
                   userId: currentUserId,
@@ -314,18 +389,16 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
       setResponses(loadedResponses);
       setSubmissionHistory(mergedHistory);
       if (refreshedProfile) {
-        if (authUser?.totalPoints && authUser.totalPoints > refreshedProfile.totalPoints) {
-          refreshedProfile.totalPoints = authUser.totalPoints;
-          refreshedProfile.standing = contributionPort.standingFor(authUser.totalPoints);
-        }
         setProfile(refreshedProfile);
+      } else {
+        setProfile(null);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [version, entityId, authUser]);
+  }, [version, entityId, authUser, guestUserId]);
 
   const refresh = useCallback(() => {
     setVersion((v) => v + 1);
@@ -389,27 +462,33 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
 
   const joinEntity = useCallback(
     async (targetEntityId: string) => {
-      setEntityId(targetEntityId);
-      if (authMode === 'django' && authUser) {
-        const numericId = targetEntityId.replace('org-', '');
+      const selectedEntityId = canonicalEntityId(targetEntityId);
+      setEntityId(selectedEntityId);
+      await store.setItem(`feedora:selected-entity:${selectionOwnerId}`, selectedEntityId);
+      if (authUser && /^org-\d+$/.test(selectedEntityId)) {
+        const numericId = selectedEntityId.replace('org-', '');
         try {
-          await fetch(`${FEEDORA_REMOTE.baseUrl}/api/v1/entities/${numericId}/join/`, {
+          const response = await fetch(`${FEEDORA_REMOTE.baseUrl}/api/v1/entities/${numericId}/join/`, {
             method: 'POST',
             credentials: 'include',
           });
+          if (response.ok) {
+            setMembershipIds((current) => current.includes(selectedEntityId)
+              ? current
+              : [...current, selectedEntityId]);
+          }
         } catch {
           // offline/local fallback
         }
       }
       setVersion((v) => v + 1);
     },
-    [authMode, authUser],
+    [authUser, selectionOwnerId],
   );
 
   const fetchEntitySurveys = useCallback(
     async (targetEntityId: string): Promise<any[]> => {
-      if (authMode === 'django') {
-        const numericId = targetEntityId.replace('org-', '');
+      const numericId = targetEntityId.replace('org-', '');
         try {
           const res = await fetch(`${FEEDORA_REMOTE.baseUrl}/api/v1/entities/${numericId}/surveys/`, {
             credentials: 'include',
@@ -421,10 +500,9 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
         } catch {
           // offline fallback
         }
-      }
       return [];
     },
-    [authMode],
+    [],
   );
 
   return (
@@ -433,6 +511,7 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
         entityId,
         setEntityId,
         entitiesList,
+        membershipIds,
         joinEntity,
         fetchEntitySurveys,
         profile,
@@ -441,11 +520,14 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
         version,
         refresh,
         authUser,
-        authMode,
-        setAuthMode,
-        isAuthModalOpen,
+        guestUserId: guestUserId ?? 'guest-user',
+        signIn,
+        signUpRespondent,
+        signUpCreator,
+        signOut,
+        exportUserData,
+        restoreAuthSession,
         openAuthModal,
-        closeAuthModal,
         isAccountDrawerOpen,
         openAccountDrawer,
         closeAccountDrawer,
@@ -467,10 +549,40 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
         submissionHistory,
       }}
     >
-      {children}
+      {guestUserId ? children : <StartupScreen />}
     </FeedoraContext.Provider>
   );
 }
+
+function StartupScreen() {
+  return (
+    <View style={startupStyles.container}>
+      <ActivityIndicator color="#1F4D8F" size="large" />
+      <Text style={startupStyles.title}>Starting Feedora</Text>
+      <Text style={startupStyles.message}>Loading your saved progress…</Text>
+    </View>
+  );
+}
+
+const startupStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F7F5F0',
+    gap: 12,
+    padding: 24,
+  },
+  title: {
+    color: '#172033',
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  message: {
+    color: '#687386',
+    fontSize: 14,
+  },
+});
 
 export function useFeedora(): FeedoraContextValue {
   const context = useContext(FeedoraContext);

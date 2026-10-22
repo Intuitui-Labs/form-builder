@@ -21,26 +21,25 @@ import {
   BatteryEngine,
   type FormAccessPolicy,
 } from '@intuitui-labs/form-builder-engine';
+import type { AssessmentState } from '@intuitui-labs/form-builder-engine/assessment';
 import { StudioShareCodec } from '@intuitui-labs/form-builder-engine/studio';
 import {
   ActionButton,
   AppPage,
   BrandHeader,
-  EntityCard,
   FieldControl,
   LevelProgress,
   Panel,
-  PointsToast,
+  SessionFeedback,
   SectionHeading,
-  StepMeter,
   Tag,
 } from '../components/FeedoraUi';
 import { AccountBar } from '../components/AccountBar';
 import { SurveyCatalogModal } from '../components/SurveyCatalogModal';
+import { OrganizationPicker } from '../components/OrganizationPicker';
 import { HMSAM_FORM_SCHEMA, HMSAM_ITEM_COUNT } from '../fixtures/hmsam';
 import { FEEDORA_FEATURES } from '../fixtures/seed';
 import {
-  authPort,
   contributionPort,
   entities,
   measurementPort,
@@ -56,9 +55,10 @@ import {
 import { FEEDORA_REMOTE, remoteEnabled } from '../config';
 import { pointsForAnswer } from '../domain/points';
 import { convertRemoteSurveyToSchema } from '../domain/surveySchemaConverter';
-import { colors, radii, serifFont } from '../theme';
+import { colors, radii, sansFont, serifFont } from '../theme';
 import type { ConstructReport } from '../domain/ports/measurementTypes';
 import { FEEDORA_BADGES, type BadgeDefinition } from '../domain/types';
+import { ScopedDraftStorage } from '../adapters/ScopedDraftStorage';
 
 type Values = Record<string, unknown>;
 
@@ -73,12 +73,12 @@ class CollectingRewardNotifier implements IFeedbackNotifierPort {
 export default function SurveyScreen() {
   const {
     entityId,
-    setEntityId,
     entitiesList,
+    membershipIds,
     joinEntity,
     profile,
-    contributorCounts,
     authUser,
+    guestUserId,
     activeSurveyUuid,
     activeSurveyMeta,
     airDropSchema,
@@ -87,6 +87,7 @@ export default function SurveyScreen() {
     openAirDropSurvey,
     resetToDefaultSurvey,
     openAuthModal,
+    restoreAuthSession,
     outboxPort,
     submissionHistory,
   } = useFeedora();
@@ -96,12 +97,12 @@ export default function SurveyScreen() {
   const [totalEarned, setTotalEarned] = useState(0);
   const [lastConstructs, setLastConstructs] = useState<ConstructReport[] | null>(null);
   const [syncNote, setSyncNote] = useState<string | null>(null);
+  const [hasRespondentDraft, setHasRespondentDraft] = useState(false);
   const [auditNotice, setAuditNotice] = useState<string | null>(null);
   const [unlockedBadge, setUnlockedBadge] = useState<BadgeDefinition | null>(null);
   const [voucherCopied, setVoucherCopied] = useState(false);
 
   // Institution Selector & Research Arm State (Defects 1 & 15 UX)
-  const [isInstitutionPickerOpen, setIsInstitutionPickerOpen] = useState(false);
   const [consented, setConsented] = useState(true);
   const [researchArm, setResearchArm] = useState<'gamified' | 'control'>('gamified');
   const surveyStartTimeRef = useRef(Date.now());
@@ -138,20 +139,27 @@ export default function SurveyScreen() {
 
   const completedSurveyIds = useMemo(() => {
     const set = new Set<string | number>();
-    if (profile?.surveysCompleted && profile.surveysCompleted > 0) {
-      set.add(1);
-      set.add('1');
-      set.add('hmsam');
-      set.add(HMSAM_FORM_SCHEMA.id);
-    }
     for (const record of submissionHistory) {
-      if (record.surveyId) {
+      if (record.entityId === entityId && record.surveyId) {
         set.add(record.surveyId);
         set.add(String(record.surveyId));
       }
     }
     return set;
-  }, [profile?.surveysCompleted, submissionHistory]);
+  }, [entityId, submissionHistory]);
+
+  const currentSurveyAttemptCount = useMemo(() => {
+    const surveyKeys = new Set([
+      currentSchema.id,
+      activeSurveyMeta?.survey?.uuid,
+      activeSurveyMeta?.survey?.id,
+      activeSurveyMeta?.survey?.id !== undefined ? String(activeSurveyMeta.survey.id) : undefined,
+      currentSchema.id === HMSAM_FORM_SCHEMA.id ? 'hmsam' : undefined,
+    ].filter((value): value is string | number => value !== undefined && value !== null).map(String));
+    return submissionHistory.filter(
+      (record) => record.entityId === entityId && surveyKeys.has(String(record.surveyId)),
+    ).length;
+  }, [submissionHistory, entityId, currentSchema.id, activeSurveyMeta]);
 
   const isSurveyCompleted = useMemo(() => {
     const curId = currentSchema.id;
@@ -164,6 +172,73 @@ export default function SurveyScreen() {
       (curId === HMSAM_FORM_SCHEMA.id && completedSurveyIds.has('hmsam'))
     );
   }, [currentSchema.id, activeSurveyMeta, completedSurveyIds]);
+
+  const activeAccessEvaluation = useMemo(() => {
+    const surveyKeys = new Set([
+      currentSchema.id,
+      activeSurveyMeta?.survey?.uuid,
+      activeSurveyMeta?.survey?.id,
+      activeSurveyMeta?.survey?.id !== undefined ? String(activeSurveyMeta.survey.id) : undefined,
+      currentSchema.id === HMSAM_FORM_SCHEMA.id ? 'hmsam' : undefined,
+    ].filter((value): value is string | number => value !== undefined && value !== null).map(String));
+    const prerequisiteIds = Array.isArray(activeSurveyMeta?.features?.prerequisiteSurveyUuids)
+      ? activeSurveyMeta.features.prerequisiteSurveyUuids.map(String)
+      : [];
+    const scopedHistory = submissionHistory.filter((record) => record.entityId === entityId);
+    const history = scopedHistory
+      .map((record) => {
+        const isCurrentSurvey = surveyKeys.has(String(record.surveyId));
+        return {
+          formId: isCurrentSurvey ? currentSchema.id : String(record.surveyId),
+          completedAt: record.completedAt,
+          isCompleted: true,
+          attemptNumber: 1,
+        };
+      });
+    const hasCurrentHistory = history.some((record) => record.formId === currentSchema.id);
+    if (isSurveyCompleted && !hasCurrentHistory) {
+      history.push({
+        formId: currentSchema.id,
+        completedAt: new Date(0).toISOString(),
+        isCompleted: true,
+        attemptNumber: 1,
+      });
+    }
+    return BatteryEngine.evaluateNodeAccess({
+      id: currentSchema.id,
+      schemaId: currentSchema.id,
+      title: currentSchema.title,
+      kind: currentSchema.kind ?? 'survey',
+      stage: 'baseline',
+      sequenceOrder: 0,
+      accessPolicy: currentSchema.accessPolicy,
+      ...(prerequisiteIds.length || activeSurveyMeta?.features?.minScorePercent !== undefined
+        ? {
+            prerequisites: {
+              completedFormIds: prerequisiteIds,
+              ...(Number.isFinite(Number(activeSurveyMeta?.features?.minScorePercent))
+                ? { minScorePercent: Number(activeSurveyMeta?.features?.minScorePercent) }
+                : {}),
+              ...(Number.isFinite(Number(activeSurveyMeta?.features?.unlockDelayMs))
+                ? { unlockDelayMs: Number(activeSurveyMeta?.features?.unlockDelayMs) }
+                : {}),
+            },
+          }
+        : {}),
+    }, history);
+  }, [
+    currentSchema.id,
+    currentSchema.title,
+    currentSchema.kind,
+    currentSchema.accessPolicy,
+    activeSurveyMeta,
+    submissionHistory,
+    entityId,
+    isSurveyCompleted,
+    activeSurveyMeta?.features,
+  ]);
+  const attemptLimitReached = activeAccessEvaluation.reason === 'max_attempts_reached';
+  const surveyAccessLocked = !activeAccessEvaluation.canStart;
 
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -256,6 +331,12 @@ export default function SurveyScreen() {
   };
 
   const handleSubmit = async (values: Values) => {
+    if (surveyAccessLocked) {
+      setSyncNote(attemptLimitReached
+        ? 'This survey has reached its attempt limit for this respondent on this device.'
+        : 'This survey is temporarily unavailable under its access policy.');
+      return;
+    }
     if (currentSchema.id === HMSAM_FORM_SCHEMA.id) {
       const report = measurementPort.score(values);
       setLastConstructs(report.constructs);
@@ -298,10 +379,19 @@ export default function SurveyScreen() {
       }
 
       // Check if this survey was already completed previously
-      const isRepeatAttempt = completedSurveyIds.has(currentSchema.id) || (currentSchema.id === HMSAM_FORM_SCHEMA.id && completedSurveyIds.has('hmsam'));
+      const isRepeatAttempt = isSurveyCompleted;
       if (isRepeatAttempt) {
         const policy: FormAccessPolicy = currentSchema.accessPolicy ?? BatteryEngine.getDefaultAccessPolicy(currentSchema.kind ?? 'survey');
-        const sanitized = BatteryEngine.calculateSanitizedReward(policy, 2, earned, earned);
+        const currentSurveyKeys = new Set([
+          currentSchema.id,
+          activeSurveyUuid,
+          activeSurveyMeta?.survey?.uuid,
+          activeSurveyMeta?.survey?.id,
+        ].filter((value) => value !== null && value !== undefined).map(String));
+        const priorAttempts = submissionHistory.filter((record) =>
+          record.entityId === entityId && currentSurveyKeys.has(String(record.surveyId)),
+        ).length;
+        const sanitized = BatteryEngine.calculateSanitizedReward(policy, priorAttempts + 1, earned, earned);
         earned = sanitized.pointsAwarded;
       }
     }
@@ -314,12 +404,12 @@ export default function SurveyScreen() {
       auditNote = `⚠️ Psychometric Notice: High answer uniformity detected (${Math.round(audit.metrics.longStringRatio * 100)}% identical scale items). Marked for reliability review.`;
     } else if (audit.flags.includes('SPEEDER')) {
       auditNote = `⚠️ Velocity Notice: Rapid completion speed (${audit.metrics.averageDwellMs}ms avg dwell). Flagged for research audit.`;
-    } else if (completedSurveyIds.has(currentSchema.id) && earned === 0) {
+    } else if (isSurveyCompleted && earned === 0) {
       auditNote = 'ℹ️ Review Session: Answers recorded for longitudinal analysis. Redo points suppressed per research protocol.';
     }
     setAuditNotice(auditNote);
 
-    const currentUserId = authUser?.id || 'guest-user';
+    const currentUserId = authUser?.id || guestUserId;
     const currentName = authUser?.displayName || 'Contributor';
     const currentAvatar = authUser?.avatar || '🎙️';
 
@@ -362,6 +452,7 @@ export default function SurveyScreen() {
           dwellMs: audit.metrics ? { avgDwellMs: audit.metrics.averageDwellMs } : {},
           qualityFlags: audit.flags,
           consentVersion: '1.0',
+          guestParticipantId: authUser ? undefined : guestUserId,
         });
         if (result.ok) {
           let note = "Synced directly to Gihini's Django research database.";
@@ -382,6 +473,9 @@ export default function SurveyScreen() {
             profile.standing = contributionPort.standingFor(result.totalPoints);
             await store.putProfile(profile);
           }
+        } else if (result.status >= 400 && result.status < 500) {
+          const availableAt = result.unlocksAt ? ` Available ${new Date(result.unlocksAt).toLocaleString()}.` : '';
+          setSyncNote(`${result.error || 'This survey is currently locked by its access policy.'}${availableAt}`);
         } else {
           await outboxPort.enqueue({
             id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -396,7 +490,7 @@ export default function SurveyScreen() {
           });
           setSyncNote(`Saved to resilient offline outbox (server HTTP ${result.status}) — will auto-sync upon reconnection.`);
         }
-        await authPort.init();
+        await restoreAuthSession();
       } catch {
         await outboxPort.enqueue({
           id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -423,43 +517,77 @@ export default function SurveyScreen() {
     setSubmitted(true);
   };
 
-  const notifier = useMemo(() => new CollectingRewardNotifier(handleReward), []);
+  const rewardHandlerRef = useRef(handleReward);
+  rewardHandlerRef.current = handleReward;
+  const notifier = useMemo(
+    () => new CollectingRewardNotifier((reward) => rewardHandlerRef.current(reward)),
+    [],
+  );
+  const submitHandlerRef = useRef(handleSubmit);
+  submitHandlerRef.current = handleSubmit;
+
+  const draftStorage = useMemo(
+    () => new ScopedDraftStorage(
+      store,
+      `${authUser?.id || guestUserId || 'guest'}:${entityId}:${currentSchema.id}`,
+      authUser && guestUserId ? `${guestUserId}:${entityId}:${currentSchema.id}` : undefined,
+    ),
+    [authUser?.id, guestUserId, entityId, currentSchema.id],
+  );
 
   const manager = useMemo(
     () =>
-      new MultiStepFormManager<Values>(currentSchema, handleSubmit, {
+      new MultiStepFormManager<Values>(currentSchema, (values) => submitHandlerRef.current(values), {
+        resilience: {
+          draftStorage,
+          autoSaveDraft: true,
+          autoRestoreDraft: true,
+          draftDebounceMs: 500,
+        },
         experience: {
           feedbackNotifier: notifier,
           progressStrategy: progressPort,
           rewardEngine: rewardPort,
         },
       }),
-    [currentSchema, runKey, notifier],
+    [currentSchema, runKey, notifier, draftStorage],
   );
 
   const form = manager.getFormManager();
   const [formState, setFormState] = useState(() => form.getState());
   const [stepIndex, setStepIndex] = useState(() => manager.getCurrentPageIndex());
   const [progress, setProgress] = useState(() => manager.getProgress());
+  const assessmentEngine = manager.getAssessmentEngine();
+  const [assessmentState, setAssessmentState] = useState<Readonly<AssessmentState> | undefined>(
+    () => assessmentEngine?.getState(),
+  );
 
   useEffect(() => {
+    let cancelled = false;
     setFormState(form.getState());
     setStepIndex(manager.getCurrentPageIndex());
     setProgress(manager.getProgress());
+    setAssessmentState(assessmentEngine?.getState());
+    manager.hasSavedDraft().then((exists) => {
+      if (!cancelled) setHasRespondentDraft(exists);
+    }).catch(() => {});
 
     const unsubscribeForm = form.subscribe(setFormState);
     const unsubscribeSteps = manager.subscribe(() => {
       setStepIndex(manager.getCurrentPageIndex());
       setProgress(manager.getProgress());
     });
+    const unsubscribeAssessment = assessmentEngine?.subscribe(setAssessmentState);
 
     return () => {
+      cancelled = true;
       unsubscribeForm();
       unsubscribeSteps();
+      unsubscribeAssessment?.();
       if (toastTimer.current) clearTimeout(toastTimer.current);
       manager.destroy();
     };
-  }, [form, manager]);
+  }, [form, manager, assessmentEngine]);
 
   const currentPage = manager.getCurrentPage();
   const visibleFields = manager.getVisibleFields(stepIndex);
@@ -490,7 +618,6 @@ export default function SurveyScreen() {
 
   const isCover = currentPage?.role === 'cover';
   const allEntities = entitiesList || entities;
-  const currentEntity = allEntities.find((e) => e.id === entityId) || allEntities[0];
 
   const liveEarnedPoints = useMemo(() => {
     if (!isGamified) return 0;
@@ -506,18 +633,21 @@ export default function SurveyScreen() {
     return earned;
   }, [formState.values, currentSchema, isGamified]);
 
-  const liveAnsweredCount = useMemo(() => {
-    let count = 0;
-    for (const page of currentSchema.pages) {
-      for (const field of page.fields) {
-        const val = formState.values[field.name];
-        if (val !== undefined && val !== null && val !== '') {
-          count++;
-        }
-      }
-    }
-    return count;
-  }, [formState.values, currentSchema]);
+  const isQuiz = ['quiz', 'exam', 'assessment'].includes(String(currentSchema.kind ?? '').toLowerCase());
+  const rubricFields = useMemo(
+    () => currentSchema.pages.flatMap((page) => page.fields).filter((field) => Boolean(field.rubric)),
+    [currentSchema],
+  );
+  const showQuizEvaluation = isQuiz && rubricFields.length > 0 &&
+    Boolean(currentSchema.assessment?.timing === 'instant' || submitted);
+  const quizCorrect = Object.values(assessmentState?.evaluations ?? {}).filter((evaluation) => evaluation.isCorrect).length;
+  const quizGraded = Object.keys(assessmentState?.evaluations ?? {}).length;
+  const configuredTimer = currentSchema.assessment?.stepTimerSeconds
+    ? assessmentState?.stepTimerRemainingSeconds
+    : currentSchema.assessment?.globalTimerSeconds
+      ? assessmentState?.globalTimerRemainingSeconds
+      : undefined;
+  const pointsEnabled = isGamified && (activeSurveyMeta?.features?.points?.enabled ?? FEEDORA_FEATURES.points.enabled);
 
   return (
     <AppPage>
@@ -598,22 +728,13 @@ export default function SurveyScreen() {
 
       {/* Spacious, Elegant Study Header Bar */}
       <View style={styles.studyHeaderBar}>
-        <Pressable
+        <OrganizationPicker
+          entities={allEntities}
+          selectedId={entityId}
+          membershipIds={membershipIds}
+          onSelect={joinEntity}
           style={styles.studyEntityPill}
-          onPress={() => setIsInstitutionPickerOpen((v) => !v)}
-          accessibilityRole="button"
-          accessibilityLabel={`Contributing as ${currentEntity?.name}. Tap to change institution.`}
-        >
-          <Text style={styles.studyEntityEmoji}>
-            {currentEntity?.type === 'university' ? '🏛️' : currentEntity?.type === 'research' ? '🔬' : '🏢'}
-          </Text>
-          <Text style={styles.studyEntityText} numberOfLines={1}>
-            {currentEntity?.name || 'University of Moratuwa'}
-          </Text>
-          <Text style={styles.studyEntityChevron}>
-            {isInstitutionPickerOpen ? '▲' : '▾'}
-          </Text>
-        </Pressable>
+        />
 
         <Pressable
           style={styles.catalogPillBtn}
@@ -635,25 +756,6 @@ export default function SurveyScreen() {
           <Text style={styles.scanCodePillText}>Join</Text>
         </Pressable>
       </View>
-
-      {/* Dropdown Institution Selector when opened */}
-      {isInstitutionPickerOpen && (
-        <Panel style={styles.institutionPickerAccordion}>
-          <Text style={styles.pickerSectionHeader}>SELECT RESEARCH INSTITUTION</Text>
-          {allEntities.map((entity) => (
-            <EntityCard
-              key={entity.id}
-              entity={entity}
-              memberCount={contributorCounts[entity.id] ?? 0}
-              selected={entity.id === entityId}
-              onSelect={() => {
-                joinEntity(entity.id);
-                setIsInstitutionPickerOpen(false);
-              }}
-            />
-          ))}
-        </Panel>
-      )}
 
       {/* Academic Ethics / Participant Consent (Task 3.5 in Agent Brief) */}
       {!consented && !submitted && (
@@ -679,13 +781,24 @@ export default function SurveyScreen() {
 
       {/* Main survey card */}
       <Panel>
-        {!submitted && isSurveyCompleted && !currentSchema.accessPolicy?.allowRedo ? (
+        {!submitted && hasRespondentDraft && !isSurveyCompleted ? (
+          <Text style={styles.draftNotice}>Your saved draft was restored on this device. You can continue where you left off.</Text>
+        ) : null}
+        {!submitted && surveyAccessLocked ? (
           <View style={styles.completedBox}>
             <View style={styles.completedLockOverlay}>
               <Text style={{ fontSize: 36 }}>✅</Text>
-              <Text style={styles.completedTitle}>Survey Already Completed</Text>
+              <Text style={styles.completedTitle}>
+                {attemptLimitReached ? 'Survey Already Completed' : 'Survey Temporarily Locked'}
+              </Text>
               <Text style={styles.completedBody}>
-                You have already submitted this research instrument. Your responses and voice points are safely stored in the dataset.
+                {attemptLimitReached
+                  ? 'You have reached the allowed number of attempts for this survey. Your saved responses and points remain in your progress.'
+                  : activeAccessEvaluation.reason === 'prerequisite_unmet'
+                    ? `Complete ${(activeSurveyMeta?.features?.prerequisiteSurveyTitles as string[] | undefined)?.join(', ') || 'the required survey'} first.`
+                  : activeAccessEvaluation.unlocksAt
+                    ? `You can try again after ${new Date(activeAccessEvaluation.unlocksAt).toLocaleString()}.`
+                    : 'This survey is not available yet under its access policy.'}
               </Text>
               <View style={styles.completedActions}>
                 <ActionButton
@@ -788,6 +901,25 @@ export default function SurveyScreen() {
               </View>
             ) : null}
 
+            {!authUser ? (
+              <View style={styles.guestClaimCard}>
+                <View style={styles.guestClaimRow}>
+                  <Text style={styles.guestClaimIcon}>💾</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.guestClaimTitle}>Keep your points and progress</Text>
+                    <Text style={styles.guestClaimDesc}>
+                      Save this progress to your account and carry it into the community leaderboard.
+                    </Text>
+                  </View>
+                </View>
+                <ActionButton
+                  label="Sign in or create account"
+                  secondary
+                  onPress={openAuthModal}
+                />
+              </View>
+            ) : null}
+
             {lastConstructs ? (
               <View style={styles.summaryBox}>
                 <Text style={styles.summaryTitle}>YOUR CONSTRUCT SCORES</Text>
@@ -840,44 +972,23 @@ export default function SurveyScreen() {
                     : activeSurveyMeta.survey.title
                   : 'HMSAM Survey'}
               </Text>
-              <Text style={styles.stepCount}>
-                Step {stepIndex + 1} of {manager.getTotalPages()}
-              </Text>
             </View>
 
-            <StepMeter
+            <SessionFeedback
+              step={stepIndex + 1}
+              steps={manager.getTotalPages()}
+              answered={progress.effortCompleted}
+              total={progress.effortTotal}
               percent={progress.percentage}
-              effortCompleted={progress.effortCompleted}
-              effortTotal={progress.effortTotal}
               eta={progress.estimatedTimeRemainingText}
+              points={pointsEnabled && !isQuiz ? liveEarnedPoints : undefined}
+              pointsDelta={pointsEnabled && !isQuiz ? toast?.points : undefined}
+              quiz={isQuiz}
+              correct={showQuizEvaluation ? quizCorrect : undefined}
+              graded={showQuizEvaluation ? quizGraded : undefined}
+              timerSeconds={configuredTimer}
+              streak={isQuiz && currentSchema.assessment?.streakBonusEnabled ? assessmentState?.currentStreak : undefined}
             />
-
-            {isGamified ? (
-              <View style={styles.liveGamificationHud}>
-                <View style={styles.livePointsBadge}>
-                  <Text style={styles.livePointsEmoji}>💎</Text>
-                  <Text style={styles.livePointsNum}>{liveEarnedPoints}</Text>
-                  <Text style={styles.livePointsLabel}>pts</Text>
-                </View>
-                <View style={styles.livePerksRow}>
-                  {activeSurveyMeta?.features?.rewards?.mode === 'variable' && (
-                    <Text style={styles.perkChip}>🎲 2x Boost</Text>
-                  )}
-                  {activeSurveyMeta?.features?.negative_reinforcement?.enabled && (
-                    <Text style={styles.perkChip}>🛡️ Shield</Text>
-                  )}
-                  {liveAnsweredCount >= 3 ? (
-                    <Text style={styles.perkChip}>🔥 Streak</Text>
-                  ) : null}
-                </View>
-              </View>
-            ) : (
-              <View style={styles.controlArmBanner}>
-                <Text style={styles.controlArmText}>
-                  ⚖️ Control Arm · Standard Academic Protocol
-                </Text>
-              </View>
-            )}
 
             {currentPage?.title ? (
               <Text style={styles.pageTitle}>{currentPage.title}</Text>
@@ -899,7 +1010,7 @@ export default function SurveyScreen() {
                     form.setFieldValue(field.name, val);
                     manager.pruneHiddenFieldValues();
 
-                    if (isGamified && (prev === undefined || prev === null || prev === '')) {
+                    if (pointsEnabled && !isQuiz && (prev === undefined || prev === null || prev === '')) {
                       const pts = pointsForAnswer(FEEDORA_FEATURES, field.type, val);
                       if (pts > 0) {
                         setToast({ points: pts, label: `${field.label ?? field.name} answered (+${pts} pts)` });
@@ -990,15 +1101,9 @@ export default function SurveyScreen() {
           startOver();
         }}
         completedSurveyIds={completedSurveyIds}
+        submissionHistory={submissionHistory}
       />
 
-      {isGamified && toast ? (
-        <PointsToast
-          points={toast.points}
-          label={toast.label}
-          onDismiss={() => setToast(null)}
-        />
-      ) : null}
     </AppPage>
   );
 }
@@ -1020,35 +1125,36 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   activeSurveyTitle: {
-    fontSize: 16,
+    fontSize: Platform.select({ web: 20, default: 16 }),
+    lineHeight: Platform.select({ web: 28, default: 24 }),
     fontFamily: serifFont,
     color: colors.ink,
     marginTop: 4,
   },
   activeSurveyDetail: {
-    fontSize: 11.5,
+    fontSize: Platform.select({ web: 14, default: 11.5 }),
+    lineHeight: Platform.select({ web: 20, default: 16 }),
     color: colors.muted,
     fontWeight: '500',
+    fontFamily: sansFont,
   },
   standingWrap: { marginTop: 12, paddingTop: 14, borderTopColor: colors.line, borderTopWidth: 1 },
   meterHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  surveyKindTitle: { fontSize: 13, fontWeight: '700', color: colors.ink, letterSpacing: -0.2 },
-  stepCount: { fontSize: 12, fontWeight: '600', color: colors.muted },
-  perkChip: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#6B21A8',
-    backgroundColor: '#F3E8FF',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
-    overflow: 'hidden',
-  },
-  pageTitle: { fontSize: 22, fontWeight: '400', color: colors.ink, fontFamily: serifFont, marginTop: 4, marginBottom: 4 },
-  pageDesc: { fontSize: 13, lineHeight: 19, color: colors.muted, marginBottom: 16 },
+  surveyKindTitle: { fontSize: Platform.select({ web: 16, default: 13 }), lineHeight: 24, fontWeight: '700', color: colors.ink, letterSpacing: -0.2, fontFamily: sansFont },
+  pageTitle: { fontSize: Platform.select({ web: 30, default: 22 }), lineHeight: Platform.select({ web: 38, default: 30 }), fontWeight: '400', color: colors.ink, fontFamily: serifFont, marginTop: 8, marginBottom: 8 },
+  pageDesc: { fontSize: Platform.select({ web: 16, default: 13 }), lineHeight: Platform.select({ web: 26, default: 19 }), color: colors.muted, fontFamily: sansFont, marginBottom: 20, maxWidth: 720 },
   fieldsContainer: { marginTop: 6 },
   navRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
   completedBox: { alignItems: 'center', paddingVertical: 20, gap: 10 },
+  draftNotice: {
+    marginBottom: 12,
+    padding: 10,
+    borderRadius: radii.small,
+    backgroundColor: '#EFF6FF',
+    color: '#1E40AF',
+    fontSize: 12,
+    lineHeight: 17,
+  },
   completedEmoji: { fontSize: 48 },
   completedTitle: { fontSize: 24, fontWeight: '400', color: colors.ink, fontFamily: serifFont },
   completedBody: { fontSize: 13.5, lineHeight: 21, color: colors.muted, textAlign: 'center', maxWidth: 460 },
@@ -1298,20 +1404,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     minHeight: 44,
   },
-  studyEntityEmoji: {
-    fontSize: 16,
-  },
-  studyEntityText: {
-    flex: 1,
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: colors.ink,
-  },
-  studyEntityChevron: {
-    fontSize: 12,
-    color: colors.muted,
-    fontWeight: '800',
-  },
   catalogPillBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1327,9 +1419,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   catalogPillText: {
-    fontSize: 12,
+    fontSize: Platform.select({ web: 14, default: 12 }),
     fontWeight: '700',
     color: '#166534',
+    fontFamily: sansFont,
   },
   scanCodePillBtn: {
     flexDirection: 'row',
@@ -1346,70 +1439,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   scanCodePillText: {
-    fontSize: 12,
+    fontSize: Platform.select({ web: 14, default: 12 }),
     fontWeight: '700',
     color: '#6B21A8',
-  },
-  institutionPickerAccordion: {
-    marginBottom: 12,
-    gap: 6,
-  },
-  pickerSectionHeader: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    color: colors.faint,
-    marginBottom: 4,
-  },
-  liveGamificationHud: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#FAF5FF',
-    borderWidth: 1,
-    borderColor: '#E9D5FF',
-    borderRadius: radii.small,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginVertical: 10,
-  },
-  livePointsBadge: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 5,
-  },
-  livePointsEmoji: {
-    fontSize: 16,
-  },
-  livePointsNum: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#6B21A8',
-  },
-  livePointsLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#7E22CE',
-  },
-  livePerksRow: {
-    flexDirection: 'row',
-    gap: 6,
-    alignItems: 'center',
-  },
-  controlArmBanner: {
-    backgroundColor: '#F8FAFC',
-    borderColor: '#E2E8F0',
-    borderWidth: 1,
-    borderRadius: radii.small,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginVertical: 8,
-  },
-  controlArmText: {
-    fontSize: 11,
-    color: colors.muted,
-    fontWeight: '600',
-    textAlign: 'center',
+    fontFamily: sansFont,
   },
   consentPanel: {
     backgroundColor: '#FAF5FF',

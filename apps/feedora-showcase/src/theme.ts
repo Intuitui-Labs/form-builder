@@ -16,7 +16,8 @@ export const colors = {
   // Typography Inks
   ink: '#14140F',
   muted: '#6B6B62',
-  faint: '#A3A39A',
+  // Keep secondary labels readable on paper and canvas surfaces (WCAG AA text contrast).
+  faint: '#6B6B62',
 
   // Her signature Feedora Purple (home.html --purple)
   primary: '#7F77DD',
@@ -66,7 +67,7 @@ export const levelColors = [
 
 /** Serif display font for brand headings — exact Gihini font pairing */
 export const serifFont = Platform.select({
-  web: "'Instrument Serif', 'DM Serif Display', Georgia, serif",
+  web: "'DM Serif Display', Georgia, serif",
   ios: 'Georgia',
   android: 'serif',
   default: 'Georgia',
@@ -74,7 +75,7 @@ export const serifFont = Platform.select({
 
 /** Clean body sans font */
 export const sansFont = Platform.select({
-  web: "'Inter', 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+  web: "'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
   ios: 'System',
   android: 'sans-serif',
   default: 'System',

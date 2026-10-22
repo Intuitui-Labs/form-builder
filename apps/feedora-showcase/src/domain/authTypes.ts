@@ -49,7 +49,8 @@ export interface SignUpRespondentInput {
   email: string;
   password?: string;
   displayName: string;
-  organizationId: string;
+  /** Organization membership is added separately after account creation. */
+  organizationId?: string;
   gender?: Gender;
   ageGroup?: AgeGroup;
   avatar?: string;
@@ -61,8 +62,9 @@ export interface SignUpCreatorInput {
   firstName: string;
   lastName: string;
   displayName?: string;
-  organizationName: string;
-  organizationType: EntityType;
+  /** Organization creation/membership is a separate step after global signup. */
+  organizationName?: string;
+  organizationType?: EntityType;
   userRoleInOrg?: string;
   country?: string;
   website?: string;

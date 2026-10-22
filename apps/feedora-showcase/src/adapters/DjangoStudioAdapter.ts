@@ -5,13 +5,31 @@ import type {
 } from '../domain/ports/ICreatorStudioPort';
 
 export class DjangoStudioAdapter implements ICreatorStudioPort {
+  private csrfToken: string | null = null;
+
   constructor(
     private readonly baseUrl: string = 'http://localhost:8000',
-    private readonly fetchImpl: typeof fetch = fetch,
+    private readonly fetchImpl: typeof fetch = fetch.bind(globalThis),
   ) {}
 
   private url(path: string): string {
     return `${this.baseUrl.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`;
+  }
+
+  private async mutationHeaders(): Promise<Record<string, string>> {
+    if (!this.csrfToken) {
+      try {
+        const response = await this.fetchImpl(this.url('/api/v1/auth/me/'), { credentials: 'include' });
+        const data = await response.json();
+        this.csrfToken = data?.csrfToken ?? null;
+      } catch {
+        // The mutation will return its normal network/authentication error.
+      }
+    }
+    return {
+      'Content-Type': 'application/json',
+      ...(this.csrfToken ? { 'X-CSRFToken': this.csrfToken } : {}),
+    };
   }
 
   async listSurveys(): Promise<StudioSurvey[]> {
@@ -72,9 +90,7 @@ export class DjangoStudioAdapter implements ICreatorStudioPort {
   }> {
     const res = await this.fetchImpl(this.url('/api/v1/surveys/create/'), {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: await this.mutationHeaders(),
       body: JSON.stringify(payload),
       credentials: 'include',
     });
@@ -107,9 +123,7 @@ export class DjangoStudioAdapter implements ICreatorStudioPort {
   }> {
     const res = await this.fetchImpl(this.url(`/api/v1/surveys/${uuid}/publish/`), {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: await this.mutationHeaders(),
       body: JSON.stringify(isDraft !== undefined ? { is_draft: isDraft } : {}),
       credentials: 'include',
     });
@@ -120,5 +134,18 @@ export class DjangoStudioAdapter implements ICreatorStudioPort {
     }
 
     return data;
+  }
+
+  async updateSurveyPolicy(uuid: string, features: Record<string, unknown>): Promise<void> {
+    const res = await this.fetchImpl(this.url(`/api/v1/surveys/${uuid}/policy/`), {
+      method: 'POST',
+      headers: await this.mutationHeaders(),
+      body: JSON.stringify({ features }),
+      credentials: 'include',
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.ok) {
+      throw new Error(data?.error || `Failed to save survey access rules (HTTP ${res.status})`);
+    }
   }
 }

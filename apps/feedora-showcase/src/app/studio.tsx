@@ -227,6 +227,7 @@ export default function StudioScreen() {
   const [surveys, setSurveys] = useState<StudioSurvey[]>([]);
   const [loadingSurveys, setLoadingSurveys] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [policyTarget, setPolicyTarget] = useState<{ uuid: string; title: string } | null>(null);
   const [publishSuccess, setPublishSuccess] = useState<{
     uuid: string;
     accessCode: string;
@@ -238,8 +239,36 @@ export default function StudioScreen() {
   const [formDesc, setFormDesc] = useState('Investigating user immersion, joy, and perceived ease of use.');
   const [isHmsam, setIsHmsam] = useState(true);
   const [questions, setQuestions] = useState<StudioQuestionPayload[]>(TEMPLATE_CORE_8);
+  const [requiresAccount, setRequiresAccount] = useState(false);
+  const [allowRedo, setAllowRedo] = useState(false);
+  const [maxAttempts, setMaxAttempts] = useState('1');
+  const [cooldownMinutes, setCooldownMinutes] = useState('');
+  const [prerequisiteIds, setPrerequisiteIds] = useState<string[]>([]);
+  const [prerequisiteDelayMinutes, setPrerequisiteDelayMinutes] = useState('');
+  const [sequenceGroup, setSequenceGroup] = useState('');
+  const [sequenceOrder, setSequenceOrder] = useState('1');
+  const [enforceSequence, setEnforceSequence] = useState(false);
   const [draftSavedStatus, setDraftSavedStatus] = useState<string>('Auto-saved');
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+  const buildAccessFeatures = useCallback(() => ({
+    accessPolicy: {
+      requiresAccount,
+      allowRedo,
+      rewardStrategy: allowRedo ? 'score_delta' : 'first_attempt_only',
+      ...(Number(maxAttempts) > 0 ? { maxAttempts: Number(maxAttempts) } : {}),
+      ...(Number(cooldownMinutes) > 0 ? { cooldownMinutes: Number(cooldownMinutes) } : {}),
+    },
+    prerequisites: {
+      completedFormIds: prerequisiteIds,
+      ...(Number(prerequisiteDelayMinutes) > 0
+        ? { unlockDelayMs: Number(prerequisiteDelayMinutes) * 60_000 }
+        : {}),
+    },
+    ...(sequenceGroup.trim()
+      ? { sequence: { groupId: sequenceGroup.trim(), order: Math.max(1, Number(sequenceOrder) || 1), enforce: enforceSequence } }
+      : {}),
+  }), [requiresAccount, allowRedo, maxAttempts, cooldownMinutes, prerequisiteIds, prerequisiteDelayMinutes, sequenceGroup, sequenceOrder, enforceSequence]);
 
   // Instant QR & P2P Distribution State
   const [isAirDropOpen, setIsAirDropOpen] = useState(false);
@@ -269,6 +298,15 @@ export default function StudioScreen() {
         if (Array.isArray(parsed.questions) && parsed.questions.length > 0) {
           setQuestions(parsed.questions);
         }
+        if (parsed.requiresAccount !== undefined) setRequiresAccount(Boolean(parsed.requiresAccount));
+        if (parsed.allowRedo !== undefined) setAllowRedo(Boolean(parsed.allowRedo));
+        if (parsed.maxAttempts !== undefined) setMaxAttempts(String(parsed.maxAttempts));
+        if (parsed.cooldownMinutes !== undefined) setCooldownMinutes(String(parsed.cooldownMinutes));
+        if (Array.isArray(parsed.prerequisiteIds)) setPrerequisiteIds(parsed.prerequisiteIds.map(String));
+        if (parsed.prerequisiteDelayMinutes !== undefined) setPrerequisiteDelayMinutes(String(parsed.prerequisiteDelayMinutes));
+        if (parsed.sequenceGroup !== undefined) setSequenceGroup(String(parsed.sequenceGroup));
+        if (parsed.sequenceOrder !== undefined) setSequenceOrder(String(parsed.sequenceOrder));
+        if (parsed.enforceSequence !== undefined) setEnforceSequence(Boolean(parsed.enforceSequence));
         draftLoaded.current = true;
         setDraftSavedStatus('Draft restored');
         setTimeout(() => setDraftSavedStatus('Auto-saved'), 2500);
@@ -288,6 +326,15 @@ export default function StudioScreen() {
         formDesc,
         isHmsam,
         questions,
+        requiresAccount,
+        allowRedo,
+        maxAttempts,
+        cooldownMinutes,
+        prerequisiteIds,
+        prerequisiteDelayMinutes,
+        sequenceGroup,
+        sequenceOrder,
+        enforceSequence,
         savedAt: Date.now(),
       });
       store.setItem('feedora_studio_draft', payload).then(() => {
@@ -295,7 +342,7 @@ export default function StudioScreen() {
       });
     }, 600);
     return () => clearTimeout(timer);
-  }, [formTitle, formDesc, isHmsam, questions]);
+  }, [formTitle, formDesc, isHmsam, questions, requiresAccount, allowRedo, maxAttempts, cooldownMinutes, prerequisiteIds, prerequisiteDelayMinutes, sequenceGroup, sequenceOrder, enforceSequence]);
 
   // ---------------------------------------------------------------------------
   // Load existing Django fleet surveys
@@ -311,6 +358,22 @@ export default function StudioScreen() {
       setLoadingSurveys(false);
     }
   }, [studioPort]);
+
+  const handleSaveSurveyPolicy = async () => {
+    if (!policyTarget || !studioPort.updateSurveyPolicy) return;
+    setPublishing(true);
+    try {
+      await studioPort.updateSurveyPolicy(policyTarget.uuid, buildAccessFeatures());
+      await loadSurveys();
+      setPolicyTarget(null);
+      setActiveTab('surveys');
+      Alert.alert('Availability updated', 'The survey rules are saved and will be reflected in the respondent survey list.');
+    } catch (err) {
+      Alert.alert('Could not save rules', (err as Error).message);
+    } finally {
+      setPublishing(false);
+    }
+  };
 
   useEffect(() => {
     loadSurveys();
@@ -530,6 +593,17 @@ export default function StudioScreen() {
         description: formDesc.trim(),
         is_hmsam: isHmsam,
         is_draft: isDraft,
+        features: {
+          accessPolicy: {
+            requiresAccount,
+            allowRedo,
+            rewardStrategy: allowRedo ? 'score_delta' : 'first_attempt_only',
+            ...(Number(maxAttempts) > 0 ? { maxAttempts: Number(maxAttempts) } : {}),
+            ...(Number(cooldownMinutes) > 0 ? { cooldownMinutes: Number(cooldownMinutes) } : {}),
+          },
+          ...(prerequisiteIds.length ? { prerequisites: { completedFormIds: prerequisiteIds, ...(Number(prerequisiteDelayMinutes) > 0 ? { unlockDelayMs: Number(prerequisiteDelayMinutes) * 60_000 } : {}) } } : {}),
+          ...(sequenceGroup.trim() ? { sequence: { groupId: sequenceGroup.trim(), order: Math.max(1, Number(sequenceOrder) || 1), enforce: enforceSequence } } : {}),
+        },
         questions,
       };
 
@@ -880,6 +954,16 @@ export default function StudioScreen() {
                             setFormTitle(meta.survey.title);
                             setFormDesc(meta.survey.description || '');
                             setIsHmsam(meta.survey.is_hmsam);
+                            const access = (meta.features?.accessPolicy || {}) as Record<string, unknown>;
+                            setRequiresAccount(Boolean(access.requiresAccount));
+                            setAllowRedo(Boolean(access.allowRedo));
+                            setMaxAttempts(access.maxAttempts != null ? String(access.maxAttempts) : '');
+                            setCooldownMinutes(access.cooldownMinutes != null ? String(access.cooldownMinutes) : '');
+                            setPrerequisiteIds(meta.survey.prerequisites || []);
+                            setPrerequisiteDelayMinutes(meta.survey.unlockDelayMs ? String(meta.survey.unlockDelayMs / 60_000) : '');
+                            setSequenceGroup(meta.survey.sequenceGroup || '');
+                            setSequenceOrder(meta.survey.sequenceOrder != null ? String(meta.survey.sequenceOrder) : '1');
+                            setEnforceSequence(Boolean(meta.survey.enforceSequence));
                             setQuestions(
                               meta.questions.map((q) => ({
                                 text: q.text,
@@ -901,6 +985,34 @@ export default function StudioScreen() {
                       >
                         <Text style={styles.cardActionSecondaryText}>Clone into Scaffolder ⚡</Text>
                       </Pressable>
+                      {s.isActive && studioPort.updateSurveyPolicy ? (
+                        <Pressable
+                          style={styles.cardActionSecondary}
+                          onPress={async () => {
+                            try {
+                              const meta = await transportPort.fetchSurveyMeta(s.uuid);
+                              const access = (meta.features?.accessPolicy || {}) as Record<string, unknown>;
+                              const prerequisites = (meta.features?.prerequisites || {}) as Record<string, unknown>;
+                              const sequence = (meta.features?.sequence || {}) as Record<string, unknown>;
+                              setRequiresAccount(Boolean(access.requiresAccount));
+                              setAllowRedo(Boolean(access.allowRedo));
+                              setMaxAttempts(access.maxAttempts != null ? String(access.maxAttempts) : '');
+                              setCooldownMinutes(access.cooldownMinutes != null ? String(access.cooldownMinutes) : '');
+                              setPrerequisiteIds(Array.isArray(prerequisites.completedFormIds) ? prerequisites.completedFormIds.map(String) : []);
+                              setPrerequisiteDelayMinutes(prerequisites.unlockDelayMs ? String(Number(prerequisites.unlockDelayMs) / 60_000) : '');
+                              setSequenceGroup(typeof sequence.groupId === 'string' ? sequence.groupId : '');
+                              setSequenceOrder(sequence.order != null ? String(sequence.order) : '1');
+                              setEnforceSequence(Boolean(sequence.enforce));
+                              setPolicyTarget({ uuid: s.uuid, title: s.title });
+                              setActiveTab('builder');
+                            } catch (err) {
+                              Alert.alert('Could not load rules', (err as Error).message);
+                            }
+                          }}
+                        >
+                          <Text style={styles.cardActionSecondaryText}>Edit availability</Text>
+                        </Pressable>
+                      ) : null}
                       <Pressable
                         style={styles.cardActionAirDrop}
                         onPress={async () => {
@@ -950,20 +1062,32 @@ export default function StudioScreen() {
         {/* TAB 2: FORM SCAFFOLDER & BUILDER */}
         {activeTab === 'builder' && (
           <View style={styles.section}>
+            {policyTarget ? (
+              <View style={styles.policyEditNotice}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.policyEditTitle}>Availability rules</Text>
+                  <Text style={styles.policyEditSubtitle} numberOfLines={2}>{policyTarget.title}</Text>
+                </View>
+                <Pressable onPress={() => setPolicyTarget(null)} accessibilityRole="button" accessibilityLabel="Cancel editing availability">
+                  <Text style={styles.policyEditCancel}>Cancel</Text>
+                </Pressable>
+              </View>
+            ) : null}
             {/* Scaffolder Control Header */}
             <View style={styles.builderToolbar}>
               <View>
-                <Text style={styles.sectionTitle}>Instrument Designer</Text>
+                <Text style={styles.sectionTitle}>{policyTarget ? 'Survey availability' : 'Instrument Designer'}</Text>
                 <Text style={styles.sectionSubtitle}>
-                  Schema-driven engine primitives with psychometric tagging
+                  {policyTarget ? 'Set participation and unlock rules for this survey.' : 'Schema-driven engine primitives with psychometric tagging'}
                 </Text>
               </View>
-              <View style={styles.draftBadge}>
+              {!policyTarget ? <View style={styles.draftBadge}>
                 <Text style={styles.draftBadgeDot}>●</Text>
                 <Text style={styles.draftBadgeText}>{draftSavedStatus}</Text>
-              </View>
+              </View> : null}
             </View>
 
+            {!policyTarget ? <>
             {/* Template Presets Bar */}
             <View style={styles.presetSection}>
               <Text style={styles.presetLabel}>RESEARCH TEMPLATES:</Text>
@@ -1038,7 +1162,46 @@ export default function StudioScreen() {
                 </Pressable>
               </View>
             </View>
+            </> : null}
 
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>AVAILABILITY</Text>
+              <Text style={styles.helperText}>Choose who can start, how often they can respond, and what unlocks this survey.</Text>
+              <Pressable style={styles.policyRow} onPress={() => setRequiresAccount(!requiresAccount)}>
+                <Text style={styles.policyTitle}>{requiresAccount ? '✓ Sign-in required' : '○ Allow guest responses'}</Text>
+                <Text style={styles.policyHint}>Account requirement is checked by the API.</Text>
+              </Pressable>
+              <Pressable style={styles.policyRow} onPress={() => setAllowRedo(!allowRedo)}>
+                <Text style={styles.policyTitle}>{allowRedo ? '✓ Allow repeat attempts' : '○ One completed attempt'}</Text>
+              </Pressable>
+              <TextInput style={styles.input} value={maxAttempts} onChangeText={setMaxAttempts} keyboardType="number-pad" placeholder={allowRedo ? 'Maximum attempts (blank for unlimited)' : 'Maximum attempts (default 1)'} placeholderTextColor={colors.faint} />
+              <TextInput style={styles.input} value={cooldownMinutes} onChangeText={setCooldownMinutes} keyboardType="decimal-pad" placeholder="Wait between attempts (minutes, optional)" placeholderTextColor={colors.faint} />
+              {surveys.some((survey) => survey.isActive && !survey.isDraft) ? (
+                <View style={styles.policyChoices}>
+                  <Text style={styles.policyTitle}>Complete another survey first</Text>
+                  {surveys.filter((survey) => survey.isActive && !survey.isDraft && survey.uuid !== policyTarget?.uuid).map((survey) => {
+                    const selected = prerequisiteIds.includes(survey.uuid);
+                    return (
+                      <Pressable key={survey.uuid} style={styles.policyChoice} onPress={() => setPrerequisiteIds((current) => selected ? current.filter((id) => id !== survey.uuid) : [...current, survey.uuid])}>
+                        <Text style={styles.policyChoiceText}>{selected ? '✓ ' : '○ '}{survey.title}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
+              {prerequisiteIds.length ? <TextInput style={styles.input} value={prerequisiteDelayMinutes} onChangeText={setPrerequisiteDelayMinutes} keyboardType="decimal-pad" placeholder="Wait after prerequisite completion (minutes, optional)" placeholderTextColor={colors.faint} /> : null}
+              <Text style={[styles.label, { marginTop: 10 }]}>SURVEY SEQUENCE (OPTIONAL)</Text>
+              <Text style={styles.helperText}>Surveys sharing a set name appear together. Enforce order to lock later steps until earlier ones are complete.</Text>
+              <TextInput style={styles.input} value={sequenceGroup} onChangeText={setSequenceGroup} placeholder="Set name" placeholderTextColor={colors.faint} />
+              {sequenceGroup.trim() ? <>
+                <TextInput style={styles.input} value={sequenceOrder} onChangeText={setSequenceOrder} keyboardType="number-pad" placeholder="Step number" placeholderTextColor={colors.faint} />
+                <Pressable style={styles.policyRow} onPress={() => setEnforceSequence(!enforceSequence)}>
+                  <Text style={styles.policyTitle}>{enforceSequence ? '✓ Enforce sequence order' : '○ Show sequence without locking'}</Text>
+                </Pressable>
+              </> : null}
+            </View>
+
+            {!policyTarget ? <>
             {/* Questions Deck Header */}
             <View style={styles.deckHeader}>
               <View>
@@ -1389,17 +1552,27 @@ export default function StudioScreen() {
                 </View>
               ))}
             </View>
+            </> : null}
 
             {/* Publishing Action Footer */}
             <View style={styles.publishBar}>
-              <Pressable
+              {policyTarget ? (
+                <Pressable
+                  style={[styles.publishBtn, publishing && styles.publishBtnDisabled]}
+                  onPress={handleSaveSurveyPolicy}
+                  disabled={publishing}
+                >
+                  {publishing ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.publishBtnText}>Save availability rules</Text>}
+                </Pressable>
+              ) : null}
+              {!policyTarget ? <Pressable
                 style={styles.previewBtn}
                 onPress={() => setIsPreviewOpen(true)}
               >
                 <Text style={styles.previewBtnText}>👁️ Test-Drive in Engine Runner</Text>
-              </Pressable>
+              </Pressable> : null}
 
-              <Pressable
+              {!policyTarget ? <Pressable
                 style={[styles.publishBtn, publishing && styles.publishBtnDisabled]}
                 onPress={() => handlePublishSurvey(false)}
                 disabled={publishing}
@@ -1411,22 +1584,22 @@ export default function StudioScreen() {
                     Publish Survey to Django Fleet 🚀
                   </Text>
                 )}
-              </Pressable>
+              </Pressable> : null}
 
-              <Pressable
+              {!policyTarget ? <Pressable
                 style={styles.saveDraftBtn}
                 onPress={() => handlePublishSurvey(true)}
                 disabled={publishing}
               >
                 <Text style={styles.saveDraftBtnText}>Save as Draft in Django Fleet 💾</Text>
-              </Pressable>
+              </Pressable> : null}
 
-              <Pressable
+              {!policyTarget ? <Pressable
                 style={styles.airdropBtn}
                 onPress={() => handleOpenAirDrop()}
               >
                 <Text style={styles.airdropBtnText}>📲 Instant QR & P2P Share (Android & iOS)</Text>
-              </Pressable>
+              </Pressable> : null}
             </View>
           </View>
         )}
@@ -2150,6 +2323,7 @@ const styles = StyleSheet.create({
   },
   cardActionsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
     marginTop: 12,
     paddingTop: 10,
@@ -2157,7 +2331,8 @@ const styles = StyleSheet.create({
     borderTopColor: colors.line,
   },
   cardActionPrimary: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '44%',
     backgroundColor: colors.primary,
     paddingVertical: 8,
     paddingHorizontal: 10,
@@ -2170,7 +2345,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   cardActionSecondary: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '44%',
     backgroundColor: colors.canvas,
     borderWidth: 1,
     borderColor: colors.line,
@@ -2184,7 +2360,36 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     fontWeight: '700',
   },
+  policyEditNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    marginBottom: 14,
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.primaryMid,
+    borderRadius: radii.medium,
+  },
+  policyEditTitle: {
+    color: colors.primaryDeep,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  policyEditSubtitle: {
+    color: colors.ink,
+    fontSize: 12,
+    marginTop: 3,
+  },
+  policyEditCancel: {
+    color: colors.primaryDeep,
+    fontSize: 12,
+    fontWeight: '700',
+    padding: 6,
+  },
   cardActionAirDrop: {
+    flexGrow: 1,
+    flexBasis: '44%',
     backgroundColor: colors.primarySoft,
     borderWidth: 1,
     borderColor: colors.primaryMid,
@@ -2266,6 +2471,13 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     marginBottom: 16,
   },
+  helperText: { fontSize: 12, lineHeight: 17, color: colors.muted, marginBottom: 8 },
+  policyRow: { paddingVertical: 10, paddingHorizontal: 11, marginVertical: 4, borderRadius: radii.small, backgroundColor: colors.canvas, borderWidth: 1, borderColor: colors.line },
+  policyTitle: { fontSize: 13, fontWeight: '700', color: colors.ink },
+  policyHint: { fontSize: 11, color: colors.muted, marginTop: 3 },
+  policyChoices: { marginTop: 8, gap: 4 },
+  policyChoice: { paddingVertical: 8, paddingHorizontal: 10, borderRadius: radii.small, backgroundColor: colors.canvas },
+  policyChoiceText: { color: colors.ink, fontSize: 12 },
   label: {
     fontSize: 10,
     fontWeight: '800',

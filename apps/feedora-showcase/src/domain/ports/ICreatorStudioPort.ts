@@ -29,6 +29,7 @@ export interface CreateSurveyPayload {
   readonly description?: string;
   readonly is_hmsam?: boolean;
   readonly is_draft?: boolean;
+  readonly features?: Record<string, unknown>;
   readonly questions: StudioQuestionPayload[];
 }
 
@@ -51,4 +52,5 @@ export interface ICreatorStudioPort {
     isActive: boolean;
     status: 'draft' | 'published';
   }>;
+  updateSurveyPolicy?(uuid: string, features: Record<string, unknown>): Promise<void>;
 }

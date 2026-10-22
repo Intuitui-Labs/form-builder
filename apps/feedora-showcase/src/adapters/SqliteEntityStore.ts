@@ -257,6 +257,56 @@ export class SqliteEntityStore implements IEntityStore {
     }
   }
 
+  async claimGuestIdentity(guestUserId: string, accountUserId: string): Promise<void> {
+    if (guestUserId === accountUserId) return;
+
+    this.db.withTransactionSync(() => {
+      const guestProfiles = this.db.getAllSync<ProfileRow>(
+        'SELECT * FROM accounts_respondentprofile WHERE user_id = ?',
+        [guestUserId],
+      );
+
+      for (const guest of guestProfiles) {
+        const account = this.db.getFirstSync<ProfileRow>(
+          'SELECT * FROM accounts_respondentprofile WHERE user_id = ? AND entity_id = ?',
+          [accountUserId, guest.entity_id],
+        );
+        if (!account) {
+          this.db.runSync(
+            'UPDATE accounts_respondentprofile SET user_id = ? WHERE user_id = ? AND entity_id = ?',
+            [accountUserId, guestUserId, guest.entity_id],
+          );
+          continue;
+        }
+
+        const badges = [...new Set([...safeParseArray(account.badges), ...safeParseArray(guest.badges)])];
+        const totalPoints = account.total_points + guest.total_points;
+        this.db.runSync(
+          `UPDATE accounts_respondentprofile
+             SET total_points = ?, surveys_completed = ?, badges = ?, updated_at = ?
+           WHERE user_id = ? AND entity_id = ?`,
+          [
+            totalPoints,
+            account.surveys_completed + guest.surveys_completed,
+            JSON.stringify(badges),
+            new Date().toISOString(),
+            accountUserId,
+            guest.entity_id,
+          ],
+        );
+        this.db.runSync(
+          'DELETE FROM accounts_respondentprofile WHERE user_id = ? AND entity_id = ?',
+          [guestUserId, guest.entity_id],
+        );
+      }
+
+      this.db.runSync('UPDATE surveys_response SET user_id = ? WHERE user_id = ?', [
+        accountUserId,
+        guestUserId,
+      ]);
+    });
+  }
+
   async getItem(key: string): Promise<string | null> {
     const row = this.db.getFirstSync<{ value: string }>(
       'SELECT value FROM app_settings WHERE key = ?',

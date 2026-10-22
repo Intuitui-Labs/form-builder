@@ -11,11 +11,12 @@ import type { IAuthPort } from '../domain/ports/IAuthPort';
 export class DjangoAuthAdapter implements IAuthPort {
   readonly mode: AuthMode = 'django';
   private currentUser: AuthUser | null = null;
+  private csrfToken: string | null = null;
   private readonly listeners = new Set<(user: AuthUser | null) => void>();
 
   constructor(
     private readonly baseUrl: string = 'http://localhost:8000',
-    private readonly fetchImpl: typeof fetch = fetch,
+    private readonly fetchImpl: typeof fetch = fetch.bind(globalThis),
   ) {}
 
   async init(): Promise<AuthUser | null> {
@@ -26,6 +27,7 @@ export class DjangoAuthAdapter implements IAuthPort {
       });
       if (res.ok) {
         const data = await res.json();
+        this.csrfToken = data.csrfToken ?? this.csrfToken;
         if (data.ok && data.authenticated && data.user) {
           this.currentUser = this.mapDjangoUser(data.user);
           this.notify();
@@ -71,9 +73,11 @@ export class DjangoAuthAdapter implements IAuthPort {
       displayName: String(raw.displayName || raw.username || raw.email || 'Researcher'),
       avatar: persona === 'creator' ? '🔬' : '🎙️',
       organizationId: org?.id,
-      organizationName: org?.name || 'University of Moratuwa',
-      organizationType: (org?.type as any) || 'university',
-      userRoleInOrg: org?.userRole || (persona === 'creator' ? 'Principal Investigator' : 'Participant'),
+      organizationName: org?.name,
+      organizationType: org?.type as AuthUser['organizationType'],
+      userRoleInOrg: org
+        ? org.userRole || (persona === 'creator' ? 'Principal Investigator' : 'Participant')
+        : undefined,
       country: org?.country || 'Sri Lanka',
       totalPoints: Number(raw.totalPoints || 0),
       createdAt: String(raw.createdAt || new Date().toISOString()),
@@ -96,6 +100,7 @@ export class DjangoAuthAdapter implements IAuthPort {
       });
 
       const data = await res.json().catch(() => null);
+      this.csrfToken = data?.csrfToken ?? this.csrfToken;
 
       if (!res.ok || !data?.ok) {
         const errorMsg = data?.error || `Django login failed with HTTP ${res.status}`;
@@ -123,7 +128,6 @@ export class DjangoAuthAdapter implements IAuthPort {
           password: input.password || 'password123',
           persona: 'respondent',
           displayName: input.displayName || input.email.split('@')[0],
-          organizationId: input.organizationId,
           gender: input.gender,
           ageGroup: input.ageGroup,
           avatar: input.avatar,
@@ -132,6 +136,7 @@ export class DjangoAuthAdapter implements IAuthPort {
       });
 
       const data = await res.json().catch(() => null);
+      this.csrfToken = data?.csrfToken ?? this.csrfToken;
 
       if (!res.ok || !data?.ok) {
         const msg = data?.error || `Django registration failed with HTTP ${res.status}`;
@@ -158,9 +163,6 @@ export class DjangoAuthAdapter implements IAuthPort {
           firstName: input.firstName,
           lastName: input.lastName,
           displayName: input.displayName || `${input.firstName} ${input.lastName}`.trim(),
-          organizationName: input.organizationName,
-          organizationType: input.organizationType,
-          userRoleInOrg: input.userRoleInOrg,
           country: input.country,
           bio: input.bio,
         }),
@@ -168,6 +170,7 @@ export class DjangoAuthAdapter implements IAuthPort {
       });
 
       const data = await res.json().catch(() => null);
+      this.csrfToken = data?.csrfToken ?? this.csrfToken;
 
       if (!res.ok || !data?.ok) {
         const msg = data?.error || `Django creator registration failed with HTTP ${res.status}`;
@@ -186,6 +189,7 @@ export class DjangoAuthAdapter implements IAuthPort {
     try {
       await this.fetchImpl(this.url('/api/v1/auth/logout/'), {
         method: 'POST',
+        headers: this.csrfToken ? { 'X-CSRFToken': this.csrfToken } : undefined,
         credentials: 'include',
       });
     } catch {

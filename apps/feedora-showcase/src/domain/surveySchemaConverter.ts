@@ -1,10 +1,12 @@
 import type {
   FieldType,
+  FormAccessPolicy,
   FormField,
   FormFieldOption,
   FormPage,
   FormSchema,
 } from '@intuitui-labs/form-builder-engine';
+import { BatteryEngine } from '@intuitui-labs/form-builder-engine';
 import type { RemoteSurveyMeta, RemoteSurveyQuestion } from './ports/transportTypes';
 
 /**
@@ -141,20 +143,37 @@ export function convertRemoteSurveyToSchema(meta: RemoteSurveyMeta): FormSchema 
     : 'survey';
 
   const featAny = features as Record<string, any> | undefined;
-  const allowRedo = Boolean(
+  const explicitPolicy = (featAny?.accessPolicy || featAny?.access_policy) as Record<string, unknown> | undefined;
+  const fallbackPolicy = BatteryEngine.getDefaultAccessPolicy(kind);
+  const hasLegacyRedoPolicy = featAny?.allow_multiple_submissions !== undefined ||
+    featAny?.allowRedo !== undefined || featAny?.collection?.allow_multiple_submissions !== undefined;
+  const legacyAllowRedo = Boolean(
     featAny?.allow_multiple_submissions ||
     featAny?.allowRedo ||
     featAny?.collection?.allow_multiple_submissions
   );
+  const explicitAllowRedo = explicitPolicy?.allowRedo ?? explicitPolicy?.allow_redo;
+  const allowRedo = explicitAllowRedo !== undefined
+    ? Boolean(explicitAllowRedo)
+    : hasLegacyRedoPolicy ? legacyAllowRedo : fallbackPolicy.allowRedo;
+  const rawMaxAttempts = explicitPolicy?.maxAttempts ?? explicitPolicy?.max_attempts;
+  const maxAttempts = rawMaxAttempts === undefined || rawMaxAttempts === null
+    ? (allowRedo ? undefined : 1)
+    : Number(rawMaxAttempts);
+  const rawRewardStrategy = explicitPolicy?.rewardStrategy ?? explicitPolicy?.reward_strategy;
+  const accessPolicy: FormAccessPolicy = {
+    allowRedo,
+    maxAttempts: Number.isFinite(maxAttempts) && maxAttempts! > 0 ? maxAttempts : (allowRedo ? undefined : 1),
+    rewardStrategy: (rawRewardStrategy ?? fallbackPolicy.rewardStrategy) as FormAccessPolicy['rewardStrategy'],
+    ...(explicitPolicy?.cooldownMinutes !== undefined || explicitPolicy?.cooldown_minutes !== undefined
+      ? { cooldownMinutes: Number(explicitPolicy.cooldownMinutes ?? explicitPolicy.cooldown_minutes) }
+      : {}),
+  };
 
   return {
     id: survey.uuid || `survey-${survey.id}`,
     kind,
-    accessPolicy: {
-      allowRedo,
-      maxAttempts: allowRedo ? undefined : 1,
-      rewardStrategy: kind === 'quiz' ? 'score_delta' : 'first_attempt_only',
-    },
+    accessPolicy,
     title: survey.title,
     description: survey.description || '',
     pages: [coverPage, ...questionPages],

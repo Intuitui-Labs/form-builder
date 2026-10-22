@@ -6,7 +6,7 @@ import { colors, radii } from '../theme';
 
 export function OfflineSyncBanner() {
   const { outboxPort, refresh } = useFeedora();
-  const [isOnline, setIsOnline] = useState(true);
+  const [backendReachable, setBackendReachable] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
   const [showSyncedToast, setShowSyncedToast] = useState(false);
@@ -22,11 +22,11 @@ export function OfflineSyncBanner() {
       }).catch(() => null);
       clearTimeout(timeoutId);
 
-      const online = res !== null && res.status >= 200 && res.status < 500;
-      setIsOnline(online);
-      return online;
+      const reachable = res !== null && res.status >= 200 && res.status < 500;
+      setBackendReachable(reachable);
+      return reachable;
     } catch {
-      setIsOnline(false);
+      setBackendReachable(false);
       return false;
     }
   }, []);
@@ -94,15 +94,15 @@ export function OfflineSyncBanner() {
     );
   }
 
-  if (!isOnline) {
+  if (!backendReachable) {
     return (
       <View style={styles.offlineBanner}>
         <View style={styles.textCol}>
-          <Text style={styles.offlineTitle}>📡 Offline Mode</Text>
+          <Text style={styles.offlineTitle}>📡 Research server unavailable</Text>
           <Text style={styles.offlineSub}>
             {pendingCount > 0
               ? `${pendingCount} survey response${pendingCount > 1 ? 's' : ''} safely queued in local outbox`
-              : 'Network disconnected. Surveys will be saved locally.'}
+              : `Can’t reach ${FEEDORA_REMOTE.baseUrl}. Your device may still have internet access; on Expo Go, check that Django is running and the phone can reach this address.`}
           </Text>
         </View>
         <Pressable

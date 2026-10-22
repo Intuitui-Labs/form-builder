@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
 /**
  * Feedora research backend configuration.
@@ -19,8 +20,21 @@ export function getDjangoBaseUrl(): string {
   if (Platform.OS === 'web') {
     return `http://127.0.0.1:${DJANGO_PORT}`;
   }
+  // Expo Go exposes the Metro host as hostUri. Derive the backend host from
+  // that address so phones keep working when the developer machine's LAN IP
+  // changes. Set EXPO_PUBLIC_API_BASE_URL when Django runs on another host.
+  const hostUri = Constants.expoConfig?.hostUri;
+  if (hostUri) {
+    try {
+      const expoHost = new URL(`http://${hostUri}`).hostname;
+      if (expoHost && expoHost !== 'localhost' && expoHost !== '127.0.0.1') {
+        return `http://${expoHost}:${DJANGO_PORT}`;
+      }
+    } catch {
+      // Fall through to the documented development-machine address.
+    }
+  }
   if (Platform.OS === 'android') {
-    // Android emulator can use 10.0.2.2; physical device uses LAN IP
     return `http://${DEV_MACHINE_LAN_IP}:${DJANGO_PORT}`;
   }
   return `http://${DEV_MACHINE_LAN_IP}:${DJANGO_PORT}`;
@@ -30,6 +44,9 @@ export const FEEDORA_REMOTE = {
   baseUrl: getDjangoBaseUrl(),
   surveyUuid: 'ba8ca44c-dc28-481d-9730-4e12c4e281e0',
 } as const;
+
+/** Django currently owns the research API's cookie session. Other identity providers need a token bridge before selection. */
+export const FEEDORA_AUTH_PROVIDER = 'django' as const;
 
 export const remoteEnabled = FEEDORA_REMOTE.surveyUuid.length > 0;
 

@@ -1,19 +1,15 @@
 import seedJson from './feedora.seed.json';
 import {
-  FEEDORA_BADGES,
-  type ContributionProfile,
   type Entity,
   type EntityType,
   type SurveyFeatures,
 } from '../domain/types';
-import { standingFor } from '../domain/levels';
 import type { SeedBundle } from '../domain/ports/IEntityStore';
 
 /**
- * Real data extracted from her Django app (`gihini-research/db.sqlite3`) by
- * `gen_seed.py`: 1 organisation (University of Moratuwa), 3 registered
- * respondents, 44 responses, and 190 HMSAM answers across 5 responses.
- * Regenerate with that script whenever her DB changes.
+ * Static research records are intentionally excluded from the client bundle.
+ * Organization metadata and survey feature defaults are only startup fallbacks;
+ * live organization, response, and standing data come from Django.
  */
 
 interface SeedOrganization {
@@ -25,33 +21,7 @@ interface SeedOrganization {
   user_id: number;
 }
 
-interface SeedRespondent {
-  user_id: number;
-  email: string;
-  display_name: string;
-  total_points: number;
-}
-
-interface SeedResponseRow {
-  id: number;
-  survey_id: number;
-  user_id: number | null;
-  points_earned: number;
-  completed_at: string;
-}
-
-interface SeedAnswerRow {
-  response_id: number;
-  survey_id: number;
-  question_code: string;
-  hmsam_construct: string;
-  likert_value: number;
-}
-
 const organizations = seedJson.organizations as SeedOrganization[];
-const respondents = seedJson.respondents as SeedRespondent[];
-const responseRows = seedJson.responses as SeedResponseRow[];
-const answerRows = seedJson.hmsamAnswers as SeedAnswerRow[];
 
 function accentFor(type: EntityType): string {
   switch (type) {
@@ -112,45 +82,11 @@ export const FEEDORA_FEATURES = seedJson.featuresHmsam as unknown as SurveyFeatu
 /** Survey.features of her gamified sample survey (survey id 11). */
 export const FEEDORA_FEATURES_GAMIFIED = seedJson.featuresGamified as unknown as SurveyFeatures;
 
-const AVATARS = ['🎙️', '📣', '💬', '🗣️', '🎧', '🌱'];
-
-/** One HMSAM response matrix row per real response_id (field code -> likert 1-5). */
-export const SEED_HMSAM_MATRIX: Record<string, number>[] = (() => {
-  const byResponse = new Map<number, Record<string, number>>();
-  for (const row of answerRows) {
-    const bucket = byResponse.get(row.response_id) ?? {};
-    bucket[row.question_code] = row.likert_value;
-    byResponse.set(row.response_id, bucket);
-  }
-  return [...byResponse.values()];
-})();
-
-function responseCountFor(userId: number): number {
-  return responseRows.filter((r) => r.user_id === userId).length;
-}
-
 export function buildSeed(): SeedBundle {
-  const entityId = FEEDORA_ENTITY.id;
-
-  const profiles: ContributionProfile[] = respondents.map((respondent, index) => {
-    const surveysCompleted = responseCountFor(respondent.user_id);
-    const badges = FEEDORA_BADGES.filter((b) => surveysCompleted >= b.minResponses).map((b) => b.id);
-    return {
-      userId: `user-${respondent.user_id}`,
-      displayName: respondent.display_name,
-      avatar: AVATARS[index % AVATARS.length]!,
-      entityId,
-      totalPoints: respondent.total_points,
-      surveysCompleted,
-      badges,
-      standing: standingFor(respondent.total_points),
-      updatedAt: new Date().toISOString(),
-    };
-  });
-
   return {
     entities: FEEDORA_ENTITIES,
-    profiles,
-    responses: SEED_HMSAM_MATRIX,
+    // Respondent identities, points, and response history are server sourced.
+    profiles: [],
+    responses: [],
   };
 }

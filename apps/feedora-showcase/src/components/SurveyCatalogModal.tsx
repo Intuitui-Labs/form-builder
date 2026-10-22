@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import {
   Modal,
   Pressable,
@@ -13,21 +13,11 @@ import { useFeedora, transportPort } from '../feedora';
 import { Tag } from './FeedoraUi';
 import { colors, radii, serifFont } from '../theme';
 import { BatteryEngine, FormKind, FormAccessPolicy } from '@intuitui-labs/form-builder-engine';
+import type { RemoteSurveyCatalogItem } from '../domain/ports/transportTypes';
+import type { SubmissionHistoryRecord } from '../domain/ports/IEntityStore';
 
-interface SurveyCatalogItem {
-  id: number;
-  uuid: string;
-  accessCode: string;
-  title: string;
-  description: string;
-  isHmsam: boolean;
-  kind?: FormKind;
-  accessPolicy?: FormAccessPolicy;
+interface SurveyCatalogItem extends RemoteSurveyCatalogItem {
   questionsCount: number;
-  // Dynamic lock criteria
-  prerequisiteId?: number | null;
-  prerequisiteTitle?: string;
-  unlockCodeRequired?: boolean;
 }
 
 interface SurveyCatalogModalProps {
@@ -35,6 +25,7 @@ interface SurveyCatalogModalProps {
   onClose: () => void;
   onSelectSurvey: (uuid: string) => Promise<void>;
   completedSurveyIds?: Set<number | string>;
+  submissionHistory?: SubmissionHistoryRecord[];
 }
 
 export function SurveyCatalogModal({
@@ -42,36 +33,26 @@ export function SurveyCatalogModal({
   onClose,
   onSelectSurvey,
   completedSurveyIds = new Set(),
+  submissionHistory = [],
 }: SurveyCatalogModalProps) {
-  const { activeSurveyUuid } = useFeedora();
+  const { activeSurveyUuid, entityId, authUser, guestUserId, openAuthModal } = useFeedora();
   const [surveys, setSurveys] = useState<SurveyCatalogItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [selectedSurveyForCode, setSelectedSurveyForCode] = useState<SurveyCatalogItem | null>(null);
   const [enteredCode, setEnteredCode] = useState('');
   const [codeError, setCodeError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'hmsam' | 'custom'>('all');
-  const [lastRefreshedAt, setLastRefreshedAt] = useState<string>('Just now');
 
-  const reloadSurveys = () => {
+  const reloadSurveys = useCallback(() => {
+    let cancelled = false;
     setLoading(true);
+    setLoadError(null);
     transportPort
-      .fetchPublicSurveys()
+      .fetchPublicSurveys(entityId, authUser ? undefined : guestUserId)
       .then((items) => {
-        const enriched: SurveyCatalogItem[] = items.map((item, idx) => {
-          let prerequisiteId: number | null = null;
-          let prerequisiteTitle: string | undefined;
-          let unlockCodeRequired = false;
-
-          if (!item.isHmsam && idx > 2) {
-            prerequisiteId = 1;
-            prerequisiteTitle = 'Baseline HMSAM Survey';
-          }
-
-          if (item.title.toLowerCase().includes('points') || item.title.toLowerCase().includes('gamification')) {
-            unlockCodeRequired = false;
-          }
-
+        const enriched: SurveyCatalogItem[] = items.map((item) => {
           const kind: FormKind = (item.kind as FormKind) || (item.isHmsam
             ? 'survey'
             : item.title.toLowerCase().includes('quiz')
@@ -88,25 +69,29 @@ export function SurveyCatalogModal({
             ...item,
             kind,
             accessPolicy,
-            prerequisiteId,
-            prerequisiteTitle,
-            unlockCodeRequired,
           };
         });
 
-        setSurveys(enriched);
-        setLastRefreshedAt(new Date().toLocaleTimeString());
+        if (!cancelled) setSurveys(enriched);
       })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  };
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setSurveys([]);
+          setLoadError(error instanceof Error ? error.message : 'Could not load research surveys.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [entityId, authUser, guestUserId]);
 
   useEffect(() => {
     if (!visible) return;
-    reloadSurveys();
-    const interval = setInterval(reloadSurveys, 10000); // 10s live sync with Django DB
-    return () => clearInterval(interval);
-  }, [visible]);
+    return reloadSurveys();
+  }, [visible, reloadSurveys]);
 
   const filtered = useMemo(() => {
     return surveys.filter((s) => {
@@ -118,25 +103,119 @@ export function SurveyCatalogModal({
       if (activeTab === 'hmsam') return s.isHmsam;
       if (activeTab === 'custom') return !s.isHmsam;
       return true;
+    }).sort((a, b) => {
+      const groupA = a.sequenceGroup ? `group:${a.sequenceGroup}` : `survey:${a.uuid}`;
+      const groupB = b.sequenceGroup ? `group:${b.sequenceGroup}` : `survey:${b.uuid}`;
+      return groupA.localeCompare(groupB) || (a.sequenceOrder ?? a.id) - (b.sequenceOrder ?? b.id);
     });
   }, [surveys, search, activeTab]);
 
-  const handleSurveyClick = async (survey: SurveyCatalogItem) => {
-    // Check prerequisite
-    if (survey.prerequisiteId && !completedSurveyIds.has(survey.prerequisiteId) && !completedSurveyIds.has('hmsam')) {
-      alert(`🔒 Locked: Please complete the "${survey.prerequisiteTitle || 'Prerequisite Survey'}" first to unlock this research instrument.`);
-      return;
+  const accessBySurveyId = useMemo(() => {
+    const scopedRecords = submissionHistory.filter((record) => record.entityId === entityId);
+    const normalizedHistory = scopedRecords.map((record) => {
+      const sourceId = String(record.surveyId);
+      const match = surveys.find((survey) =>
+        sourceId === survey.uuid || sourceId === String(survey.id) ||
+        (survey.isHmsam && (sourceId === 'hmsam' || sourceId === 'hmsam-38')),
+      );
+      return {
+        formId: match?.uuid ?? sourceId,
+        completedAt: record.completedAt,
+        isCompleted: true,
+        attemptNumber: 1,
+      };
+    });
+    for (const survey of surveys) {
+      const hasHistory = normalizedHistory.some((record) => record.formId === survey.uuid);
+      const completedLocally = completedSurveyIds.has(survey.uuid) || completedSurveyIds.has(survey.id) ||
+        (survey.isHmsam && (completedSurveyIds.has('hmsam') || completedSurveyIds.has('hmsam-38')));
+      if (!hasHistory && completedLocally) {
+        normalizedHistory.push({
+          formId: survey.uuid,
+          completedAt: new Date(0).toISOString(),
+          isCompleted: true,
+          attemptNumber: 1,
+        });
+      }
+    }
+    for (const survey of surveys) {
+      const existingAttempts = normalizedHistory.filter((record) => record.formId === survey.uuid && record.isCompleted !== false).length;
+      const serverAttempts = Math.max(0, Number(survey.attemptsUsed) || 0);
+      for (let index = existingAttempts; index < serverAttempts; index += 1) {
+        normalizedHistory.push({
+          formId: survey.uuid,
+          completedAt: survey.lastCompletedAt || new Date(0).toISOString(),
+          isCompleted: true,
+          attemptNumber: index + 1,
+        });
+      }
     }
 
-    // Check allowRedo policy
-    const isCompleted = completedSurveyIds.has(survey.id) || (survey.isHmsam && completedSurveyIds.has('hmsam'));
-    if (isCompleted && survey.accessPolicy && !survey.accessPolicy.allowRedo) {
-      alert(`🔒 Completed: This ${survey.kind || 'instrument'} has already been completed and retakes are restricted by the research protocol.`);
+    const evaluations = new Map<string, ReturnType<typeof BatteryEngine.evaluateNodeAccess>>();
+    for (const survey of surveys) {
+      const sequencePrerequisites = survey.enforceSequence && survey.sequenceGroup && survey.sequenceOrder !== undefined
+        ? surveys
+            .filter((candidate) => candidate.sequenceGroup === survey.sequenceGroup &&
+              candidate.sequenceOrder !== undefined && candidate.sequenceOrder < survey.sequenceOrder!)
+            .map((candidate) => candidate.uuid)
+        : [];
+      const prerequisites = [...new Set([...(survey.prerequisites ?? []), ...sequencePrerequisites])];
+      const node = {
+        id: survey.uuid,
+        schemaId: survey.uuid,
+        title: survey.title,
+        kind: survey.kind ?? 'survey' as FormKind,
+        stage: 'baseline' as const,
+        sequenceOrder: survey.sequenceOrder ?? survey.id,
+        accessPolicy: survey.accessPolicy,
+        ...(prerequisites.length || survey.unlockDelayMs || survey.minScorePercent !== undefined
+          ? {
+              prerequisites: {
+                completedFormIds: prerequisites,
+                ...(survey.unlockDelayMs ? { unlockDelayMs: survey.unlockDelayMs } : {}),
+                ...(survey.minScorePercent !== undefined ? { minScorePercent: survey.minScorePercent } : {}),
+              },
+            }
+          : {}),
+      };
+      evaluations.set(survey.uuid, BatteryEngine.evaluateNodeAccess(node, normalizedHistory));
+    }
+    return evaluations;
+  }, [submissionHistory, completedSurveyIds, entityId, surveys]);
+
+  const lockDescription = (item: SurveyCatalogItem, evaluation: ReturnType<typeof BatteryEngine.evaluateNodeAccess>) => {
+    if (item.requiresAccount && !authUser) return 'Sign in to start and save progress on this survey.';
+    if (item.accessCodeRequired) return 'An access code is required to start this survey.';
+    if (evaluation.reason === 'prerequisite_unmet') {
+      const titles = (evaluation.missingFormIds ?? [])
+        .map((id) => surveys.find((survey) => survey.uuid === id)?.title)
+        .filter(Boolean);
+      return `Complete ${titles.join(', ') || 'the required survey'} first.`;
+    }
+    if (evaluation.reason === 'score_threshold_unmet') return 'A required score has not been reached yet.';
+    if (evaluation.reason === 'cooldown_active' || evaluation.reason === 'time_locked') {
+      return evaluation.unlocksAt
+        ? `Available ${new Date(evaluation.unlocksAt).toLocaleString()}.`
+        : 'This survey is temporarily locked.';
+    }
+    if (evaluation.reason === 'max_attempts_reached') return 'You have reached the attempt limit for this survey.';
+    return 'This survey is not available yet.';
+  };
+
+  const handleSurveyClick = async (survey: SurveyCatalogItem) => {
+    const evaluation = accessBySurveyId.get(survey.uuid)!;
+    if (survey.requiresAccount && !authUser) {
+      alert('Sign in to start this survey and save your progress.');
+      openAuthModal();
+      return;
+    }
+    if (evaluation.isLocked) {
+      alert(`🔒 ${lockDescription(survey, evaluation)}`);
       return;
     }
 
     // Check code lock if required
-    if (survey.unlockCodeRequired) {
+    if (survey.accessCodeRequired) {
       setSelectedSurveyForCode(survey);
       setEnteredCode('');
       setCodeError(null);
@@ -225,21 +304,38 @@ export function SurveyCatalogModal({
           </View>
         ) : (
           <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
-            {filtered.length === 0 ? (
+            {loadError ? (
+              <View style={styles.emptyWrap}>
+                <Text style={styles.emptyEmoji}>📡</Text>
+                <Text style={styles.emptyTitle}>Couldn’t load surveys</Text>
+                <Text style={styles.emptyDesc}>{loadError}</Text>
+                <Pressable style={styles.retryCatalogButton} onPress={reloadSurveys} accessibilityRole="button">
+                  <Text style={styles.retryCatalogText}>Try again</Text>
+                </Pressable>
+              </View>
+            ) : filtered.length === 0 ? (
               <View style={styles.emptyWrap}>
                 <Text style={styles.emptyEmoji}>🔎</Text>
                 <Text style={styles.emptyTitle}>No matching studies found</Text>
                 <Text style={styles.emptyDesc}>Try adjusting your search query or switch tabs.</Text>
               </View>
             ) : (
-              filtered.map((item) => {
+              filtered.map((item, index) => {
                 const isActive = item.uuid === activeSurveyUuid;
-                const isCompleted = completedSurveyIds.has(item.id) || (item.isHmsam && completedSurveyIds.has('hmsam'));
-                const isLocked = Boolean(item.prerequisiteId && !completedSurveyIds.has(item.prerequisiteId) && !completedSurveyIds.has('hmsam'));
+                const evaluation = accessBySurveyId.get(item.uuid)!;
+                const isCompleted = evaluation.isCompleted;
+                const isLocked = evaluation.isLocked || item.accessCodeRequired === true || (item.requiresAccount === true && !authUser);
+                const canRetake = !isLocked && isCompleted;
 
                 return (
+                  <View key={item.uuid}>
+                  {item.sequenceGroup && (!index || filtered[index - 1]?.sequenceGroup !== item.sequenceGroup) ? (
+                    <View style={styles.sequenceHeading}>
+                      <Text style={styles.sequenceTitle}>{item.sequenceGroup}</Text>
+                      <Text style={styles.sequenceCaption}>Survey sequence</Text>
+                    </View>
+                  ) : null}
                   <Pressable
-                    key={item.uuid}
                     style={[
                       styles.card,
                       isActive && styles.cardActive,
@@ -254,13 +350,17 @@ export function SurveyCatalogModal({
                         </Tag>
                         {isActive && <Tag tone="gold">🌟 ACTIVE</Tag>}
                         {isCompleted && (
-                          <Tag tone={item.accessPolicy?.allowRedo ? 'teal' : 'slate'}>
-                            {item.accessPolicy?.allowRedo ? '✓ RETAKE' : '✓ DONE'}
+                          <Tag tone={canRetake ? 'teal' : 'slate'}>
+                            {canRetake ? '✓ RETAKE' : '✓ DONE'}
                           </Tag>
+                        )}
+                        {item.requiresAccount && <Tag tone="slate">SIGN IN</Tag>}
+                        {item.sequenceGroup && item.sequenceOrder !== undefined && (
+                          <Tag tone="slate">STEP {item.sequenceOrder}</Tag>
                         )}
                       </View>
                       <Text style={styles.statusIndicator}>
-                        {isLocked ? '🔒' : isActive ? '🌟' : isCompleted ? (item.accessPolicy?.allowRedo ? '🔄' : '✅') : '→'}
+                        {isLocked ? '🔒' : isActive ? '🌟' : isCompleted ? (canRetake ? '🔄' : '✅') : '→'}
                       </Text>
                     </View>
 
@@ -274,7 +374,7 @@ export function SurveyCatalogModal({
                     {isLocked ? (
                       <View style={styles.prereqNotice}>
                         <Text style={styles.prereqText}>
-                          🔒 Prerequisite required: Complete {item.prerequisiteTitle || 'Baseline HMSAM'} to unlock.
+                          🔒 {lockDescription(item, evaluation)}
                         </Text>
                       </View>
                     ) : (
@@ -288,6 +388,7 @@ export function SurveyCatalogModal({
                       </View>
                     )}
                   </Pressable>
+                  </View>
                 );
               })
             )}
@@ -452,6 +553,9 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     gap: 10,
   },
+  sequenceHeading: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingHorizontal: 3, paddingTop: 12 },
+  sequenceTitle: { color: colors.ink, fontSize: 15, fontWeight: '700', fontFamily: serifFont },
+  sequenceCaption: { color: colors.faint, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.7 },
   card: {
     backgroundColor: colors.paper,
     borderWidth: 1,
@@ -534,6 +638,18 @@ const styles = StyleSheet.create({
   emptyDesc: {
     fontSize: 12,
     color: colors.muted,
+  },
+  retryCatalogButton: {
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: radii.pill,
+    backgroundColor: colors.ink,
+  },
+  retryCatalogText: {
+    color: colors.paper,
+    fontSize: 12,
+    fontWeight: '700',
   },
   codeModalBackdrop: {
     flex: 1,

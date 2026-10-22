@@ -1,7 +1,5 @@
 import type {
-  AuthMode,
   AuthUser,
-  ExportDataPayload,
   SignInInput,
   SignUpCreatorInput,
   SignUpRespondentInput,
@@ -16,8 +14,6 @@ import type {
  *   3. DjangoAuthAdapter   (Direct HTTP to Gihini's Django server)
  */
 export interface IAuthPort {
-  readonly mode: AuthMode;
-
   /** Initialize or restore existing session. */
   init(): Promise<AuthUser | null>;
 
@@ -38,7 +34,9 @@ export interface IAuthPort {
 
   /** Subscribe to authentication state transitions. */
   onAuthStateChange(listener: (user: AuthUser | null) => void): () => void;
+}
 
-  /** Export data aligned with Gihini's schema (JSON / CSV / SQL) */
-  exportData(format: 'json' | 'csv' | 'sql'): Promise<ExportDataPayload>;
+/** Export is a data lifecycle concern, not an identity operation. */
+export interface IUserDataExportPort {
+  exportData(format: 'json' | 'csv' | 'sql'): Promise<import('../authTypes').ExportDataPayload>;
 }

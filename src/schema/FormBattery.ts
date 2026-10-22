@@ -64,7 +64,7 @@ export interface BatteryAccessEvaluation {
   isCompleted: boolean;
   attemptsUsed: number;
   isLocked: boolean;
-  reason?: 'prerequisite_unmet' | 'score_threshold_unmet' | 'max_attempts_reached' | 'time_locked' | 'access_code_required';
+  reason?: 'prerequisite_unmet' | 'score_threshold_unmet' | 'max_attempts_reached' | 'time_locked' | 'cooldown_active' | 'access_code_required';
   missingFormIds?: string[];
   unlocksAt?: string;
   hasPartialProgress?: boolean;

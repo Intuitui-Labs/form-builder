@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { FormField } from '@intuitui-labs/form-builder-engine';
@@ -8,6 +8,9 @@ import type { Entity, Standing } from '../domain/types';
 import { colors, radii, sansFont, serifFont } from '../theme';
 
 export function AppPage({ children }: { children: ReactNode }) {
+  const { width } = useWindowDimensions();
+  const desktopWeb = Platform.OS === 'web' && width >= 900;
+
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <StatusBar style="dark" />
@@ -16,7 +19,7 @@ export function AppPage({ children }: { children: ReactNode }) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.content}>{children}</View>
+        <View style={[styles.content, desktopWeb && styles.contentDesktopWeb]}>{children}</View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -45,17 +48,23 @@ export function BrandHeader({
 }) {
   return (
     <View style={styles.brandHeader}>
-      <View style={styles.brandLine}>
-        <View style={styles.brandGroup}>
-          <FeedoraMark />
-          <Text style={styles.brandLogo}>Feedora</Text>
-        </View>
-        {rightAction ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            {rightAction}
+      {Platform.OS !== 'web' ? (
+        <View style={styles.brandLine}>
+          <View style={styles.brandGroup}>
+            <FeedoraMark />
+            <Text style={styles.brandLogo}>Feedora</Text>
           </View>
-        ) : null}
-      </View>
+          {rightAction ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {rightAction}
+            </View>
+          ) : null}
+        </View>
+      ) : rightAction ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 12 }}>
+          {rightAction}
+        </View>
+      ) : null}
       {eyebrow && <Text style={styles.eyebrow}>{eyebrow.toUpperCase()}</Text>}
       <Text style={styles.heroTitle}>{title}</Text>
       {subtitle && <Text style={styles.heroSubtitle}>{subtitle}</Text>}
@@ -193,6 +202,58 @@ export function StepMeter({
   );
 }
 
+export function SessionFeedback({
+  step,
+  steps,
+  answered,
+  total,
+  percent,
+  eta,
+  points,
+  pointsDelta,
+  quiz,
+  correct,
+  graded,
+  timerSeconds,
+  streak,
+}: {
+  step: number;
+  steps: number;
+  answered: number;
+  total: number;
+  percent: number;
+  eta?: string;
+  points?: number;
+  pointsDelta?: number;
+  quiz?: boolean;
+  correct?: number;
+  graded?: number;
+  timerSeconds?: number;
+  streak?: number;
+}) {
+  const timer = timerSeconds == null ? undefined : `${Math.floor(timerSeconds / 60)}:${String(timerSeconds % 60).padStart(2, '0')}`;
+  return (
+    <View style={styles.sessionFeedback} accessibilityLiveRegion="polite">
+      <View style={styles.sessionFeedbackTop}>
+        <Text style={styles.sessionFeedbackStep}>Step {step} of {steps}</Text>
+        <View style={styles.sessionFeedbackMeta}>
+          {quiz && graded != null ? <Text style={styles.sessionFeedbackDetail}>{correct ?? 0} correct</Text> : null}
+          {timer ? <Text style={styles.sessionFeedbackDetail}>Time {timer}</Text> : null}
+          {!quiz && points != null ? (
+            <Text style={styles.sessionFeedbackPoints}>{points} pts{pointsDelta ? `  ·  +${pointsDelta}` : ''}</Text>
+          ) : null}
+        </View>
+      </View>
+      <Meter percent={percent} color={colors.primary} height={5} />
+      <View style={styles.sessionFeedbackBottom}>
+        <Text style={styles.sessionFeedbackDetail}>{answered} of {total} answered</Text>
+        {quiz && streak != null && streak > 1 ? <Text style={styles.sessionFeedbackDetail}>{streak} correct in a row</Text> : null}
+        {!quiz && eta ? <Text style={styles.sessionFeedbackDetail}>{eta}</Text> : null}
+      </View>
+    </View>
+  );
+}
+
 export function LevelProgress({
   standing,
   totalPoints,
@@ -222,31 +283,6 @@ export function LevelProgress({
         <Text style={styles.levelNext}>Top level reached 🏆</Text>
       )}
     </View>
-  );
-}
-
-export function PointsToast({
-  points,
-  label,
-  onDismiss,
-}: {
-  points: number;
-  label?: string;
-  onDismiss: () => void;
-}) {
-  return (
-    <Pressable accessibilityRole="button" onPress={onDismiss} style={styles.toast}>
-      <Text style={styles.toastPoints}>+{points}</Text>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.toastTitle}>Voice points earned</Text>
-        {label ? (
-          <Text numberOfLines={2} style={styles.toastLabel}>
-            {label}
-          </Text>
-        ) : null}
-      </View>
-      <Text style={styles.toastDismiss}>✕</Text>
-    </Pressable>
   );
 }
 
@@ -489,11 +525,12 @@ const styles = StyleSheet.create({
   scrollContent: { flexGrow: 1, paddingBottom: 48 },
   content: {
     width: '100%',
-    maxWidth: 740,
+    maxWidth: Platform.select({ web: 920, default: 740 }),
     alignSelf: 'center',
-    paddingHorizontal: 22,
-    paddingTop: 12,
+    paddingHorizontal: Platform.select({ web: 24, default: 22 }),
+    paddingTop: Platform.select({ web: 28, default: 12 }),
   },
+  contentDesktopWeb: { maxWidth: 1120, paddingHorizontal: 48, paddingTop: 44 },
 
   brandHeader: { paddingTop: 6, paddingBottom: 16 },
   brandLine: {
@@ -555,18 +592,18 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     color: colors.ink,
-    fontSize: 34,
-    lineHeight: 40,
+    fontSize: Platform.select({ web: 42, default: 34 }),
+    lineHeight: Platform.select({ web: 52, default: 40 }),
     fontWeight: '400',
     fontFamily: serifFont,
     letterSpacing: -0.5,
   },
   heroSubtitle: {
     color: colors.muted,
-    fontSize: 14.5,
-    lineHeight: 22,
-    marginTop: 8,
-    maxWidth: 580,
+    fontSize: Platform.select({ web: 16, default: 14.5 }),
+    lineHeight: Platform.select({ web: 25, default: 22 }),
+    marginTop: 10,
+    maxWidth: 680,
     fontFamily: sansFont,
   },
 
@@ -575,8 +612,8 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     borderWidth: 1,
     borderRadius: radii.medium,
-    padding: 22,
-    marginBottom: 16,
+    padding: Platform.select({ web: 28, default: 22 }),
+    marginBottom: Platform.select({ web: 20, default: 16 }),
     shadowColor: '#14140F',
     shadowOpacity: 0.03,
     shadowRadius: 12,
@@ -595,7 +632,7 @@ const styles = StyleSheet.create({
   tagGold: { backgroundColor: colors.amberLight },
   tagSlate: { backgroundColor: colors.slateSoft },
   tagRose: { backgroundColor: colors.roseSoft },
-  tagText: { fontSize: 10.5, fontWeight: '700', letterSpacing: 0.3 },
+  tagText: { fontSize: Platform.select({ web: 12, default: 10.5 }), fontWeight: '700', letterSpacing: 0.3 },
   tagTextViolet: { color: colors.primaryDeep },
   tagTextTeal: { color: colors.green },
   tagTextGold: { color: colors.amber },
@@ -605,16 +642,17 @@ const styles = StyleSheet.create({
   sectionHeading: { marginTop: 4, marginBottom: 12 },
   sectionTitle: {
     color: colors.ink,
-    fontSize: 18,
+    fontSize: Platform.select({ web: 21, default: 18 }),
     fontWeight: '700',
     letterSpacing: -0.3,
     fontFamily: sansFont,
   },
   sectionDetail: {
     color: colors.muted,
-    fontSize: 12.5,
-    lineHeight: 18,
-    marginTop: 4,
+    fontSize: Platform.select({ web: 15, default: 12.5 }),
+    lineHeight: Platform.select({ web: 23, default: 18 }),
+    marginTop: 6,
+    fontFamily: sansFont,
   },
 
   actionButton: {
@@ -634,7 +672,7 @@ const styles = StyleSheet.create({
   actionButtonCompact: { minHeight: 38, borderRadius: radii.small, paddingHorizontal: 12 },
   actionButtonDisabled: { opacity: 0.5 },
   actionButtonPressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
-  actionText: { fontSize: 13.5, fontWeight: '600', letterSpacing: 0.2 },
+  actionText: { fontSize: Platform.select({ web: 15, default: 13.5 }), fontWeight: '600', letterSpacing: 0.2, fontFamily: sansFont },
   actionTextPrimary: { color: '#FFFFFF' },
   actionTextSecondary: { color: colors.ink },
 
@@ -642,17 +680,34 @@ const styles = StyleSheet.create({
   meterFill: { borderRadius: radii.pill },
 
   stepMeter: { marginBottom: 16, gap: 8 },
+  sessionFeedback: {
+    marginVertical: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    gap: 8,
+    borderRadius: radii.small,
+    backgroundColor: colors.canvas,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  sessionFeedbackTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+  sessionFeedbackMeta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap' },
+  sessionFeedbackStep: { color: colors.ink, fontSize: 13, lineHeight: 18, fontWeight: '700', fontFamily: sansFont },
+  sessionFeedbackBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  sessionFeedbackDetail: { color: colors.muted, fontSize: 12, lineHeight: 17, fontWeight: '500', fontFamily: sansFont },
+  sessionFeedbackPoints: { color: colors.primary, fontSize: 12, lineHeight: 17, fontWeight: '700', fontFamily: sansFont },
   stepMeterRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   stepMeterLabel: {
-    fontSize: 11,
+    fontSize: Platform.select({ web: 14, default: 11 }),
+    lineHeight: 20,
     fontWeight: '700',
     color: colors.muted,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
-  stepMeterValue: { fontSize: 13, fontWeight: '800', color: colors.primaryDeep },
+  stepMeterValue: { fontSize: Platform.select({ web: 15, default: 13 }), lineHeight: 22, fontWeight: '800', color: colors.primaryDeep },
   stepMeterFootRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  stepMeterFoot: { fontSize: 11.5, color: colors.faint, fontWeight: '500' },
+  stepMeterFoot: { fontSize: Platform.select({ web: 14, default: 11.5 }), lineHeight: 21, color: colors.faint, fontWeight: '500', fontFamily: sansFont },
 
   levelProgress: { gap: 8 },
   levelProgressCompact: { gap: 6 },
@@ -660,32 +715,7 @@ const styles = StyleSheet.create({
   levelDot: { width: 9, height: 9, borderRadius: 5 },
   levelName: { fontSize: 14, fontWeight: '700' },
   levelPoints: { marginLeft: 'auto', fontSize: 12.5, fontWeight: '700', color: colors.ink },
-  levelNext: { fontSize: 11.5, color: colors.muted, fontWeight: '500' },
-
-  toast: {
-    position: 'absolute',
-    bottom: 24,
-    left: 20,
-    right: 20,
-    zIndex: 9999,
-    elevation: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#FFFBEB',
-    borderColor: '#FCD34D',
-    borderWidth: 1.5,
-    borderRadius: radii.medium,
-    padding: 14,
-    shadowColor: '#78350F',
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-  },
-  toastPoints: { fontSize: 20, fontWeight: '800', color: colors.amber },
-  toastTitle: { fontSize: 12, fontWeight: '700', color: colors.ink },
-  toastLabel: { fontSize: 11, color: colors.muted, marginTop: 1 },
-  toastDismiss: { fontSize: 14, color: colors.amber, fontWeight: '800', paddingHorizontal: 4 },
+  levelNext: { fontSize: Platform.select({ web: 14, default: 11.5 }), lineHeight: 20, color: colors.muted, fontWeight: '500' },
 
   entityCard: {
     flexDirection: 'row',
@@ -772,13 +802,14 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     color: colors.ink,
-    fontSize: 13.5,
+    fontSize: Platform.select({ web: 16, default: 13.5 }),
+    lineHeight: Platform.select({ web: 24, default: 20 }),
     fontWeight: '600',
     flex: 1,
     paddingRight: 8,
   },
   requiredMark: { fontSize: 9.5, color: colors.rose, fontWeight: '700', letterSpacing: 0.5 },
-  fieldHelperText: { fontSize: 11.5, color: colors.muted, marginBottom: 8, marginTop: -2 },
+  fieldHelperText: { fontSize: Platform.select({ web: 14, default: 11.5 }), lineHeight: Platform.select({ web: 21, default: 16 }), color: colors.muted, marginBottom: 8, marginTop: -2, fontFamily: sansFont },
 
   scaleRow: { flexDirection: 'row', gap: 6 },
   scalePoint: {
@@ -799,7 +830,7 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   scaleNumber: { fontSize: 15 },
-  scaleValue: { fontSize: 10, color: colors.muted, fontWeight: '700' },
+  scaleValue: { fontSize: Platform.select({ web: 12, default: 10 }), color: colors.muted, fontWeight: '700' },
   scaleValueSelected: { color: '#FFFFFF' },
   scaleCaptionRow: {
     flexDirection: 'row',
@@ -835,7 +866,7 @@ const styles = StyleSheet.create({
   },
   choiceIndicatorSelected: { borderColor: colors.primary },
   choiceIndicatorCore: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary },
-  choiceText: { flex: 1, fontSize: 13.5, color: colors.ink, fontWeight: '500' },
+  choiceText: { flex: 1, fontSize: Platform.select({ web: 16, default: 13.5 }), lineHeight: Platform.select({ web: 24, default: 20 }), color: colors.ink, fontWeight: '500', fontFamily: sansFont },
   choiceTextSelected: { color: colors.primaryDeep, fontWeight: '700' },
 
   input: {
@@ -847,9 +878,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 11,
     color: colors.ink,
-    fontSize: 14,
+    fontSize: Platform.select({ web: 16, default: 14 }),
   },
   inputFocused: { borderColor: colors.primary, borderWidth: 1.5 },
   inputError: { borderColor: colors.rose },
-  errorText: { color: colors.rose, fontSize: 11.5, lineHeight: 16, marginTop: 6, fontWeight: '500' },
+  errorText: { color: colors.rose, fontSize: Platform.select({ web: 14, default: 11.5 }), lineHeight: Platform.select({ web: 21, default: 16 }), marginTop: 6, fontWeight: '500' },
 });

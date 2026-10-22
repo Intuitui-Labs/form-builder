@@ -3,7 +3,9 @@ import type {
   RemoteSurveyMeta,
   RemoteSubmitResult,
   RemoteSurveyAnalysis,
+  RemoteLeaderboardResult,
 } from '../domain/ports/transportTypes';
+import type { RemoteSurveyCatalogItem } from '../domain/ports/transportTypes';
 
 /**
  * Outbound adapter -> Feedora's Django backend over plain HTTP.
@@ -27,7 +29,7 @@ export class FeedoraHttpTransportAdapter implements ITransportPort {
 
   constructor(
     private readonly baseUrl: string,
-    private readonly fetchImpl: typeof fetch = fetch,
+    private readonly fetchImpl: typeof fetch = fetch.bind(globalThis),
   ) {}
 
   async fetchSurveyMeta(accessUuid: string): Promise<RemoteSurveyMeta> {
@@ -40,6 +42,7 @@ export class FeedoraHttpTransportAdapter implements ITransportPort {
     }
     this.captureCsrf(response);
     const meta = (await response.json()) as RemoteSurveyMeta;
+    this.csrfToken = meta.csrfToken ?? this.csrfToken;
     this.metaCache.set(accessUuid, meta);
     return meta;
   }
@@ -56,39 +59,30 @@ export class FeedoraHttpTransportAdapter implements ITransportPort {
     }
     this.captureCsrf(response);
     const meta = (await response.json()) as RemoteSurveyMeta;
+    this.csrfToken = meta.csrfToken ?? this.csrfToken;
     if (meta.survey?.uuid) {
       this.metaCache.set(meta.survey.uuid, meta);
     }
     return meta;
   }
 
-  async fetchPublicSurveys(): Promise<Array<{
-    id: number;
-    uuid: string;
-    accessCode: string;
-    title: string;
-    description: string;
-    isHmsam: boolean;
-    kind?: string;
-    accessPolicy?: {
-      allowRedo: boolean;
-      maxAttempts?: number | null;
-      rewardStrategy: string;
-    };
-    questionsCount: number;
-    createdAt?: string;
-  }>> {
-    try {
-      const response = await this.fetchImpl(`${this.baseUrl.replace(/\/+$/, '')}/api/v1/surveys/`, {
+  async fetchPublicSurveys(entityId?: string, guestParticipantId?: string): Promise<RemoteSurveyCatalogItem[]> {
+    const params = new URLSearchParams();
+    if (entityId) params.set('entity_id', entityId);
+    if (guestParticipantId) params.set('guest_participant_id', guestParticipantId);
+    const query = params.toString();
+    const response = await this.fetchImpl(`${this.baseUrl.replace(/\/+$/, '')}/api/v1/surveys/${query ? `?${query}` : ''}`, {
         method: 'GET',
         credentials: 'include',
       });
-      if (!response.ok) return [];
-      const data = await response.json();
-      return Array.isArray(data?.surveys) ? data.surveys : [];
-    } catch {
-      return [];
+    if (!response.ok) {
+      throw new Error(`Survey catalog request failed (HTTP ${response.status}).`);
     }
+    const data = await response.json();
+    if (!Array.isArray(data?.surveys)) {
+      throw new Error('The research server returned an invalid survey catalog.');
+    }
+    return data.surveys;
   }
 
   async submitResponse(
@@ -101,6 +95,7 @@ export class FeedoraHttpTransportAdapter implements ITransportPort {
       dwellMs?: Record<string, number>;
       qualityFlags?: string[];
       consentVersion?: string;
+      guestParticipantId?: string;
     },
   ): Promise<RemoteSubmitResult> {
     const meta = this.metaCache.get(accessUuid) ?? (await this.fetchSurveyMeta(accessUuid));
@@ -120,6 +115,9 @@ export class FeedoraHttpTransportAdapter implements ITransportPort {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            ...(this.csrfToken || this.readCookie('csrftoken')
+              ? { 'X-CSRFToken': this.csrfToken ?? this.readCookie('csrftoken')! }
+              : {}),
           },
           body: JSON.stringify({
             answers: answersPayload,
@@ -129,6 +127,7 @@ export class FeedoraHttpTransportAdapter implements ITransportPort {
             dwellMs: options?.dwellMs,
             qualityFlags: options?.qualityFlags ?? [],
             consentVersion: options?.consentVersion ?? '1.0',
+            guestParticipantId: options?.guestParticipantId,
           }),
           credentials: 'include',
         },
@@ -142,6 +141,9 @@ export class FeedoraHttpTransportAdapter implements ITransportPort {
       return {
         ok: response.ok,
         status: response.status,
+        code: resData?.code,
+        error: resData?.error,
+        unlocksAt: resData?.unlocksAt,
         responseId: resData?.responseId,
         submissionId: resData?.submissionId,
         pointsEarned: resData?.pointsEarned,
@@ -163,6 +165,17 @@ export class FeedoraHttpTransportAdapter implements ITransportPort {
       throw new Error(`Failed to fetch survey analysis for ${accessUuid} (${response.status})`);
     }
     return (await response.json()) as RemoteSurveyAnalysis;
+  }
+
+  async fetchLeaderboard(entityId: string): Promise<RemoteLeaderboardResult> {
+    const query = new URLSearchParams({ entity_id: entityId });
+    const response = await this.fetchImpl(`${this.baseUrl.replace(/\/+$/, '')}/api/v1/leaderboard/?${query}`, {
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to fetch organization leaderboard (${response.status})`);
+    }
+    return (await response.json()) as RemoteLeaderboardResult;
   }
 
   private url(accessUuid: string, suffix: string): string {

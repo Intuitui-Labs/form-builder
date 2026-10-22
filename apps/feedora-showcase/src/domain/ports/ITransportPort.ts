@@ -32,9 +32,13 @@ export interface ITransportPort {
       dwellMs?: Record<string, number>;
       qualityFlags?: string[];
       consentVersion?: string;
+      guestParticipantId?: string;
     },
   ): Promise<RemoteSubmitResult>;
 
   /** Fetch authoritative server-side analysis including construct scores and arm comparisons. */
   fetchSurveyAnalysis(accessUuid: string): Promise<import('./transportTypes').RemoteSurveyAnalysis>;
+
+  /** Fetch leaderboard values calculated from responses in the selected organization. */
+  fetchLeaderboard(entityId: string): Promise<import('./transportTypes').RemoteLeaderboardResult>;
 }

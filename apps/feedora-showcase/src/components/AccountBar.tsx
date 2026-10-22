@@ -1,9 +1,9 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFeedora } from '../feedora';
-import { colors, radii } from '../theme';
+import { colors, radii, sansFont } from '../theme';
 
 export function AccountBar() {
-  const { authUser, authMode, profile, openAccountDrawer, openWelcome, effectiveRole, previewRole } = useFeedora();
+  const { authUser, profile, entitiesList, entityId, openAccountDrawer, openWelcome, effectiveRole, previewRole } = useFeedora();
 
   if (!authUser) {
     const unsavedPoints = profile?.totalPoints ?? 0;
@@ -23,9 +23,8 @@ export function AccountBar() {
 
   const isCreator = authUser.role === 'creator';
   const isPreviewing = isCreator && previewRole === 'respondent';
-  const engineLabel =
-    authMode === 'local' ? '⚡ SQLite' : authMode === 'supabase' ? '☁️ Supabase' : '🐍 Django';
-  const displayedPoints = Math.max(profile?.totalPoints ?? 0, authUser.totalPoints ?? 0);
+  const displayedPoints = profile?.totalPoints ?? 0;
+  const selectedOrganization = entitiesList.find((entity) => entity.id === entityId)?.name;
 
   return (
     <View style={styles.container}>
@@ -54,7 +53,7 @@ export function AccountBar() {
           </View>
           <View style={styles.subRow}>
             <Text style={styles.orgSub} numberOfLines={1}>
-              {authUser.organizationName || 'University of Moratuwa'}
+              {selectedOrganization || authUser.organizationName || 'Organization'}
             </Text>
             {!isCreator && (
               <Text style={styles.pointsSub}>
@@ -64,11 +63,6 @@ export function AccountBar() {
           </View>
         </View>
 
-        {/* Engine switcher indicator */}
-        <View style={styles.enginePill}>
-          <Text style={styles.engineText}>{engineLabel}</Text>
-          <Text style={styles.chevron}>▾</Text>
-        </View>
       </Pressable>
     </View>
   );
@@ -90,20 +84,25 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   guestText: {
-    fontSize: 11,
+    fontSize: 14,
+    lineHeight: 20,
     color: colors.muted,
     fontWeight: '600',
+    fontFamily: sansFont,
   },
   signInBtn: {
-    backgroundColor: colors.primary,
+    minHeight: 44,
+    justifyContent: 'center',
+    backgroundColor: colors.primaryDeep,
     borderRadius: radii.small,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
   },
   signInBtnText: {
-    fontSize: 11,
+    fontSize: 14,
+    lineHeight: 20,
     fontWeight: '800',
     color: '#FFFFFF',
+    fontFamily: sansFont,
   },
   userCard: {
     flexDirection: 'row',
@@ -175,23 +174,5 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '800',
     marginTop: 1,
-  },
-  enginePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.canvas,
-    borderRadius: radii.pill,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    gap: 4,
-  },
-  engineText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.slate,
-  },
-  chevron: {
-    fontSize: 10,
-    color: colors.faint,
   },
 });

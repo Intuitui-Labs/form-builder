@@ -20,6 +20,7 @@ export interface RemoteSurveyQuestion {
 import type { SurveyFeatures } from '../types';
 
 export interface RemoteSurveyMeta {
+  csrfToken?: string;
   survey: {
     id: number;
     uuid: string;
@@ -27,6 +28,15 @@ export interface RemoteSurveyMeta {
     description: string;
     is_hmsam: boolean;
     access_code: string;
+    accessPolicy?: import('@intuitui-labs/form-builder-engine').FormAccessPolicy;
+    prerequisites?: string[];
+    sequenceOrder?: number;
+    sequenceGroup?: string;
+    enforceSequence?: boolean;
+    unlockDelayMs?: number;
+    minScorePercent?: number;
+    accessCodeRequired?: boolean;
+    requiresAccount?: boolean;
   };
   features: Partial<SurveyFeatures> & Record<string, any>;
   experiment?: {
@@ -36,9 +46,37 @@ export interface RemoteSurveyMeta {
   questions: RemoteSurveyQuestion[];
 }
 
+export interface RemoteSurveyCatalogItem {
+  id: number;
+  uuid: string;
+  accessCode: string;
+  title: string;
+  description: string;
+  isHmsam: boolean;
+  isGlobal?: boolean;
+  kind?: import('@intuitui-labs/form-builder-engine').FormKind;
+  accessPolicy?: import('@intuitui-labs/form-builder-engine').FormAccessPolicy;
+  prerequisites?: string[];
+  prerequisiteTitles?: string[];
+  sequenceOrder?: number;
+  sequenceGroup?: string;
+  enforceSequence?: boolean;
+  unlockDelayMs?: number;
+  minScorePercent?: number;
+  accessCodeRequired?: boolean;
+  requiresAccount?: boolean;
+  attemptsUsed?: number;
+  lastCompletedAt?: string | null;
+  questionsCount: number;
+  createdAt?: string;
+}
+
 export interface RemoteSubmitResult {
   ok: boolean;
   status: number;
+  code?: string;
+  error?: string;
+  unlocksAt?: string;
   responseId?: number;
   submissionId?: string;
   pointsEarned?: number;
@@ -52,6 +90,29 @@ export interface RemoteSubmitResult {
   };
   totalPoints?: number;
   user?: any;
+}
+
+export interface RemoteLeaderboardResult {
+  ok: boolean;
+  totalContributors: number;
+  contributors: Array<{
+    userId: string;
+    displayName: string;
+    avatar: string;
+    entityId: string;
+    totalPoints: number;
+    surveysCompleted: number;
+    badges: string[];
+    standing: {
+      level: number;
+      title: string;
+      points: number;
+      progress: number;
+      next_title: string | null;
+      points_needed: number;
+      color: string;
+    };
+  }>;
 }
 
 export interface RemoteSurveyAnalysis {

@@ -23,6 +23,8 @@ export interface IEntityStore {
   recordSurveyResponse(record: SubmissionHistoryRecord): Promise<void>;
   listUserHistory(userId: string): Promise<SubmissionHistoryRecord[]>;
   getPointsByEntity(userId: string): Promise<Record<string, number>>;
+  /** Atomically transfer a guest principal's profiles and history to an account. */
+  claimGuestIdentity(guestUserId: string, accountUserId: string): Promise<void>;
 
   /** Key-value storage for settings, auth session, and studio drafts. */
   getItem(key: string): Promise<string | null>;

@@ -8,7 +8,6 @@ import type {
 } from '../domain/authTypes';
 import type { IAuthPort } from '../domain/ports/IAuthPort';
 import type { IEntityStore } from '../domain/ports/IEntityStore';
-import { FEEDORA_ENTITIES } from '../fixtures/seed';
 
 /** Initial seed accounts mirroring Gihini's real SQLite DB */
 const DEFAULT_ACCOUNTS: AuthUser[] = [
@@ -91,17 +90,12 @@ export class LocalAuthAdapter implements IAuthPort {
       throw new Error(`Account already exists for email: ${input.email}`);
     }
 
-    const org = FEEDORA_ENTITIES.find((e) => e.id === input.organizationId) || FEEDORA_ENTITIES[0]!;
     const newUser: AuthUser = {
       id: `resp-${Date.now()}`,
       email: input.email.trim(),
       role: 'respondent',
       displayName: input.displayName || input.email.split('@')[0] || 'Respondent',
       avatar: input.avatar || '🎯',
-      organizationId: org.id,
-      organizationName: org.name,
-      organizationType: org.type,
-      userRoleInOrg: 'Respondent',
       gender: input.gender || 'NS',
       ageGroup: input.ageGroup || '18-24',
       totalPoints: 0,
@@ -131,10 +125,6 @@ export class LocalAuthAdapter implements IAuthPort {
       firstName: input.firstName,
       lastName: input.lastName,
       avatar: input.avatar || '🏛️',
-      organizationId: `org-${Date.now()}`,
-      organizationName: input.organizationName,
-      organizationType: input.organizationType,
-      userRoleInOrg: input.userRoleInOrg || 'Creator',
       country: input.country || 'Sri Lanka',
       website: input.website || '',
       bio: input.bio || '',

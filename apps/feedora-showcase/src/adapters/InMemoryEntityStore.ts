@@ -1,5 +1,6 @@
 import type { IEntityStore, SeedBundle } from '../domain/ports/IEntityStore';
 import type { ContributionProfile, Entity } from '../domain/types';
+import { standingFor } from '../domain/levels';
 
 const KEY_SEPARATOR = '::';
 
@@ -136,6 +137,34 @@ export class InMemoryEntityStore implements IEntityStore {
       if (h.userId === fromUserId) {
         h.userId = toUserId;
       }
+    }
+    this.persistStorage();
+  }
+
+  async claimGuestIdentity(guestUserId: string, accountUserId: string): Promise<void> {
+    if (guestUserId === accountUserId) return;
+
+    for (const [key, guestProfile] of [...this.profiles.entries()]) {
+      if (guestProfile.userId !== guestUserId) continue;
+      const accountKey = this.key(accountUserId, guestProfile.entityId);
+      const accountProfile = this.profiles.get(accountKey);
+      if (accountProfile) {
+        accountProfile.totalPoints += guestProfile.totalPoints;
+        accountProfile.surveysCompleted += guestProfile.surveysCompleted;
+        accountProfile.badges = [...new Set([...accountProfile.badges, ...guestProfile.badges])];
+        accountProfile.standing = standingFor(accountProfile.totalPoints);
+        accountProfile.updatedAt = new Date().toISOString();
+        this.profiles.set(accountKey, accountProfile);
+      } else {
+        const claimedProfile = { ...guestProfile, userId: accountUserId };
+        claimedProfile.standing = standingFor(claimedProfile.totalPoints);
+        this.profiles.set(accountKey, claimedProfile);
+      }
+      this.profiles.delete(key);
+    }
+
+    for (const item of this.history) {
+      if (item.userId === guestUserId) item.userId = accountUserId;
     }
     this.persistStorage();
   }

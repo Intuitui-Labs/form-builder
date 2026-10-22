@@ -97,7 +97,6 @@ export class SupabaseAuthAdapter implements IAuthPort {
         data: {
           role: 'respondent',
           displayName: input.displayName,
-          organizationId: input.organizationId,
           gender: input.gender || 'NS',
           ageGroup: input.ageGroup || '18-24',
           avatar: input.avatar || '🎯',
@@ -117,7 +116,6 @@ export class SupabaseAuthAdapter implements IAuthPort {
     const authUser = this.mapSupabaseUserToAuthUser(data.user, {
       role: 'respondent',
       displayName: input.displayName,
-      organizationId: input.organizationId,
       gender: input.gender,
       ageGroup: input.ageGroup,
       avatar: input.avatar,
@@ -159,9 +157,6 @@ export class SupabaseAuthAdapter implements IAuthPort {
           displayName: input.displayName || `${input.firstName} ${input.lastName}`.trim(),
           firstName: input.firstName,
           lastName: input.lastName,
-          organizationName: input.organizationName,
-          organizationType: input.organizationType,
-          userRoleInOrg: input.userRoleInOrg || 'Creator',
           country: input.country || 'Sri Lanka',
           website: input.website || '',
           bio: input.bio || '',
@@ -184,9 +179,6 @@ export class SupabaseAuthAdapter implements IAuthPort {
       displayName: input.displayName || `${input.firstName} ${input.lastName}`.trim(),
       firstName: input.firstName,
       lastName: input.lastName,
-      organizationName: input.organizationName,
-      organizationType: input.organizationType,
-      userRoleInOrg: input.userRoleInOrg,
       country: input.country,
       website: input.website,
       bio: input.bio,
@@ -194,8 +186,8 @@ export class SupabaseAuthAdapter implements IAuthPort {
       totalPoints: 0,
     });
 
-    // Optionally write to organizations and creator_profiles
-    try {
+    // Organization setup is intentionally separate from global account creation.
+    if (input.organizationName && input.organizationType) try {
       await this.client.from('organizations').upsert({
         user_id: data.user.id,
         org_name: input.organizationName,

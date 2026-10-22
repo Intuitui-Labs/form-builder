@@ -99,12 +99,39 @@ export class BatteryEngine {
       };
     }
 
+    if (accessPolicy.cooldownMinutes && attemptsUsed > 0) {
+      const latestCompletion = completedSubmissions
+        .map((submission) => submission.completedAt)
+        .filter((completedAt): completedAt is string => Boolean(completedAt))
+        .map((completedAt) => new Date(completedAt).getTime())
+        .filter(Number.isFinite)
+        .sort((a, b) => b - a)[0];
+      if (latestCompletion !== undefined) {
+        const unlocksAtMs = latestCompletion + accessPolicy.cooldownMinutes * 60_000;
+        if (now < unlocksAtMs) {
+          return {
+            canStart: false,
+            isCompleted,
+            attemptsUsed,
+            isLocked: true,
+            reason: 'cooldown_active',
+            hasPartialProgress,
+            unlocksAt: new Date(unlocksAtMs).toISOString(),
+          };
+        }
+      }
+    }
+
     // 3. Check Prerequisites
     if (node.prerequisites) {
       const { completedFormIds, minScorePercent, unlockDelayMs } = node.prerequisites;
 
       if (completedFormIds && completedFormIds.length > 0) {
-        const completedSet = new Set(history.map((h) => h.formId));
+        const completedSet = new Set(
+          history
+            .filter((h) => h.isCompleted !== false && (h.completedAt !== undefined || h.isCompleted === true))
+            .map((h) => h.formId),
+        );
         const missing = completedFormIds.filter((id) => !completedSet.has(id));
 
         if (missing.length > 0) {
@@ -138,10 +165,10 @@ export class BatteryEngine {
         // Check time lock delay after prerequisite completion
         if (unlockDelayMs && unlockDelayMs > 0) {
           const prereqSubs = history
-            .filter((h) => completedFormIds.includes(h.formId))
-            .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime());
+            .filter((h) => completedFormIds.includes(h.formId) && h.completedAt)
+            .sort((a, b) => new Date(b.completedAt ?? 0).getTime() - new Date(a.completedAt ?? 0).getTime());
 
-          if (prereqSubs.length > 0) {
+          if (prereqSubs.length > 0 && prereqSubs[0]?.completedAt) {
             const lastPrereqTime = new Date(prereqSubs[0].completedAt).getTime();
             const unlocksAtMs = lastPrereqTime + unlockDelayMs;
             if (now < unlocksAtMs) {

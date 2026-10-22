@@ -44,14 +44,14 @@ export const HMSAM_FORM_SCHEMA: FormSchema = {
   },
   title: 'Hedonic System Adoption Survey',
   description:
-    'The 38-item HMSAM instrument measuring perceived ease of use, usefulness, joy, curiosity, control, focused immersion and behavioural intention.',
+    'Share your experience using this app. Your answers help the research team understand what feels useful, enjoyable, or difficult.',
   pages: [
     {
       id: 'welcome',
       title: 'Hedonic System Adoption Survey',
       role: 'cover',
       description:
-        'Your answers help researchers understand how hedonic (enjoyment-driven) systems are adopted. Responses are collected and scored exactly the way her Django app scores them.',
+        'Tell us how you experience this app. Your answers help the research team understand what feels useful, enjoyable, or difficult. There are no right or wrong answers.',
       badge: 'HMSAM · 38 ITEMS',
       fields: [],
     },
