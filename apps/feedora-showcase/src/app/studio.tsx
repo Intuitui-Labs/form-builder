@@ -47,6 +47,7 @@ import type {
 import type { RemoteSurveyMeta } from '../domain/ports/transportTypes';
 import { getSharableSurveyUrl } from '../config';
 import { NativeQrView } from '../components/NativeQrView';
+import { LegendList } from '@legendapp/list/react-native';
 import { colors, radii, serifFont } from '../theme';
 
 // ---------------------------------------------------------------------------
@@ -896,8 +897,11 @@ export default function StudioScreen() {
               </View>
             ) : (
               <View style={styles.surveyList}>
-                {surveys.map((s) => (
-                  <View key={s.id || s.uuid} style={styles.surveyCard}>
+                <LegendList
+                  data={surveys}
+                  keyExtractor={(s) => String(s.id || s.uuid)}
+                  renderItem={({ item: s }) => (
+                    <View style={styles.surveyCard}>
                     <View style={styles.surveyCardHeader}>
                       <View style={styles.surveyTitleCol}>
                         <Text style={styles.surveyTitle}>{s.title}</Text>
@@ -1052,8 +1056,9 @@ export default function StudioScreen() {
                         </Pressable>
                       ) : null}
                     </View>
-                  </View>
-                ))}
+                    </View>
+                  )}
+                />
               </View>
             )}
           </View>

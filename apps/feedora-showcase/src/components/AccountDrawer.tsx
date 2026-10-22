@@ -8,6 +8,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { LegendList } from '@legendapp/list/react-native';
 import type { ExportDataPayload } from '../domain/authTypes';
 import { standingFor } from '../domain/levels';
 import { store, useFeedora } from '../feedora';
@@ -39,63 +40,60 @@ export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerPro
     return unsub;
   }, [visible, outboxPort]);
 
+  const loadRemoteHistory = async (userId: string, isMounted: () => boolean) => {
+    try {
+      const res = await fetch(`${FEEDORA_REMOTE.baseUrl}/api/v1/respondent/history/`, {
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error(`Respondent history failed with HTTP ${res.status}`);
+      const data = await res.json();
+      if (!isMounted() || !data.ok) return;
+      if (Array.isArray(data.history)) {
+        setHistoryItems(
+          data.history.map((h: any) => ({
+            id: h.responseId,
+            entityId: h.organization,
+            surveyId: h.surveyUuid,
+            surveyTitle: h.surveyTitle,
+            userId: String(userId),
+            pointsEarned: h.pointsEarned,
+            completedAt: h.completedAt,
+          })),
+        );
+      }
+      if (Array.isArray(data.pointsByOrganization)) {
+        setEntityPoints(
+          data.pointsByOrganization.map((o: any) => ({
+            name: o.organization,
+            points: o.points,
+          })),
+        );
+      }
+    } catch {}
+    try {
+      const items = await store.listUserHistory(userId);
+      if (isMounted() && items.length > 0) {
+        setHistoryItems((prev) => (prev.length > 0 ? prev : items));
+      }
+    } catch {}
+    try {
+      const ptMap = await store.getPointsByEntity(userId);
+      if (isMounted()) {
+        const arr = Object.entries(ptMap).map(([entId, pts]) => {
+          const ent = store.getEntity(entId);
+          return { name: ent ? ent.name : entId, points: pts };
+        });
+        if (arr.length > 0) {
+          setEntityPoints((prev) => (prev.length > 0 ? prev : arr));
+        }
+      }
+    } catch {}
+  };
+
   useEffect(() => {
     if (!visible || !authUser) return;
     let isMounted = true;
-
-    fetch(`${FEEDORA_REMOTE.baseUrl}/api/v1/respondent/history/`, {
-        credentials: 'include',
-      })
-        .then((res) => {
-          if (!res.ok) throw new Error(`Respondent history failed with HTTP ${res.status}`);
-          return res.json();
-        })
-        .then((data) => {
-          if (!isMounted || !data.ok) return;
-          if (Array.isArray(data.history)) {
-            setHistoryItems(
-              data.history.map((h: any) => ({
-                id: h.responseId,
-                entityId: h.organization,
-                surveyId: h.surveyUuid,
-                surveyTitle: h.surveyTitle,
-                userId: String(authUser.id),
-                pointsEarned: h.pointsEarned,
-                completedAt: h.completedAt,
-              })),
-            );
-          }
-          if (Array.isArray(data.pointsByOrganization)) {
-            setEntityPoints(
-              data.pointsByOrganization.map((o: any) => ({
-                name: o.organization,
-                points: o.points,
-              })),
-            );
-          }
-        })
-        .catch(() => {});
-    store.listUserHistory(String(authUser.id)).then((items) => {
-      if (!isMounted) return;
-      if (items.length > 0) {
-        setHistoryItems((prev) => (prev.length > 0 ? prev : items));
-      }
-    });
-
-    store.getPointsByEntity(String(authUser.id)).then((ptMap) => {
-      if (!isMounted) return;
-      const arr = Object.entries(ptMap).map(([entId, pts]) => {
-        const ent = store.getEntity(entId);
-        return {
-          name: ent ? ent.name : entId,
-          points: pts,
-        };
-      });
-      if (arr.length > 0) {
-        setEntityPoints((prev) => (prev.length > 0 ? prev : arr));
-      }
-    });
-
+    void loadRemoteHistory(String(authUser.id), () => isMounted);
     return () => {
       isMounted = false;
     };
@@ -268,12 +266,16 @@ export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerPro
                     </View>
                   ) : (
                     <View style={styles.orgPointsList}>
-                      {entityPoints.map((op, i) => (
-                        <View key={i} style={styles.orgPointRow}>
-                          <Text style={styles.orgPointName}>{op.name}</Text>
-                          <Text style={styles.orgPointVal}>{op.points} pts</Text>
-                        </View>
-                      ))}
+                      <LegendList
+                        data={entityPoints}
+                        keyExtractor={(op, i) => `${op.name}-${i}`}
+                        renderItem={({ item: op }) => (
+                          <View style={styles.orgPointRow}>
+                            <Text style={styles.orgPointName}>{op.name}</Text>
+                            <Text style={styles.orgPointVal}>{op.points} pts</Text>
+                          </View>
+                        )}
+                      />
                     </View>
                   )}
                 </View>
@@ -291,19 +293,23 @@ export function AccountDrawer({ visible, onClose, onOpenAuth }: AccountDrawerPro
                     </View>
                   ) : (
                     <View style={styles.historyList}>
-                      {historyItems.map((item, idx) => (
-                        <View key={idx} style={styles.historyCard}>
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.historyTitle}>{item.surveyTitle}</Text>
-                            <Text style={styles.historyMeta}>
-                              {item.completedAt ? new Date(item.completedAt).toLocaleDateString() : 'Today'} · {item.entityId}
-                            </Text>
+                      <LegendList
+                        data={historyItems}
+                        keyExtractor={(item, index) => String(item.id ?? index)}
+                        renderItem={({ item }) => (
+                          <View style={styles.historyCard}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.historyTitle}>{item.surveyTitle}</Text>
+                              <Text style={styles.historyMeta}>
+                                {item.completedAt ? new Date(item.completedAt).toLocaleDateString() : 'Today'} · {item.entityId}
+                              </Text>
+                            </View>
+                            <View style={styles.historyPointsBadge}>
+                              <Text style={styles.historyPointsText}>+{item.pointsEarned} pts</Text>
+                            </View>
                           </View>
-                          <View style={styles.historyPointsBadge}>
-                            <Text style={styles.historyPointsText}>+{item.pointsEarned} pts</Text>
-                          </View>
-                        </View>
-                      ))}
+                        )}
+                      />
                     </View>
                   )}
                 </View>

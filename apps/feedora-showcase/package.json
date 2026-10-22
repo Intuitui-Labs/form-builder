@@ -16,6 +16,7 @@
     "@expo/metro-runtime": "~58.0.15",
     "@expo/vector-icons": "^15.1.1",
     "@intuitui-labs/form-builder-engine": "workspace:*",
+    "@legendapp/list": "^3.6.0",
     "@supabase/supabase-js": "^2.118.0",
     "@tanstack/form-core": "^0.42.1",
     "@types/qrcode": "^1.5.6",
