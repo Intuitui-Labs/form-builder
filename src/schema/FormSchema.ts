@@ -260,11 +260,14 @@ export type RedoRewardStrategy =
   | 'unrestricted'
   | 'blocked';
 
+import type { BatteryPrerequisiteRule } from './FormBattery.js';
+
 export interface FormAccessPolicy {
   allowRedo: boolean;
   maxAttempts?: number;
   rewardStrategy: RedoRewardStrategy;
   cooldownMinutes?: number;
+  version?: string;
 }
 
 export interface FormSchema {
@@ -273,6 +276,7 @@ export interface FormSchema {
   id: string;
   kind?: FormKind;
   accessPolicy?: FormAccessPolicy;
+  prerequisites?: BatteryPrerequisiteRule;
   tenantId?: string;
   title: string;
   description?: string;

@@ -17,6 +17,8 @@ import type { FormManager } from '../FormManager.js';
 import type { OfflineOutboxQueue, OutboxSyncStatus } from '../../persistence/OfflineOutboxQueue.js';
 import type { IAssessmentPort } from '../../ports/IAssessmentPort.js';
 
+import type { FormParticipationConfig } from '../../schema/FormParticipation.js';
+
 /**
  * Shared context and interface bindings provided to each coordinator by MultiStepFormManager.
  * Coordinators remain pure delegates that do not store duplicate state.
@@ -66,4 +68,6 @@ export interface MultiStepCoordinatorContext<T extends Record<string, unknown>> 
   getOutboxSyncStatus: () => OutboxSyncStatus;
   getOutboxLastSyncError: () => string | undefined;
   getAssessmentEngine?: () => IAssessmentPort | undefined;
+  getParticipationConfig?: () => FormParticipationConfig | undefined;
+  onDraftHydrated?: (snapshot: FormDraftSnapshot<T>) => void;
 }

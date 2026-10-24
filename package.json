@@ -1,6 +1,6 @@
 {
   "name": "@intuitui-labs/form-builder-engine",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Headless schema-driven form evaluation, validation, hydration, and analytics engine built on TanStack Form and Zod for React Native, Expo, and Web.",
   "type": "module",
   "sideEffects": false,
@@ -158,7 +158,7 @@
     "expo:web": "pnpm run expo:latest:web",
     "showcase:verify": "pnpm --filter @intuitui-labs/showcase-latest run verify",
     "showcase:verify:next": "pnpm --filter @intuitui-labs/showcase-next run verify",
-    "prepublishOnly": "pnpm run check-types && pnpm run test && pnpm run build"
+    "prepublishOnly": "tsc --noEmit && vitest run --pool=threads && tsc -p tsconfig.json"
   },
   "publishConfig": {
     "access": "public"

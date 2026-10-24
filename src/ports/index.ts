@@ -189,6 +189,8 @@ export type {
   IResilientTransportPort,
   SubmissionEnvelope,
   SubmissionReceipt,
+  SubmissionAttribution,
+  SubmissionTelemetryContext,
 } from './ITransportPort.js';
 
 export type {
@@ -284,3 +286,21 @@ export type {
   ChunkReassemblyResult,
 } from './IQrAirDropPort.js';
 
+export type {
+  IReceiptReconciliationPort,
+} from './IReceiptReconciliationPort.js';
+
+export type {
+  IAttemptReservationPort,
+  AttemptReservationReceipt,
+  AttemptReservationError,
+} from './IAttemptReservationPort.js';
+
+export type {
+  IPsychometricMeasurementPort,
+  PsychometricConstructDefinition,
+  PsychometricItemDefinition,
+  ConstructScoreReport,
+  MultiConstructMeasurementReport,
+  ConstructReliabilityResult,
+} from './IPsychometricMeasurementPort.js';

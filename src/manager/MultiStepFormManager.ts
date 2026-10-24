@@ -63,6 +63,19 @@ import { DefaultSanitizer } from '../core/DefaultSanitizer.js';
 import { NativeFocusController } from '../focus/NativeFocusController.js';
 import { evaluateStepAffordance, type StepAffordanceSnapshot } from '../governance/index.js';
 import { FormManager } from './FormManager.js';
+import { BatteryEngine } from '../battery/BatteryEngine.js';
+import type { BatteryAccessEvaluation, FormSubmissionHistoryItem } from '../schema/FormBattery.js';
+import type {
+  FormParticipationStatus,
+  FormParticipationState,
+  FormParticipationConfig,
+} from '../schema/FormParticipation.js';
+
+export type {
+  FormParticipationStatus,
+  FormParticipationState,
+  FormParticipationConfig,
+};
 
 
 import {
@@ -122,6 +135,7 @@ export interface MultiStepFormOptions<T extends Record<string, unknown> = Record
   experience?: FormExperienceOptions;
   security?: FormSecurityOptions;
   lifecyclePort?: IFormLifecyclePort<T>;
+  participation?: FormParticipationConfig;
 }
 
 export class MultiStepFormManager<T extends Record<string, unknown>> {
@@ -132,6 +146,10 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
   private subscribers: Set<(manager: MultiStepFormManager<T>) => void> = new Set();
   private unsubscribeForm?: () => void;
   private unsubscribeLifecycle?: () => void;
+
+  private participationConfig?: FormParticipationConfig;
+  private participationState!: FormParticipationState;
+  private participationSubscribers: Set<(state: FormParticipationState) => void> = new Set();
 
   private policy: ResolvedAffordanceConfig;
   private autoSaveDraft: boolean;
@@ -174,6 +192,8 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
     }
 
     this.schema = schema;
+    this.participationConfig = options?.participation;
+    this.participationState = this.evaluateParticipation();
     this.sessionId = expOpt?.sessionId ?? `sess_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 
     const rawTelemetry = expOpt?.telemetry;
@@ -322,6 +342,8 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
       getOutboxSyncStatus: () => this.persistenceCoordinator?.getOutboxQueue()?.getSyncStatus() ?? 'idle',
       getOutboxLastSyncError: () => this.persistenceCoordinator?.getOutboxQueue()?.getLastSyncError() ?? this.lifecyclePort.getContext().lastError,
       getAssessmentEngine: () => this.assessmentEngine,
+      getParticipationConfig: () => this.participationConfig,
+      onDraftHydrated: (snapshot) => this.handleDraftHydrated(snapshot),
     };
 
     // Instantiate modular coordinators
@@ -415,6 +437,9 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
   }
 
   public setFieldValue<K extends keyof T>(field: K, value: T[K]): boolean {
+    if (this.participationState?.status === 'locked') {
+      return false;
+    }
     if (this.schema.governance?.interaction?.lockOnSelection) {
       const affordance = this.getStepAffordance();
       if (affordance.isStepLocked) {
@@ -451,6 +476,19 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
     updates: Partial<T>,
     options?: BatchSetOptions<T>,
   ): BatchEnrichmentResult<T> {
+    if (this.participationState?.status === 'locked') {
+      return {
+        appliedFields: [],
+        appliedCount: 0,
+        skippedFields: (Object.keys(updates) as (keyof T)[]).map((field) => ({
+          field,
+          reason: 'already_set' as const,
+          currentValue: undefined,
+          attemptedValue: updates[field],
+        })),
+        rollback: () => [],
+      };
+    }
     return this.enrichmentCoordinator.batchSetFieldValues(updates, options);
   }
 
@@ -1118,6 +1156,17 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
   }
 
   public async submit(): Promise<void> {
+    if (this.participationState?.status === 'locked') {
+      throw new Error(
+        `Cannot submit: participation is locked (${this.participationState.lockReasonDescription ?? this.participationState.evaluation?.reason ?? 'locked'})`
+      );
+    }
+    if (this.participationState?.status === 'policy_drift_detected') {
+      throw new Error(
+        'Cannot submit: policy drift detected between draft and schema. Please confirm policy update.'
+      );
+    }
+
     if (this.assessmentEngine && !this.assessmentEngine.isInstantTiming()) {
       try {
         this.assessmentEngine.gradeAll(this.formManager.getState().values as Record<string, unknown>);
@@ -1170,6 +1219,128 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
     return this.persistenceCoordinator.getPendingOutboxCount();
   }
 
+  // Participation & Policy Drift Management
+  public getParticipationState(): FormParticipationState {
+    return this.participationState;
+  }
+
+  public subscribeParticipation(callback: (state: FormParticipationState) => void): () => void {
+    this.participationSubscribers.add(callback);
+    return () => this.participationSubscribers.delete(callback);
+  }
+
+  public updateParticipation(config: Partial<FormParticipationConfig>): FormParticipationState {
+    this.participationConfig = {
+      ...this.participationConfig,
+      ...config,
+    };
+    this.participationState = this.evaluateParticipation();
+    this.notifyParticipation();
+    this.notify();
+    return this.participationState;
+  }
+
+  public async confirmPolicyDrift(action: 'confirm_and_apply' | 'reject_and_clear'): Promise<void> {
+    if (this.participationState.status !== 'policy_drift_detected') {
+      return;
+    }
+
+    if (action === 'confirm_and_apply') {
+      const baseEvaluation = this.evaluateParticipation();
+      this.participationState = {
+        ...baseEvaluation,
+        policyVersion: this.getActivePolicyVersion(),
+        draftPolicyVersion: undefined,
+        driftDetails: undefined,
+      };
+      this.saveDraft();
+      this.notifyParticipation();
+      this.notify();
+    } else {
+      await this.clearDraft();
+      for (const page of this.schema.pages) {
+        for (const field of page.fields) {
+          (this.formManager as any).tsForm?.setFieldValue(field.name as any, field.defaultValue);
+        }
+      }
+      const baseEvaluation = this.evaluateParticipation();
+      this.participationState = {
+        ...baseEvaluation,
+        policyVersion: this.getActivePolicyVersion(),
+        draftPolicyVersion: undefined,
+        driftDetails: undefined,
+      };
+      this.notifyParticipation();
+      this.notify();
+    }
+  }
+
+  private evaluateParticipation(): FormParticipationState {
+    const history = this.participationConfig?.submissionHistory ?? [];
+    const evaluation = BatteryEngine.evaluateFormAccess(
+      {
+        id: this.schema.id,
+        title: this.schema.title ?? this.schema.id,
+        kind: this.schema.kind,
+        accessPolicy: this.schema.accessPolicy,
+        prerequisites: this.schema.prerequisites,
+      },
+      history,
+    );
+
+    const isLocked = evaluation.isLocked && !evaluation.canStart;
+    const lockReasonDescription = isLocked
+      ? BatteryEngine.describeAccessEvaluation(evaluation, { formTitles: this.participationConfig?.formTitles })
+      : undefined;
+
+    const activePolicyVersion = this.getActivePolicyVersion();
+
+    return {
+      status: isLocked ? 'locked' : 'eligible',
+      isLocked,
+      canSubmit: !isLocked,
+      evaluation,
+      lockReasonDescription,
+      attemptId: this.participationConfig?.attemptId,
+      policyVersion: activePolicyVersion,
+    };
+  }
+
+  private getActivePolicyVersion(): string | undefined {
+    if (this.participationConfig?.policyVersion) {
+      return String(this.participationConfig.policyVersion);
+    }
+    if (this.schema.accessPolicy?.version) {
+      return String(this.schema.accessPolicy.version);
+    }
+    return undefined;
+  }
+
+  private handleDraftHydrated(snapshot: FormDraftSnapshot<T>): void {
+    const activeVersion = this.getActivePolicyVersion();
+    const draftVersion = snapshot.policyVersion;
+
+    if (draftVersion && activeVersion && draftVersion !== activeVersion) {
+      const driftDetails = {
+        expectedVersion: activeVersion,
+        draftVersion: draftVersion,
+      };
+      this.participationState = {
+        ...this.participationState,
+        status: 'policy_drift_detected',
+        draftPolicyVersion: draftVersion,
+        driftDetails,
+      };
+      this.participationConfig?.onPolicyDrift?.(driftDetails);
+      this.notifyParticipation();
+    }
+  }
+
+  private notifyParticipation(): void {
+    this.participationConfig?.onParticipationChange?.(this.participationState);
+    this.participationSubscribers.forEach((cb) => cb(this.participationState));
+  }
+
   public destroy(): void {
     if (this.unsubscribeForm) {
       this.unsubscribeForm();
@@ -1188,6 +1359,7 @@ export class MultiStepFormManager<T extends Record<string, unknown>> {
       (this.telemetry as any).flush?.();
     }
     this.subscribers.clear();
+    this.participationSubscribers.clear();
   }
 
   public dispose(): void {

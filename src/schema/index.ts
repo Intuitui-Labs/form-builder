@@ -115,3 +115,26 @@ export type {
   SchemaLintResult,
 } from './SchemaLint.js';
 
+export {
+  SchemaPaginator,
+  type PaginatorOptions,
+} from './SchemaPaginator.js';
+
+export {
+  FormAccessPolicyBuilder,
+  REDO_REWARD_STRATEGY_CHOICES,
+  type CreatorAttemptPolicyInput,
+} from './FormAccessPolicyBuilder.js';
+
+export type {
+  FormParticipationStatus,
+  FormParticipationState,
+  FormParticipationConfig,
+} from './FormParticipation.js';
+
+export {
+  SurveySchemaConverter,
+  type ExternalQuestion,
+  type ExternalQuestionOption,
+  type ExternalSurveyInput,
+} from './SurveySchemaConverter.js';

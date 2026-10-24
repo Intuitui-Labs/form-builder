@@ -2,35 +2,72 @@ import type { Result } from '../core/Result.js';
 import type { TransportError } from '../core/DomainErrors.js';
 
 /**
+ * Immutable actor attribution captured at the moment of form submission.
+ * Decoupled from application-specific concepts like avatars or survey titles.
+ */
+export interface SubmissionAttribution {
+  principalId: string;
+  accountId?: string;
+  anonymousId?: string;
+  tenantId?: string;
+  scopeId?: string;
+  sessionId?: string;
+}
+
+/**
+ * Runtime telemetry and psychometric quality flags captured during completion.
+ */
+export interface SubmissionTelemetryContext {
+  platform?: 'ios' | 'android' | 'web' | 'desktop' | 'cli' | string;
+  durationMs?: number;
+  dwellMs?: Record<string, number>;
+  qualityFlags?: string[];
+  consentVersion?: string;
+  clientVersion?: string;
+}
+
+/**
  * Envelope containing a queued or submitted form response with idempotency metadata.
  */
-export interface SubmissionEnvelope<T = Record<string, unknown>> {
+export interface SubmissionEnvelope<T = Record<string, unknown>, TMeta = Record<string, unknown>> {
   id: string; // Unique idempotency key (UUID/hash)
   formId: string;
+  schemaVersion?: string;
+  policyVersion?: string;
   tenantId?: string;
-  /** Immutable attribution captured when the intent was created. */
+  values: T;
+  submittedAt: string;
+  retryCount: number;
+  /** Immutable actor attribution captured when the intent was created. */
+  attribution?: SubmissionAttribution;
+  /** Runtime telemetry and audit quality flags captured during execution. */
+  telemetry?: SubmissionTelemetryContext;
+  /** Opaque consumer/adapter metadata treated immutably by the core engine. */
+  metadata?: TMeta;
+  /**
+   * @deprecated Legacy context field preserved for backwards compatibility with existing adapters.
+   * Prefer using `attribution`, `telemetry`, and `metadata`.
+   */
   context?: {
-    principalId: string;
-    profileUserId: string;
-    scopeId: string;
+    principalId?: string;
+    profileUserId?: string;
+    scopeId?: string;
     guestParticipantId?: string;
     policyVersion?: string;
     /** Adapter-owned opaque metadata needed to resume a remote submission workflow. */
     transportMetadata?: Record<string, string>;
     surveyTitle?: string;
-    displayName: string;
-    avatar: string;
-    surveyId: string;
+    displayName?: string;
+    avatar?: string;
+    surveyId?: string;
     variant?: string;
     platform?: string;
     durationMs?: number;
     dwellMs?: Record<string, number>;
     qualityFlags?: string[];
     consentVersion?: string;
+    [key: string]: unknown;
   };
-  values: T;
-  submittedAt: string;
-  retryCount: number;
   experimentMetadata?: {
     experimentKey: string;
     variantId: string;
@@ -40,11 +77,11 @@ export interface SubmissionEnvelope<T = Record<string, unknown>> {
 /**
  * Receipt returned upon successful data delivery to the backend.
  */
-export interface SubmissionReceipt {
+export interface SubmissionReceipt<TMeta = Record<string, unknown>> {
   receiptId: string;
   status: 'accepted' | 'synced' | 'pending';
   timestamp: string;
-  metadata?: Record<string, unknown>;
+  metadata?: TMeta;
 }
 
 /**

@@ -52,3 +52,6 @@ export { SpatialAffordanceAdapter, type SpatialAffordanceAdapterOptions } from '
 
 // Battery & Power adapters
 export * from './battery/index.js';
+
+// Progress adapters
+export { FieldWeightedProgressAdapter, type FieldWeightedProgressOptions } from './progress/FieldWeightedProgressAdapter.js';

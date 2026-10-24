@@ -12,6 +12,100 @@ export interface BatteryEvaluationOptions {
 
 export class BatteryEngine {
   /**
+   * Directly evaluates whether a FormSchema can be accessed and started given the respondent's history.
+   * Eliminates the boilerplate of fabricating synthetic BatteryNodes for standalone forms.
+   */
+  static evaluateFormAccess(
+    schema: {
+      id: string;
+      title: string;
+      kind?: FormKind;
+      accessPolicy?: FormAccessPolicy;
+      prerequisites?: {
+        completedFormIds?: string[];
+        minScorePercent?: number;
+        unlockDelayMs?: number;
+      };
+    },
+    history: FormSubmissionHistoryItem[],
+    options: BatteryEvaluationOptions = {},
+  ): BatteryAccessEvaluation {
+    return this.evaluateNodeAccess(
+      {
+        id: schema.id,
+        schemaId: schema.id,
+        title: schema.title,
+        kind: schema.kind ?? 'form',
+        stage: 'baseline',
+        sequenceOrder: 0,
+        accessPolicy: schema.accessPolicy,
+        prerequisites: schema.prerequisites,
+      },
+      history,
+      options,
+    );
+  }
+
+  /**
+   * Formats a machine-readable access evaluation reason into accessible, human-friendly localization text.
+   */
+  static describeAccessEvaluation(
+    evaluation: BatteryAccessEvaluation,
+    options: {
+      formTitles?: Record<string, string> | ReadonlyMap<string, string>;
+    } = {},
+  ): string {
+    if (!evaluation.isLocked || evaluation.canStart) {
+      return 'Available to start.';
+    }
+
+    switch (evaluation.reason) {
+      case 'max_attempts_reached': {
+        const attempts = evaluation.attemptsUsed;
+        return attempts === 1
+          ? 'You have completed the single allowed attempt for this form.'
+          : `You have completed all ${attempts} allowed attempts for this form.`;
+      }
+      case 'cooldown_active': {
+        if (evaluation.unlocksAt) {
+          const parsed = Date.parse(evaluation.unlocksAt);
+          if (Number.isFinite(parsed)) {
+            return `Temporarily locked. Available after ${new Date(parsed).toLocaleString()}.`;
+          }
+        }
+        return 'Temporarily locked after your previous submission.';
+      }
+      case 'time_locked': {
+        if (evaluation.unlocksAt) {
+          const parsed = Date.parse(evaluation.unlocksAt);
+          if (Number.isFinite(parsed)) {
+            return `Available after ${new Date(parsed).toLocaleString()}.`;
+          }
+        }
+        return 'Locked until the waiting period has elapsed.';
+      }
+      case 'prerequisite_unmet': {
+        const missing = evaluation.missingFormIds ?? [];
+        if (missing.length > 0 && options.formTitles) {
+          const getTitle = (id: string) =>
+            options.formTitles instanceof Map
+              ? options.formTitles.get(id)
+              : (options.formTitles as Record<string, string>)[id];
+          const titles = missing.map((id) => getTitle(id)?.trim() || id);
+          if (titles.length === 1) return `Complete "${titles[0]}" first.`;
+          if (titles.length === 2) return `Complete "${titles[0]}" and "${titles[1]}" first.`;
+          return `Complete "${titles.slice(0, 2).join('", "')}" and ${titles.length - 2} more required forms first.`;
+        }
+        return 'Complete the required prerequisite forms first.';
+      }
+      case 'score_threshold_unmet':
+        return 'Prerequisite score threshold not met.';
+      default:
+        return 'This form is currently unavailable.';
+    }
+  }
+
+  /**
    * Resolves default access policy for a specific FormKind if not explicitly specified.
    */
   static getDefaultAccessPolicy(kind: FormKind = 'form'): FormAccessPolicy {

@@ -158,7 +158,7 @@ export class FormLifecycleMachine<T extends Record<string, unknown>>
               []
           );
           next.lastSavedAt =
-            event.draft.savedAt ?? (event.draft as any).updatedAt;
+            event.draft.savedAt != null ? String(event.draft.savedAt) : (event.draft as any).updatedAt;
           if (Array.isArray(event.draft.branchLineage)) {
             next.branchLineage = new Map(
               event.draft.branchLineage.map(([k, v]) => [k, new Set(v)])

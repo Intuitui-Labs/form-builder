@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Platform,
   Pressable,
@@ -215,6 +214,19 @@ const QUESTION_TYPES = [
   { id: 'open', label: 'Long Answer', icon: '📝' },
 ] as const;
 
+interface StudioDialogButton {
+  text: string;
+  style?: 'default' | 'cancel' | 'destructive';
+  onPress?: () => void;
+}
+
+interface StudioDialogState {
+  visible: boolean;
+  title: string;
+  message?: string;
+  buttons?: StudioDialogButton[];
+}
+
 export default function StudioScreen() {
   const {
     authUser,
@@ -231,6 +243,20 @@ export default function StudioScreen() {
 
   const isCreatorOrStaff =
     effectiveRole === 'creator' || Boolean(authUser?.isStaff);
+
+  const [dialogState, setDialogState] = useState<StudioDialogState>({ visible: false, title: '' });
+
+  const showDialog = useCallback(
+    (title: string, message?: string, buttons?: StudioDialogButton[]) => {
+      setDialogState({
+        visible: true,
+        title,
+        message,
+        buttons: buttons && buttons.length > 0 ? buttons : [{ text: 'OK', style: 'default' }],
+      });
+    },
+    [],
+  );
 
   const [activeTab, setActiveTab] = useState<'surveys' | 'builder'>('surveys');
   const [surveys, setSurveys] = useState<StudioSurvey[]>([]);
@@ -399,9 +425,9 @@ export default function StudioScreen() {
       await loadSurveys();
       setPolicyTarget(null);
       setActiveTab('surveys');
-      Alert.alert('Availability updated', 'The survey rules are saved and will be reflected in the respondent survey list.');
+      showDialog('Availability updated', 'The survey rules are saved and will be reflected in the respondent survey list.');
     } catch (err) {
-      Alert.alert('Could not save rules', (err as Error).message);
+      showDialog('Could not save rules', (err as Error).message);
     } finally {
       setPublishing(false);
     }
@@ -415,10 +441,11 @@ export default function StudioScreen() {
   // Template Loaders
   // ---------------------------------------------------------------------------
   const applyTemplate = (name: 'hmsam_full' | 'core_8' | 'usability' | 'blank') => {
-    Alert.alert(
+    showDialog(
       'Load Instrument Template',
       'This will replace your current questions deck with the selected template. Proceed?',
       [
+        { text: 'Cancel', style: 'cancel' },
         {
           text: 'Load Template',
           style: 'destructive',
@@ -495,7 +522,7 @@ export default function StudioScreen() {
 
   const handleRemoveQuestion = (idx: number) => {
     if (questions.length <= 1) {
-      Alert.alert('Cannot Delete', 'An instrument must have at least one question.');
+      showDialog('Cannot Delete', 'An instrument must have at least one question.');
       return;
     }
     setQuestions(questions.filter((_, i) => i !== idx));
@@ -548,7 +575,7 @@ export default function StudioScreen() {
   const handleRemoveOption = (qIdx: number, optIdx: number) => {
     const q = questions[qIdx]!;
     if (!q.options || q.options.length <= 2) {
-      Alert.alert('Minimum Options', 'Multiple choice questions require at least 2 choices.');
+      showDialog('Minimum Options', 'Multiple choice questions require at least 2 choices.');
       return;
     }
     const opts = q.options.filter((_, i) => i !== optIdx);
@@ -572,46 +599,46 @@ export default function StudioScreen() {
   // ---------------------------------------------------------------------------
   const handlePublishSurvey = async (isDraft = false) => {
     if (!authUser) {
-      Alert.alert(
+      showDialog(
         'Authentication Required',
         'Please sign in or register as a Form Creator to publish surveys to the Django backend.',
         [
-          { text: 'Sign In / Register', onPress: openAuthModal },
           { text: 'Cancel', style: 'cancel' },
+          { text: 'Sign In / Register', onPress: openAuthModal },
         ],
       );
       return;
     }
 
     if (authUser.role !== 'creator' && !authUser.isStaff) {
-      Alert.alert(
+      showDialog(
         'Creator Account Required',
         'You are currently signed in as a Respondent. Publishing research instruments requires a Form Creator account.',
         [
-          { text: 'Switch Account', onPress: openAuthModal },
           { text: 'Cancel', style: 'cancel' },
+          { text: 'Switch Account', onPress: openAuthModal },
         ],
       );
       return;
     }
 
     if (!formTitle.trim()) {
-      Alert.alert('Required Field', 'Please provide an instrument title.');
+      showDialog('Required Field', 'Please provide an instrument title.');
       return;
     }
     if (questions.length === 0) {
-      Alert.alert('Required Field', 'Please add at least one question.');
+      showDialog('Required Field', 'Please add at least one question.');
       return;
     }
 
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i]!;
       if (!q.text.trim()) {
-        Alert.alert('Incomplete Question', `Question #${i + 1} is missing statement text.`);
+        showDialog('Incomplete Question', `Question #${i + 1} is missing statement text.`);
         return;
       }
       if (q.type === 'mcq' && (!q.options || q.options.length < 2)) {
-        Alert.alert('Incomplete MCQ', `Question #${i + 1} requires at least 2 choice options.`);
+        showDialog('Incomplete MCQ', `Question #${i + 1} requires at least 2 choice options.`);
         return;
       }
     }
@@ -656,7 +683,7 @@ export default function StudioScreen() {
       await loadSurveys();
       setActiveTab('surveys');
     } catch (err) {
-      Alert.alert('Publish Error', (err as Error).message);
+      showDialog('Publish Error', (err as Error).message);
     } finally {
       setPublishing(false);
     }
@@ -1019,7 +1046,7 @@ export default function StudioScreen() {
                             );
                             setActiveTab('builder');
                           } catch (err) {
-                            Alert.alert('Load Error', (err as Error).message);
+                            showDialog('Load Error', (err as Error).message);
                           }
                         }}
                       >
@@ -1054,7 +1081,7 @@ export default function StudioScreen() {
                               });
                               setActiveTab('builder');
                             } catch (err) {
-                              Alert.alert('Could not load rules', (err as Error).message);
+                              showDialog('Could not load rules', (err as Error).message);
                             }
                           }}
                         >
@@ -1068,7 +1095,7 @@ export default function StudioScreen() {
                             const meta = await transportPort.fetchSurveyMeta(s.uuid);
                             handleOpenAirDrop(meta, s.accessCode);
                           } catch (err) {
-                            Alert.alert('QR Share Error', (err as Error).message);
+                            showDialog('QR Share Error', (err as Error).message);
                           }
                         }}
                       >
@@ -1085,7 +1112,7 @@ export default function StudioScreen() {
                               await studioPort.togglePublish!(s.uuid, !s.isDraft);
                               await loadSurveys();
                             } catch (err) {
-                              Alert.alert('Update Error', (err as Error).message);
+                              showDialog('Update Error', (err as Error).message);
                             }
                           }}
                         >
@@ -1881,6 +1908,53 @@ export default function StudioScreen() {
                 </View>
               </>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Accessible In-App Modal Dialog replacing legacy Alert.alert */}
+      <Modal
+        visible={dialogState.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDialogState((prev) => ({ ...prev, visible: false }))}
+      >
+        <View style={styles.dialogBackdrop}>
+          <View style={styles.dialogCard}>
+            <Text style={styles.dialogTitle}>{dialogState.title}</Text>
+            {dialogState.message ? (
+              <Text style={styles.dialogMessage}>{dialogState.message}</Text>
+            ) : null}
+            <View style={styles.dialogButtonRow}>
+              {(dialogState.buttons ?? [{ text: 'OK' }]).map((btn, idx) => {
+                const isCancel = btn.style === 'cancel';
+                const isDestructive = btn.style === 'destructive';
+                return (
+                  <Pressable
+                    key={idx}
+                    style={[
+                      styles.dialogBtn,
+                      isCancel && styles.dialogBtnCancel,
+                      isDestructive && styles.dialogBtnDestructive,
+                    ]}
+                    onPress={() => {
+                      setDialogState((prev) => ({ ...prev, visible: false }));
+                      btn.onPress?.();
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.dialogBtnText,
+                        isCancel && styles.dialogBtnTextCancel,
+                        isDestructive && styles.dialogBtnTextDestructive,
+                      ]}
+                    >
+                      {btn.text}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
         </View>
       </Modal>
@@ -3239,6 +3313,72 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  dialogBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  dialogCard: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: colors.paper,
+    borderRadius: radii.large,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: colors.line,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  dialogTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.ink,
+    marginBottom: 8,
+  },
+  dialogMessage: {
+    fontSize: 13,
+    color: colors.muted,
+    lineHeight: 18,
+    marginBottom: 18,
+  },
+  dialogButtonRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  dialogBtn: {
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    borderRadius: radii.medium,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 72,
+  },
+  dialogBtnCancel: {
+    backgroundColor: colors.hover,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  dialogBtnDestructive: {
+    backgroundColor: colors.rose,
+  },
+  dialogBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  dialogBtnTextCancel: {
+    color: colors.muted,
+  },
+  dialogBtnTextDestructive: {
+    color: '#ffffff',
   },
 });
 

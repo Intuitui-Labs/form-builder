@@ -6,7 +6,7 @@
 export interface FormDraftSnapshot<T = Record<string, unknown>> {
   schemaId: string;
   schemaVersion: string;
-  savedAt: string; // ISO 8601 string
+  savedAt: string | number; // ISO 8601 string or epoch ms
   currentPageIndex: number;
   completedStepIndices: number[];
   stepHistory: number[];
@@ -14,6 +14,8 @@ export interface FormDraftSnapshot<T = Record<string, unknown>> {
   branchTargetHistory: Array<[number, number]>; // Serializable representation of branchTargetHistory Map
   values: T;
   isSubmitted: boolean;
+  policyVersion?: string;
+  attemptId?: string;
   redactedFields?: string[];
   experimentLineage?: {
     experimentKey: string;

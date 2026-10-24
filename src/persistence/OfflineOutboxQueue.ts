@@ -212,6 +212,40 @@ export class OfflineOutboxQueue<T = Record<string, unknown>> {
     return true;
   }
 
+  public async findDeadLetters(
+    predicate: (item: QueuedSubmission<T>) => boolean,
+  ): Promise<QueuedSubmission<T>[]> {
+    const dlq = await this.getDeadLetterQueue();
+    return dlq.filter(predicate);
+  }
+
+  /**
+   * Rebinds metadata or context on a dead-lettered submission while strictly preserving
+   * its original idempotency key (envelope.id).
+   */
+  public async rebindDeadLetter(
+    envelopeId: string,
+    mutator: (envelope: SubmissionEnvelope<T>) => SubmissionEnvelope<T>,
+  ): Promise<boolean> {
+    const dlq = await this.getDeadLetterQueue();
+    const item = dlq.find((queued) => queued.envelope.id === envelopeId);
+    if (!item) return false;
+
+    const mutated = mutator(item.envelope);
+    if (!mutated || mutated.id !== envelopeId) {
+      throw new Error(`Submission idempotency key is immutable. Cannot mutate '${envelopeId}' to '${mutated ? mutated.id : 'null'}'.`);
+    }
+
+    item.envelope = mutated;
+    item.envelope.retryCount = 0;
+    item.lastError = undefined;
+    item.lastErrorCode = undefined;
+    item.lastAttemptAt = undefined;
+    await this.storage.setItem(this.dlqKey, JSON.stringify(dlq));
+    this.notify();
+    return true;
+  }
+
   /** Update delivery metadata only after the respondent accepts changed rules. */
   public async rebindDeadLetterContext(
     envelopeId: string,
@@ -448,6 +482,7 @@ export class OfflineOutboxQueue<T = Record<string, unknown>> {
   public destroy(): void {
     if (this.unsubscribeNetwork) {
       this.unsubscribeNetwork();
+      this.unsubscribeNetwork = undefined;
     }
     this.subscribers.clear();
   }

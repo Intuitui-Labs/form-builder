@@ -153,6 +153,10 @@ export class FormPersistenceCoordinator<T extends Record<string, unknown>> {
       }
     }
 
+    const partConfig = this.ctx.getParticipationConfig?.();
+    const activePolicyVersion = partConfig?.policyVersion ?? (this.ctx.schema.accessPolicy as any)?.version;
+    const attemptId = partConfig?.attemptId;
+
     return {
       schemaId: this.ctx.schema.id,
       schemaVersion: this.ctx.schema.version ?? '1.0.0',
@@ -165,6 +169,8 @@ export class FormPersistenceCoordinator<T extends Record<string, unknown>> {
       values: sanitizedValues,
       redactedFields: redactedFields.length > 0 ? redactedFields : undefined,
       isSubmitted: state.submitSuccess,
+      policyVersion: activePolicyVersion ? String(activePolicyVersion) : undefined,
+      attemptId: attemptId ? String(attemptId) : undefined,
     };
   }
 
@@ -176,7 +182,7 @@ export class FormPersistenceCoordinator<T extends Record<string, unknown>> {
     this.draftStorage.saveDraft(snapshot as FormDraftSnapshot);
     this.hasSavedDraftState = true;
     this.ctx.setHasSavedDraftState(true);
-    this.ctx.lifecyclePort.send({ type: 'DRAFT_SAVED', savedAt: snapshot.savedAt });
+    this.ctx.lifecyclePort.send({ type: 'DRAFT_SAVED', savedAt: String(snapshot.savedAt) });
     return snapshot;
   }
 
@@ -188,7 +194,7 @@ export class FormPersistenceCoordinator<T extends Record<string, unknown>> {
         (saved) => {
           this.hasSavedDraftState = true;
           this.ctx.setHasSavedDraftState(true);
-          this.ctx.lifecyclePort.send({ type: 'DRAFT_SAVED', savedAt: saved.savedAt });
+          this.ctx.lifecyclePort.send({ type: 'DRAFT_SAVED', savedAt: String(saved.savedAt) });
           this.ctx.notify();
         },
         (err) => {
@@ -247,6 +253,7 @@ export class FormPersistenceCoordinator<T extends Record<string, unknown>> {
 
     // Restore state atomically into FLM SSOT
     this.ctx.lifecyclePort.send({ type: 'HYDRATE_SUCCESS', draft: snapshot });
+    this.ctx.onDraftHydrated?.(snapshot);
     this.ctx.notify();
     return true;
   }
