@@ -66,7 +66,7 @@ export class FeedoraContributionAdapter implements IContributionPort {
 
   async recordContribution(input: RecordContributionInput): Promise<ContributionProfile> {
     const existing = await this.store.getProfile(input.userId, input.entityId);
-    const profile: ContributionProfile = existing ?? {
+    const profile: ContributionProfile = existing ? { ...existing, badges: [...existing.badges] } : {
       userId: input.userId,
       displayName: input.displayName,
       avatar: input.avatar ?? '🗣️',
@@ -88,6 +88,45 @@ export class FeedoraContributionAdapter implements IContributionPort {
 
     await this.store.putProfile(profile);
     return profile;
+  }
+
+  async recordReceipt(input: RecordContributionInput & {
+    submissionId: string;
+    responseId: string;
+    completedAt: string;
+  }): Promise<ContributionProfile> {
+    const existing = await this.store.getProfile(input.userId, input.entityId);
+    const profile: ContributionProfile = existing ? { ...existing, badges: [...existing.badges] } : {
+      userId: input.userId,
+      displayName: input.displayName,
+      avatar: input.avatar ?? '🗣️',
+      entityId: input.entityId,
+      totalPoints: 0,
+      surveysCompleted: 0,
+      badges: [],
+      standing: standingFor(0),
+      updatedAt: input.completedAt,
+    };
+
+    profile.totalPoints += Math.max(0, Math.round(input.points));
+    if (input.isCompletion) profile.surveysCompleted += 1;
+    profile.badges = this.computeBadges(profile.surveysCompleted);
+    profile.standing = standingFor(profile.totalPoints);
+    profile.updatedAt = input.completedAt;
+
+    const applied = await this.store.applySubmissionReceipt({
+      entityId: input.entityId,
+      surveyId: input.formId,
+      surveyTitle: input.surveyTitle ?? input.formId,
+      userId: input.userId,
+      pointsEarned: Math.max(0, Math.round(input.points)),
+      completedAt: input.completedAt,
+      submissionId: input.submissionId,
+      responseId: input.responseId,
+    }, profile);
+
+    if (applied) return profile;
+    return (await this.store.getProfile(input.userId, input.entityId)) ?? profile;
   }
 
   async listContributors(entityId: string): Promise<ContributionProfile[]> {

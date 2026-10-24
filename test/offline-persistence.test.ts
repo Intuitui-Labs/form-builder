@@ -160,7 +160,7 @@ describe('OfflineOutboxQueue (14-day TTL, 50-Item Capacity, Backoff & Reconnect)
     expect(await outbox.getPendingCount()).toBe(1);
   });
 
-  it('evicts submissions older than 14-day TTL (Decision A2)', async () => {
+  it('retains pending submissions beyond the former 14-day TTL', async () => {
     const outbox = new OfflineOutboxQueue({
       storage,
       ttlMs: 100, // 100ms TTL for testing
@@ -177,20 +177,20 @@ describe('OfflineOutboxQueue (14-day TTL, 50-Item Capacity, Backoff & Reconnect)
     await outbox.enqueue(envelope);
     expect(await outbox.getPendingCount()).toBe(1);
 
-    // Wait for TTL expiration
+    // Waiting time alone cannot discard a response requiring delivery.
     await new Promise((res) => setTimeout(res, 120));
 
-    expect(await outbox.getPendingCount()).toBe(0);
+    expect(await outbox.getPendingCount()).toBe(1);
   });
 
-  it('bounds queue size to max 50 items by evicting oldest items (Decision A2)', async () => {
+  it('rejects new submissions at capacity without evicting saved responses', async () => {
     const outbox = new OfflineOutboxQueue({
       storage,
       networkStatus: { isOnline: () => false, subscribe: () => () => {} },
       maxQueueSize: 3, // Bound to 3 for testing
     });
 
-    for (let i = 1; i <= 5; i++) {
+    for (let i = 1; i <= 3; i++) {
       await outbox.enqueue({
         id: `sub-${i}`,
         formId: 'test',
@@ -199,8 +199,36 @@ describe('OfflineOutboxQueue (14-day TTL, 50-Item Capacity, Backoff & Reconnect)
         retryCount: 0,
       });
     }
-
+    await expect(outbox.enqueue({
+      id: 'sub-4', formId: 'test', values: { i: 4 },
+      submittedAt: new Date().toISOString(), retryCount: 0,
+    })).rejects.toThrow('queue is full');
     expect(await outbox.getPendingCount()).toBe(3);
+  });
+
+  it('durably stores an intent before attempting its transport', async () => {
+    let durable = false;
+    const storage = {
+      getItem: async () => null,
+      setItem: async () => { durable = true; },
+      removeItem: async () => {},
+    };
+    const outbox = new OfflineOutboxQueue({
+      storage,
+      transport: {
+        submit: async () => {
+          expect(durable).toBe(true);
+          throw Object.assign(new Error('network interrupted'), { status: 0, retryable: true });
+        },
+      },
+    });
+
+    const result = await outbox.enqueue({
+      id: 'persist-before-send', formId: 'survey', values: { answer: 1 },
+      submittedAt: new Date().toISOString(), retryCount: 0,
+    });
+    expect(result.status).toBe('queued');
+    expect(durable).toBe(true);
   });
 
   it('automatically flushes queued submissions upon network reconnection', async () => {

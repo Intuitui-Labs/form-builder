@@ -49,6 +49,13 @@ import { getSharableSurveyUrl } from '../config';
 import { NativeQrView } from '../components/NativeQrView';
 import { LegendList } from '@legendapp/list/react-native';
 import { colors, radii, serifFont } from '../theme';
+import { policyPrerequisiteChoices } from '../domain/surveyPolicyChoices';
+import {
+  buildCreatorAttemptPolicy,
+  isRepeatRewardStrategy,
+  repeatRewardChoices,
+  type RepeatRewardStrategy,
+} from '../domain/surveyRewardPolicy';
 
 // ---------------------------------------------------------------------------
 // Research Presets & Instrument Templates
@@ -211,6 +218,7 @@ const QUESTION_TYPES = [
 export default function StudioScreen() {
   const {
     authUser,
+    entityId,
     effectiveRole,
     switchPreviewRole,
     openWelcome,
@@ -228,7 +236,12 @@ export default function StudioScreen() {
   const [surveys, setSurveys] = useState<StudioSurvey[]>([]);
   const [loadingSurveys, setLoadingSurveys] = useState(false);
   const [publishing, setPublishing] = useState(false);
-  const [policyTarget, setPolicyTarget] = useState<{ uuid: string; title: string } | null>(null);
+  const [policyTarget, setPolicyTarget] = useState<{
+    uuid: string;
+    title: string;
+    scopeId: string;
+    scopeKind: 'organization' | 'platform';
+  } | null>(null);
   const [publishSuccess, setPublishSuccess] = useState<{
     uuid: string;
     accessCode: string;
@@ -241,7 +254,10 @@ export default function StudioScreen() {
   const [isHmsam, setIsHmsam] = useState(true);
   const [questions, setQuestions] = useState<StudioQuestionPayload[]>(TEMPLATE_CORE_8);
   const [requiresAccount, setRequiresAccount] = useState(false);
+  const [requiresOrganizationMembership, setRequiresOrganizationMembership] = useState(false);
+  const [accessCodeRequired, setAccessCodeRequired] = useState(false);
   const [allowRedo, setAllowRedo] = useState(false);
+  const [repeatReward, setRepeatReward] = useState<RepeatRewardStrategy>('first_attempt_only');
   const [maxAttempts, setMaxAttempts] = useState('1');
   const [cooldownMinutes, setCooldownMinutes] = useState('');
   const [prerequisiteIds, setPrerequisiteIds] = useState<string[]>([]);
@@ -249,27 +265,34 @@ export default function StudioScreen() {
   const [sequenceGroup, setSequenceGroup] = useState('');
   const [sequenceOrder, setSequenceOrder] = useState('1');
   const [enforceSequence, setEnforceSequence] = useState(false);
+  const activeScopeId = entityId === 'platform' || entityId.startsWith('org-') ? entityId : `org-${entityId}`;
+  const policyChoiceScope = policyTarget
+    ? { id: policyTarget.scopeId, kind: policyTarget.scopeKind }
+    : { id: activeScopeId, kind: 'organization' as const };
+  const prerequisiteChoices = policyPrerequisiteChoices(surveys, policyChoiceScope, policyTarget?.uuid);
   const [draftSavedStatus, setDraftSavedStatus] = useState<string>('Auto-saved');
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
-  const buildAccessFeatures = useCallback(() => ({
-    accessPolicy: {
-      requiresAccount,
-      allowRedo,
-      rewardStrategy: allowRedo ? 'score_delta' : 'first_attempt_only',
-      ...(Number(maxAttempts) > 0 ? { maxAttempts: Number(maxAttempts) } : {}),
-      ...(Number(cooldownMinutes) > 0 ? { cooldownMinutes: Number(cooldownMinutes) } : {}),
-    },
-    prerequisites: {
-      completedFormIds: prerequisiteIds,
-      ...(Number(prerequisiteDelayMinutes) > 0
-        ? { unlockDelayMs: Number(prerequisiteDelayMinutes) * 60_000 }
+  const buildAccessFeatures = useCallback(() => {
+    const attemptPolicy = buildCreatorAttemptPolicy({ allowRedo, maxAttempts, cooldownMinutes, repeatReward });
+    return {
+      accessPolicy: {
+        requiresAccount,
+        organizationMembershipRequired: requiresOrganizationMembership,
+        ...attemptPolicy,
+      },
+      accessCodeRequired,
+      prerequisites: {
+        completedFormIds: prerequisiteIds,
+        ...(Number(prerequisiteDelayMinutes) > 0
+          ? { unlockDelayMs: Number(prerequisiteDelayMinutes) * 60_000 }
+          : {}),
+      },
+      ...(sequenceGroup.trim()
+        ? { sequence: { groupId: sequenceGroup.trim(), order: Math.max(1, Number(sequenceOrder) || 1), enforce: enforceSequence } }
         : {}),
-    },
-    ...(sequenceGroup.trim()
-      ? { sequence: { groupId: sequenceGroup.trim(), order: Math.max(1, Number(sequenceOrder) || 1), enforce: enforceSequence } }
-      : {}),
-  }), [requiresAccount, allowRedo, maxAttempts, cooldownMinutes, prerequisiteIds, prerequisiteDelayMinutes, sequenceGroup, sequenceOrder, enforceSequence]);
+    };
+  }, [requiresAccount, requiresOrganizationMembership, accessCodeRequired, allowRedo, repeatReward, maxAttempts, cooldownMinutes, prerequisiteIds, prerequisiteDelayMinutes, sequenceGroup, sequenceOrder, enforceSequence]);
 
   // Instant QR & P2P Distribution State
   const [isAirDropOpen, setIsAirDropOpen] = useState(false);
@@ -300,8 +323,13 @@ export default function StudioScreen() {
           setQuestions(parsed.questions);
         }
         if (parsed.requiresAccount !== undefined) setRequiresAccount(Boolean(parsed.requiresAccount));
-        if (parsed.allowRedo !== undefined) setAllowRedo(Boolean(parsed.allowRedo));
-        if (parsed.maxAttempts !== undefined) setMaxAttempts(String(parsed.maxAttempts));
+        if (parsed.requiresOrganizationMembership !== undefined) setRequiresOrganizationMembership(Boolean(parsed.requiresOrganizationMembership));
+        if (parsed.accessCodeRequired !== undefined) setAccessCodeRequired(Boolean(parsed.accessCodeRequired));
+        if (isRepeatRewardStrategy(parsed.repeatReward)) setRepeatReward(parsed.repeatReward);
+        if (parsed.maxAttempts !== undefined) {
+          setMaxAttempts(parsed.maxAttempts == null ? '' : String(parsed.maxAttempts));
+          setAllowRedo(parsed.maxAttempts == null || Number(parsed.maxAttempts) > 1);
+        } else if (parsed.allowRedo !== undefined) setAllowRedo(Boolean(parsed.allowRedo));
         if (parsed.cooldownMinutes !== undefined) setCooldownMinutes(String(parsed.cooldownMinutes));
         if (Array.isArray(parsed.prerequisiteIds)) setPrerequisiteIds(parsed.prerequisiteIds.map(String));
         if (parsed.prerequisiteDelayMinutes !== undefined) setPrerequisiteDelayMinutes(String(parsed.prerequisiteDelayMinutes));
@@ -328,7 +356,10 @@ export default function StudioScreen() {
         isHmsam,
         questions,
         requiresAccount,
+        requiresOrganizationMembership,
+        accessCodeRequired,
         allowRedo,
+        repeatReward,
         maxAttempts,
         cooldownMinutes,
         prerequisiteIds,
@@ -343,7 +374,7 @@ export default function StudioScreen() {
       });
     }, 600);
     return () => clearTimeout(timer);
-  }, [formTitle, formDesc, isHmsam, questions, requiresAccount, allowRedo, maxAttempts, cooldownMinutes, prerequisiteIds, prerequisiteDelayMinutes, sequenceGroup, sequenceOrder, enforceSequence]);
+  }, [formTitle, formDesc, isHmsam, questions, requiresAccount, requiresOrganizationMembership, accessCodeRequired, allowRedo, repeatReward, maxAttempts, cooldownMinutes, prerequisiteIds, prerequisiteDelayMinutes, sequenceGroup, sequenceOrder, enforceSequence]);
 
   // ---------------------------------------------------------------------------
   // Load existing Django fleet surveys
@@ -594,14 +625,16 @@ export default function StudioScreen() {
         description: formDesc.trim(),
         is_hmsam: isHmsam,
         is_draft: isDraft,
+        ...(policyChoiceScope.kind === 'organization'
+          ? { organizationId: policyChoiceScope.id.replace(/^org-/, '') }
+          : {}),
         features: {
           accessPolicy: {
             requiresAccount,
-            allowRedo,
-            rewardStrategy: allowRedo ? 'score_delta' : 'first_attempt_only',
-            ...(Number(maxAttempts) > 0 ? { maxAttempts: Number(maxAttempts) } : {}),
-            ...(Number(cooldownMinutes) > 0 ? { cooldownMinutes: Number(cooldownMinutes) } : {}),
+            organizationMembershipRequired: requiresOrganizationMembership,
+            ...buildCreatorAttemptPolicy({ allowRedo, maxAttempts, cooldownMinutes, repeatReward }),
           },
+          accessCodeRequired,
           ...(prerequisiteIds.length ? { prerequisites: { completedFormIds: prerequisiteIds, ...(Number(prerequisiteDelayMinutes) > 0 ? { unlockDelayMs: Number(prerequisiteDelayMinutes) * 60_000 } : {}) } } : {}),
           ...(sequenceGroup.trim() ? { sequence: { groupId: sequenceGroup.trim(), order: Math.max(1, Number(sequenceOrder) || 1), enforce: enforceSequence } } : {}),
         },
@@ -960,8 +993,11 @@ export default function StudioScreen() {
                             setIsHmsam(meta.survey.is_hmsam);
                             const access = (meta.features?.accessPolicy || {}) as Record<string, unknown>;
                             setRequiresAccount(Boolean(access.requiresAccount));
-                            setAllowRedo(Boolean(access.allowRedo));
+                            setRequiresOrganizationMembership(Boolean(access.organizationMembershipRequired));
+                            setAccessCodeRequired(Boolean(meta.features?.accessCodeRequired));
+                            setRepeatReward(isRepeatRewardStrategy(access.rewardStrategy) ? access.rewardStrategy : 'first_attempt_only');
                             setMaxAttempts(access.maxAttempts != null ? String(access.maxAttempts) : '');
+                            setAllowRedo(access.maxAttempts == null ? Boolean(access.allowRedo) : Number(access.maxAttempts) > 1);
                             setCooldownMinutes(access.cooldownMinutes != null ? String(access.cooldownMinutes) : '');
                             setPrerequisiteIds(meta.survey.prerequisites || []);
                             setPrerequisiteDelayMinutes(meta.survey.unlockDelayMs ? String(meta.survey.unlockDelayMs / 60_000) : '');
@@ -999,15 +1035,23 @@ export default function StudioScreen() {
                               const prerequisites = (meta.features?.prerequisites || {}) as Record<string, unknown>;
                               const sequence = (meta.features?.sequence || {}) as Record<string, unknown>;
                               setRequiresAccount(Boolean(access.requiresAccount));
-                              setAllowRedo(Boolean(access.allowRedo));
+                              setRequiresOrganizationMembership(Boolean(access.organizationMembershipRequired));
+                              setAccessCodeRequired(Boolean(meta.features?.accessCodeRequired));
+                              setRepeatReward(isRepeatRewardStrategy(access.rewardStrategy) ? access.rewardStrategy : 'first_attempt_only');
                               setMaxAttempts(access.maxAttempts != null ? String(access.maxAttempts) : '');
+                              setAllowRedo(access.maxAttempts == null ? Boolean(access.allowRedo) : Number(access.maxAttempts) > 1);
                               setCooldownMinutes(access.cooldownMinutes != null ? String(access.cooldownMinutes) : '');
                               setPrerequisiteIds(Array.isArray(prerequisites.completedFormIds) ? prerequisites.completedFormIds.map(String) : []);
                               setPrerequisiteDelayMinutes(prerequisites.unlockDelayMs ? String(Number(prerequisites.unlockDelayMs) / 60_000) : '');
                               setSequenceGroup(typeof sequence.groupId === 'string' ? sequence.groupId : '');
                               setSequenceOrder(sequence.order != null ? String(sequence.order) : '1');
                               setEnforceSequence(Boolean(sequence.enforce));
-                              setPolicyTarget({ uuid: s.uuid, title: s.title });
+                              setPolicyTarget({
+                                uuid: s.uuid,
+                                title: s.title,
+                                scopeId: meta.survey.scopeId ?? s.scopeId ?? activeScopeId,
+                                scopeKind: meta.survey.scopeKind ?? s.scopeKind ?? 'organization',
+                              });
                               setActiveTab('builder');
                             } catch (err) {
                               Alert.alert('Could not load rules', (err as Error).message);
@@ -1176,15 +1220,57 @@ export default function StudioScreen() {
                 <Text style={styles.policyTitle}>{requiresAccount ? '✓ Sign-in required' : '○ Allow guest responses'}</Text>
                 <Text style={styles.policyHint}>Account requirement is checked by the API.</Text>
               </Pressable>
-              <Pressable style={styles.policyRow} onPress={() => setAllowRedo(!allowRedo)}>
-                <Text style={styles.policyTitle}>{allowRedo ? '✓ Allow repeat attempts' : '○ One completed attempt'}</Text>
+              <Pressable style={styles.policyRow} onPress={() => setRequiresOrganizationMembership(!requiresOrganizationMembership)}>
+                <Text style={styles.policyTitle}>{requiresOrganizationMembership ? '✓ Organization members only' : '○ Organization membership is optional'}</Text>
+                <Text style={styles.policyHint}>Applies only to organization surveys.</Text>
               </Pressable>
-              <TextInput style={styles.input} value={maxAttempts} onChangeText={setMaxAttempts} keyboardType="number-pad" placeholder={allowRedo ? 'Maximum attempts (blank for unlimited)' : 'Maximum attempts (default 1)'} placeholderTextColor={colors.faint} />
+              <Pressable style={styles.policyRow} onPress={() => setAccessCodeRequired(!accessCodeRequired)}>
+                <Text style={styles.policyTitle}>{accessCodeRequired ? '✓ Access code required' : '○ No access code required'}</Text>
+                <Text style={styles.policyHint}>The service verifies the code before showing questions.</Text>
+              </Pressable>
+              <Pressable style={styles.policyRow} onPress={() => {
+                const next = !allowRedo;
+                setAllowRedo(next);
+                setMaxAttempts(next ? '' : '1');
+              }}>
+                <Text style={styles.policyTitle}>{allowRedo ? '✓ Allow repeat attempts' : '○ One completed attempt'}</Text>
+                <Text style={styles.policyHint}>{allowRedo
+                  ? 'Set a maximum below, or leave it blank for no fixed limit.'
+                  : requiresAccount
+                    ? 'The API enforces this limit for each account.'
+                    : 'Guest limits follow the saved guest session. Require sign-in for per-account enforcement.'}</Text>
+              </Pressable>
+              <TextInput style={styles.input} value={maxAttempts} onChangeText={(value) => {
+                setMaxAttempts(value);
+                if (!value.trim()) setAllowRedo(true);
+                else if (Number.isInteger(Number(value)) && Number(value) > 0) setAllowRedo(Number(value) > 1);
+              }} keyboardType="number-pad" placeholder={allowRedo ? 'Maximum attempts (blank for no fixed limit)' : 'Maximum attempts (default 1)'} placeholderTextColor={colors.faint} />
               <TextInput style={styles.input} value={cooldownMinutes} onChangeText={setCooldownMinutes} keyboardType="decimal-pad" placeholder="Wait between attempts (minutes, optional)" placeholderTextColor={colors.faint} />
-              {surveys.some((survey) => survey.isActive && !survey.isDraft) ? (
+              {allowRedo ? (
+                <View style={styles.policyChoices}>
+                  <Text style={styles.policyTitle}>Points on repeat attempts</Text>
+                  {repeatRewardChoices.map((choice) => {
+                    const selected = choice.value === repeatReward
+                      || (choice.value === 'first_attempt_only' && repeatReward === 'blocked');
+                    return (
+                      <Pressable
+                        key={choice.value}
+                        style={styles.policyChoice}
+                        accessibilityRole="radio"
+                        accessibilityState={{ checked: selected }}
+                        onPress={() => setRepeatReward(choice.value)}
+                      >
+                        <Text style={styles.policyChoiceText}>{selected ? '● ' : '○ '}{choice.label}</Text>
+                        <Text style={styles.policyHint}>{choice.description}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
+              {prerequisiteChoices.length ? (
                 <View style={styles.policyChoices}>
                   <Text style={styles.policyTitle}>Complete another survey first</Text>
-                  {surveys.filter((survey) => survey.isActive && !survey.isDraft && survey.uuid !== policyTarget?.uuid).map((survey) => {
+                  {prerequisiteChoices.map((survey) => {
                     const selected = prerequisiteIds.includes(survey.uuid);
                     return (
                       <Pressable key={survey.uuid} style={styles.policyChoice} onPress={() => setPrerequisiteIds((current) => selected ? current.filter((id) => id !== survey.uuid) : [...current, survey.uuid])}>

@@ -67,7 +67,9 @@ export class SqliteEntityStore implements IEntityStore {
         survey_title  TEXT DEFAULT '',
         user_id       TEXT,
         points_earned INTEGER NOT NULL DEFAULT 0,
-        completed_at  TEXT NOT NULL
+        completed_at  TEXT NOT NULL,
+        submission_id TEXT,
+        server_response_id TEXT
       );
 
       CREATE TABLE IF NOT EXISTS hmsam_response (
@@ -79,6 +81,21 @@ export class SqliteEntityStore implements IEntityStore {
         key   TEXT PRIMARY KEY,
         value TEXT NOT NULL
       );
+    `);
+
+    const historyColumns = new Set(
+      this.db.getAllSync<{ name: string }>('PRAGMA table_info(surveys_response)').map((column) => column.name),
+    );
+    if (!historyColumns.has('submission_id')) {
+      this.db.execSync('ALTER TABLE surveys_response ADD COLUMN submission_id TEXT;');
+    }
+    if (!historyColumns.has('server_response_id')) {
+      this.db.execSync('ALTER TABLE surveys_response ADD COLUMN server_response_id TEXT;');
+    }
+    this.db.execSync(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_surveys_response_receipt
+      ON surveys_response (user_id, entity_id, survey_id, submission_id)
+      WHERE submission_id IS NOT NULL;
     `);
   }
 
@@ -208,6 +225,54 @@ export class SqliteEntityStore implements IEntityStore {
     }
   }
 
+  async applySubmissionReceipt(
+    record: import('../domain/ports/IEntityStore').SubmissionHistoryRecord,
+    profile: ContributionProfile,
+  ): Promise<boolean> {
+    let applied = false;
+    this.db.withTransactionSync(() => {
+      const prior = this.db.getFirstSync<{ id: number }>(
+        `SELECT id FROM surveys_response
+         WHERE user_id = ? AND entity_id = ? AND survey_id = ? AND submission_id = ? LIMIT 1`,
+        [record.userId, record.entityId, record.surveyId, record.submissionId ?? ''],
+      );
+      if (prior) return;
+
+      this.db.runSync(
+        `INSERT INTO surveys_response
+           (entity_id, survey_id, survey_title, user_id, points_earned, completed_at, submission_id, server_response_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          record.entityId,
+          record.surveyId,
+          record.surveyTitle || 'Research Survey',
+          record.userId,
+          record.pointsEarned,
+          record.completedAt,
+          record.submissionId ?? null,
+          record.responseId ?? null,
+        ],
+      );
+      this.db.runSync(
+        `INSERT OR REPLACE INTO accounts_respondentprofile
+           (user_id, entity_id, display_name, avatar, total_points, surveys_completed, badges, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          profile.userId,
+          profile.entityId,
+          profile.displayName,
+          profile.avatar,
+          profile.totalPoints,
+          profile.surveysCompleted,
+          JSON.stringify(profile.badges),
+          profile.updatedAt,
+        ],
+      );
+      applied = true;
+    });
+    return applied;
+  }
+
   async listUserHistory(userId: string): Promise<import('../domain/ports/IEntityStore').SubmissionHistoryRecord[]> {
     interface HistoryRow {
       id: number;
@@ -217,6 +282,8 @@ export class SqliteEntityStore implements IEntityStore {
       user_id: string;
       points_earned: number;
       completed_at: string;
+      submission_id?: string | null;
+      server_response_id?: string | null;
     }
     try {
       const rows = this.db.getAllSync<HistoryRow>(
@@ -231,6 +298,8 @@ export class SqliteEntityStore implements IEntityStore {
         userId: r.user_id,
         pointsEarned: r.points_earned,
         completedAt: r.completed_at,
+        submissionId: r.submission_id ?? undefined,
+        responseId: r.server_response_id ?? undefined,
       }));
     } catch {
       return [];

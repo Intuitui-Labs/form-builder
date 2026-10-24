@@ -1,4 +1,5 @@
 import type { RemoteSurveyMeta, RemoteSubmitResult } from './transportTypes';
+import type { PrincipalId, ScopeRef } from '../identity';
 
 /**
  * Application-level port: how the showcase talks to the Feedora research
@@ -14,6 +15,12 @@ export interface ITransportPort {
 
   /** Read-only survey metadata (features + questions) as JSON by UUID. */
   fetchSurveyMeta(accessUuid: string): Promise<RemoteSurveyMeta>;
+
+  /** Reserve or resume a server-authorized attempt before opening a response draft. */
+  startSurveyAttempt(accessUuid: string, attemptId: string, scopeId?: string): Promise<{ attemptId: string; policyVersion: string; scopeId: string; scopeKind: 'platform' | 'organization'; resumed: boolean }>;
+
+  /** Verify a private survey code and retain the short-lived server grant. */
+  verifySurveyAccessCode(accessUuid: string, accessCode: string): Promise<void>;
 
   /** Read-only survey metadata by 6-char access code. */
   fetchSurveyMetaByCode(accessCode: string): Promise<RemoteSurveyMeta>;
@@ -33,6 +40,12 @@ export interface ITransportPort {
       qualityFlags?: string[];
       consentVersion?: string;
       guestParticipantId?: string;
+      submissionId?: string;
+      principalId?: PrincipalId;
+      scope?: ScopeRef;
+      scopeId?: string;
+      policyVersion?: string;
+      attemptId?: string;
     },
   ): Promise<RemoteSubmitResult>;
 
@@ -41,4 +54,7 @@ export interface ITransportPort {
 
   /** Fetch leaderboard values calculated from responses in the selected organization. */
   fetchLeaderboard(entityId: string): Promise<import('./transportTypes').RemoteLeaderboardResult>;
+
+  /** Update an organization's preference for aggregate completion counts. */
+  setOrganizationAggregateSharing(entityId: string, enabled: boolean): Promise<void>;
 }

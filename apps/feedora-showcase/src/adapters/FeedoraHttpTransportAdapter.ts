@@ -6,6 +6,7 @@ import type {
   RemoteLeaderboardResult,
 } from '../domain/ports/transportTypes';
 import type { RemoteSurveyCatalogItem } from '../domain/ports/transportTypes';
+import { scopeRefFromWire } from '../domain/identity';
 
 /**
  * Outbound adapter -> Feedora's Django backend over plain HTTP.
@@ -26,25 +27,95 @@ export class FeedoraHttpTransportAdapter implements ITransportPort {
 
   private readonly metaCache = new Map<string, RemoteSurveyMeta>();
   private csrfToken: string | null = null;
+  private guestToken: string | null = null;
+  private readonly admissionGrants = new Map<string, string>();
 
   constructor(
     private readonly baseUrl: string,
     private readonly fetchImpl: typeof fetch = fetch.bind(globalThis),
   ) {}
 
+  setGuestToken(token: string | null): void {
+    this.guestToken = token;
+  }
+
   async fetchSurveyMeta(accessUuid: string): Promise<RemoteSurveyMeta> {
     const response = await this.fetchImpl(this.url(accessUuid, 'meta/'), {
       method: 'GET',
       credentials: 'include',
+      headers: this.requestHeaders(accessUuid),
     });
     if (!response.ok) {
-      throw new Error(`Feedora meta request failed (${response.status})`);
+      const result = await response.json().catch(() => ({}));
+      const error = new Error(result?.error || `Feedora meta request failed (${response.status})`);
+      Object.assign(error, { status: response.status, code: result?.code });
+      throw error;
     }
     this.captureCsrf(response);
     const meta = (await response.json()) as RemoteSurveyMeta;
+    meta.survey.scope = scopeRefFromWire(meta.survey.scopeKind, meta.survey.scopeId) ?? undefined;
     this.csrfToken = meta.csrfToken ?? this.csrfToken;
     this.metaCache.set(accessUuid, meta);
     return meta;
+  }
+
+  async startSurveyAttempt(accessUuid: string, attemptId: string, scopeId?: string) {
+    let response: Response;
+    try {
+      response = await this.fetchImpl(
+        `${this.baseUrl.replace(/\/+$/, '')}/api/v1/surveys/${accessUuid}/attempts/start/`,
+        {
+          method: 'POST',
+          credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...this.requestHeaders(accessUuid),
+          ...(this.csrfToken || this.readCookie('csrftoken')
+            ? { 'X-CSRFToken': this.csrfToken ?? this.readCookie('csrftoken')! }
+            : {}),
+        },
+          body: JSON.stringify({ attemptId, ...(scopeId ? { scopeId } : {}) }),
+        },
+      );
+    } catch (cause) {
+      const error = new Error('The research service is offline.', { cause });
+      Object.assign(error, { status: 0 });
+      throw error;
+    }
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result?.ok !== true || typeof result.attemptId !== 'string' || typeof result.policyVersion !== 'string') {
+      const error = new Error(result?.error || `Could not start this survey (${response.status}).`);
+      Object.assign(error, { status: response.status, code: result?.code });
+      throw error;
+    }
+    return {
+      attemptId: result.attemptId as string,
+      policyVersion: result.policyVersion as string,
+      scopeId: result.scopeId as string,
+      scopeKind: result.scopeKind as 'platform' | 'organization',
+      resumed: Boolean(result.resumed),
+    };
+  }
+
+  async verifySurveyAccessCode(accessUuid: string, accessCode: string): Promise<void> {
+    const response = await this.fetchImpl(`${this.baseUrl.replace(/\/+$/, '')}/api/v1/surveys/${accessUuid}/access/verify/`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ...this.requestHeaders(accessUuid) },
+      body: JSON.stringify({ accessCode: accessCode.trim().toUpperCase() }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || typeof result?.accessGrant !== 'string') {
+      throw new Error(result?.error || 'That access code could not be verified.');
+    }
+    this.admissionGrants.set(accessUuid, result.accessGrant);
+  }
+
+  private requestHeaders(accessUuid: string): Record<string, string> {
+    return {
+      ...(this.guestToken ? { 'X-Feedora-Guest-Token': this.guestToken } : {}),
+      ...(this.admissionGrants.get(accessUuid) ? { 'X-Feedora-Access-Grant': this.admissionGrants.get(accessUuid)! } : {}),
+    };
   }
 
   async fetchSurveyMetaByCode(accessCode: string): Promise<RemoteSurveyMeta> {
@@ -53,27 +124,30 @@ export class FeedoraHttpTransportAdapter implements ITransportPort {
     const response = await this.fetchImpl(endpoint, {
       method: 'GET',
       credentials: 'include',
+      headers: this.requestHeaders(''),
     });
     if (!response.ok) {
       throw new Error(`Survey with access code '${cleanCode}' not found (${response.status})`);
     }
     this.captureCsrf(response);
     const meta = (await response.json()) as RemoteSurveyMeta;
+    meta.survey.scope = scopeRefFromWire(meta.survey.scopeKind, meta.survey.scopeId) ?? undefined;
     this.csrfToken = meta.csrfToken ?? this.csrfToken;
     if (meta.survey?.uuid) {
       this.metaCache.set(meta.survey.uuid, meta);
+      if (meta.accessGrant) this.admissionGrants.set(meta.survey.uuid, meta.accessGrant);
     }
     return meta;
   }
 
-  async fetchPublicSurveys(entityId?: string, guestParticipantId?: string): Promise<RemoteSurveyCatalogItem[]> {
+  async fetchPublicSurveys(entityId?: string, _guestParticipantId?: string): Promise<RemoteSurveyCatalogItem[]> {
     const params = new URLSearchParams();
     if (entityId) params.set('entity_id', entityId);
-    if (guestParticipantId) params.set('guest_participant_id', guestParticipantId);
     const query = params.toString();
     const response = await this.fetchImpl(`${this.baseUrl.replace(/\/+$/, '')}/api/v1/surveys/${query ? `?${query}` : ''}`, {
         method: 'GET',
         credentials: 'include',
+      headers: this.guestToken ? { 'X-Feedora-Guest-Token': this.guestToken } : {},
       });
     if (!response.ok) {
       throw new Error(`Survey catalog request failed (HTTP ${response.status}).`);
@@ -96,16 +170,37 @@ export class FeedoraHttpTransportAdapter implements ITransportPort {
       qualityFlags?: string[];
       consentVersion?: string;
       guestParticipantId?: string;
+      submissionId?: string;
+      principalId?: string;
+      scope?: import('../domain/identity').ScopeRef;
+      scopeId?: string;
+      policyVersion?: string;
+      attemptId?: string;
     },
   ): Promise<RemoteSubmitResult> {
-    const meta = this.metaCache.get(accessUuid) ?? (await this.fetchSurveyMeta(accessUuid));
-
     const answersPayload: Record<string, unknown> = {};
-    for (const question of meta.questions) {
-      const value = answersByCode[question.code] ?? answersByCode[String(question.id)];
-      if (value !== undefined && value !== null && value !== '') {
-        answersPayload[String(question.id)] = value;
+    let meta = this.metaCache.get(accessUuid);
+    if (!meta) {
+      try {
+        meta = await this.fetchSurveyMeta(accessUuid);
+      } catch (error) {
+        const status = (error as { status?: number })?.status;
+        // A replay may arrive after the original attempt has completed or the
+        // caller has lost eligibility. The server resolves accepted receipts
+        // before current policy, so preserve the saved answers and try that
+        // idempotent receipt path without fetching question metadata again.
+        if (![401, 403, 409, 429].includes(status ?? -1)) throw error;
       }
+    }
+    if (meta) {
+      for (const question of meta.questions) {
+        const value = answersByCode[question.code] ?? answersByCode[String(question.id)];
+        if (value !== undefined && value !== null && value !== '') {
+          answersPayload[String(question.id)] = value;
+        }
+      }
+    } else {
+      Object.assign(answersPayload, answersByCode);
     }
 
     try {
@@ -115,6 +210,8 @@ export class FeedoraHttpTransportAdapter implements ITransportPort {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            ...(this.guestToken ? { 'X-Feedora-Guest-Token': this.guestToken } : {}),
+            ...(this.admissionGrants.get(accessUuid) ? { 'X-Feedora-Access-Grant': this.admissionGrants.get(accessUuid)! } : {}),
             ...(this.csrfToken || this.readCookie('csrftoken')
               ? { 'X-CSRFToken': this.csrfToken ?? this.readCookie('csrftoken')! }
               : {}),
@@ -127,7 +224,11 @@ export class FeedoraHttpTransportAdapter implements ITransportPort {
             dwellMs: options?.dwellMs,
             qualityFlags: options?.qualityFlags ?? [],
             consentVersion: options?.consentVersion ?? '1.0',
-            guestParticipantId: options?.guestParticipantId,
+            submissionId: options?.submissionId,
+            ...(options?.principalId?.startsWith('user-') ? { principalId: options.principalId } : {}),
+            scopeId: options?.scope?.id ?? options?.scopeId,
+            policyVersion: options?.policyVersion,
+            attemptId: options?.attemptId,
           }),
           credentials: 'include',
         },
@@ -146,7 +247,17 @@ export class FeedoraHttpTransportAdapter implements ITransportPort {
         unlocksAt: resData?.unlocksAt,
         responseId: resData?.responseId,
         submissionId: resData?.submissionId,
+        principalId: resData?.principalId,
+        scopeId: resData?.scopeId,
+        scopeKind: resData?.scopeKind,
+        scope: scopeRefFromWire(resData?.scopeKind, resData?.scopeId) ?? undefined,
+        policyVersion: resData?.policyVersion,
+        acceptedAt: resData?.acceptedAt,
+        replayed: resData?.replayed,
         pointsEarned: resData?.pointsEarned,
+        scopeTotalPoints: resData?.scopeTotalPoints,
+        accountTotalPoints: resData?.accountTotalPoints,
+        platformPoints: resData?.platformPoints,
         variableBonus: resData?.variableBonus,
         bonusLabel: resData?.bonusLabel,
         negativeReinforcement: resData?.negativeReinforcement,
@@ -169,6 +280,7 @@ export class FeedoraHttpTransportAdapter implements ITransportPort {
 
   async fetchLeaderboard(entityId: string): Promise<RemoteLeaderboardResult> {
     const query = new URLSearchParams({ entity_id: entityId });
+    if (entityId === 'platform') query.set('scope', 'global');
     const response = await this.fetchImpl(`${this.baseUrl.replace(/\/+$/, '')}/api/v1/leaderboard/?${query}`, {
       credentials: 'include',
     });
@@ -176,6 +288,30 @@ export class FeedoraHttpTransportAdapter implements ITransportPort {
       throw new Error(`Failed to fetch organization leaderboard (${response.status})`);
     }
     return (await response.json()) as RemoteLeaderboardResult;
+  }
+
+  async setOrganizationAggregateSharing(entityId: string, enabled: boolean): Promise<void> {
+    const base = this.baseUrl.replace(/\/+$/, '');
+    const csrfResponse = await this.fetchImpl(`${base}/api/v1/auth/me/`, { credentials: 'include' });
+    if (!csrfResponse.ok) throw new Error(`Could not prepare organization settings (${csrfResponse.status}).`);
+    const csrfData = await csrfResponse.json();
+    this.csrfToken = csrfData?.csrfToken ?? this.csrfToken;
+
+    const response = await this.fetchImpl(`${base}/api/v1/entities/${encodeURIComponent(entityId)}/platform-sharing/`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(this.csrfToken || this.readCookie('csrftoken')
+          ? { 'X-CSRFToken': this.csrfToken ?? this.readCookie('csrftoken')! }
+          : {}),
+      },
+      body: JSON.stringify({ shareAggregateStats: enabled }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data?.error || `Could not update organization sharing (${response.status}).`);
+    }
   }
 
   private url(accessUuid: string, suffix: string): string {

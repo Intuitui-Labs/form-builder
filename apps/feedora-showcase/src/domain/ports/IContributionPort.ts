@@ -6,6 +6,7 @@ export interface RecordContributionInput {
   avatar?: string;
   entityId: string;
   formId: string;
+  surveyTitle?: string;
   points: number;
   isCompletion?: boolean;
 }
@@ -38,6 +39,13 @@ export interface IContributionPort {
 
   /** Apply earned points to a contributor and persist them. */
   recordContribution(input: RecordContributionInput): Promise<ContributionProfile>;
+
+  /** Apply one canonical server receipt once, including its scoped history row. */
+  recordReceipt(input: RecordContributionInput & {
+    submissionId: string;
+    responseId: string;
+    completedAt: string;
+  }): Promise<ContributionProfile>;
 
   /** Leaderboard for one entity, strongest contributors first. */
   listContributors(entityId: string): Promise<ContributionProfile[]>;

@@ -10,6 +10,8 @@ export interface StudioSurvey {
   readonly questionsCount: number;
   readonly responsesCount: number;
   readonly createdAt: string;
+  readonly scopeId?: string;
+  readonly scopeKind?: 'organization' | 'platform';
 }
 
 export interface StudioQuestionPayload {
@@ -29,6 +31,7 @@ export interface CreateSurveyPayload {
   readonly description?: string;
   readonly is_hmsam?: boolean;
   readonly is_draft?: boolean;
+  readonly organizationId?: string;
   readonly features?: Record<string, unknown>;
   readonly questions: StudioQuestionPayload[];
 }

@@ -28,11 +28,14 @@ export interface OutboxQueueOptions<T = Record<string, unknown>> {
   throttleOnLowPower?: boolean; // Default true
   storageKey?: string;
   maxQueueSize?: number; // Default 50 items
-  ttlMs?: number; // Default 14 days
+  /** @deprecated Pending submissions are no longer discarded by age. Retained for source compatibility. */
+  ttlMs?: number;
   maxRetries?: number; // Default 5
   baseDelayMs?: number; // Default 1000ms
   autoFlushOnReconnect?: boolean; // Default true
   onDeadLetter?: (item: QueuedSubmission<T>, error: OutboxDeadLetterError) => void;
+  /** Persist local projections from the canonical response before removing an intent. */
+  onReceipt?: (envelope: SubmissionEnvelope<T>, receipt: SubmissionReceipt) => Promise<void> | void;
 }
 
 export interface QueuedSubmission<T = Record<string, unknown>> {
@@ -40,11 +43,18 @@ export interface QueuedSubmission<T = Record<string, unknown>> {
   queuedAt: number; // epoch ms
   lastAttemptAt?: number;
   lastError?: string;
+  lastErrorCode?: string;
+}
+
+function isNonRetryableResponse(error: any): boolean {
+  if (error?.retryable === false) return true;
+  const status = Number(error?.status);
+  return status >= 400 && status < 500 && ![408, 425, 429].includes(status);
 }
 
 /**
  * Durable FIFO outbox queue for resilient offline form submissions.
- * Handles offline enqueueing, 14-day TTL eviction, max-size bounding,
+ * Handles offline enqueueing, durable intent retention, max-size bounding,
  * network reconnection auto-flush, Dead-Letter Queue (DLQ) routing,
  * and intelligent non-retryable 4xx rejection detection.
  */
@@ -59,10 +69,10 @@ export class OfflineOutboxQueue<T = Record<string, unknown>> {
   private dlqKey: string;
   private lockKey: string;
   private maxQueueSize: number;
-  private ttlMs: number;
   private maxRetries: number;
   private baseDelayMs: number;
   private onDeadLetter?: (item: QueuedSubmission<T>, error: OutboxDeadLetterError) => void;
+  private onReceipt?: OutboxQueueOptions<T>['onReceipt'];
 
   private syncStatus: OutboxSyncStatus = 'idle';
   private lastSyncError?: string;
@@ -81,10 +91,10 @@ export class OfflineOutboxQueue<T = Record<string, unknown>> {
     this.dlqKey = `${this.storageKey}_dlq`;
     this.lockKey = `${this.storageKey}_flush_lock`;
     this.maxQueueSize = options?.maxQueueSize ?? 50;
-    this.ttlMs = options?.ttlMs ?? 14 * 24 * 60 * 60 * 1000; // 14 days
     this.maxRetries = options?.maxRetries ?? 5;
     this.baseDelayMs = options?.baseDelayMs ?? 1000;
     this.onDeadLetter = options?.onDeadLetter;
+    this.onReceipt = options?.onReceipt;
 
     if (options?.autoFlushOnReconnect !== false) {
       this.unsubscribeNetwork = this.networkStatus.subscribe((isOnline) => {
@@ -125,13 +135,8 @@ export class OfflineOutboxQueue<T = Record<string, unknown>> {
     if (!raw) return [];
     try {
       const items: QueuedSubmission<T>[] = JSON.parse(raw);
-      const now = Date.now();
-      // Filter out items older than TTL (14 days)
-      const validItems = items.filter((item) => now - item.queuedAt < this.ttlMs);
-      if (validItems.length !== items.length) {
-        await this.saveQueue(validItems);
-      }
-      return validItems;
+      // Pending responses are user data. Age alone must never delete an intent.
+      return items;
     } catch {
       return [];
     }
@@ -156,12 +161,10 @@ export class OfflineOutboxQueue<T = Record<string, unknown>> {
       const rawDlq = await this.storage.getItem(this.dlqKey);
       let dlqItems: QueuedSubmission<T>[] = rawDlq ? JSON.parse(rawDlq) : [];
       dlqItems.push(item);
-      if (dlqItems.length > 25) {
-        dlqItems = dlqItems.slice(-25);
-      }
       await this.storage.setItem(this.dlqKey, JSON.stringify(dlqItems));
-    } catch {
-      // Ignore DLQ storage failure
+    } catch (error) {
+      // Keep the item in the active queue unless durable recovery storage succeeds.
+      throw new Error(`Could not preserve the rejected response for recovery: ${String(error)}`);
     }
 
     if (this.onDeadLetter) {
@@ -198,12 +201,39 @@ export class OfflineOutboxQueue<T = Record<string, unknown>> {
 
     item.envelope.retryCount = 0;
     item.lastError = undefined;
+    item.lastErrorCode = undefined;
     item.lastAttemptAt = undefined;
     item.queuedAt = Date.now();
 
     const queue = await this.loadQueue();
     queue.push(item);
     await this.saveQueue(queue);
+    this.notify();
+    return true;
+  }
+
+  /** Update delivery metadata only after the respondent accepts changed rules. */
+  public async rebindDeadLetterContext(
+    envelopeId: string,
+    contextPatch: Partial<NonNullable<SubmissionEnvelope<T>['context']>>,
+  ): Promise<boolean> {
+    const dlq = await this.getDeadLetterQueue();
+    const item = dlq.find((queued) => queued.envelope.id === envelopeId);
+    if (!item?.envelope.context) return false;
+
+    item.envelope.context = {
+      ...item.envelope.context,
+      ...contextPatch,
+      transportMetadata: {
+        ...item.envelope.context.transportMetadata,
+        ...contextPatch.transportMetadata,
+      },
+    };
+    item.envelope.retryCount = 0;
+    item.lastError = undefined;
+    item.lastErrorCode = undefined;
+    item.lastAttemptAt = undefined;
+    await this.storage.setItem(this.dlqKey, JSON.stringify(dlq));
     this.notify();
     return true;
   }
@@ -218,60 +248,50 @@ export class OfflineOutboxQueue<T = Record<string, unknown>> {
   public async enqueue(
     envelope: SubmissionEnvelope<T>,
   ): Promise<{ status: 'queued' | 'synced'; receipt?: SubmissionReceipt }> {
+    // Commit the intent before any network side effect. A crash after this point
+    // is recoverable and submission idempotency makes retries safe.
+    let queue = await this.loadQueue();
+    const existing = queue.find((item) => item.envelope.id === envelope.id);
+    if (!existing) {
+      if (queue.length >= this.maxQueueSize) {
+        throw new Error('Your saved response queue is full. Sync existing responses before submitting another.');
+      }
+      queue.push({ envelope, queuedAt: Date.now() });
+      await this.saveQueue(queue);
+    }
+
     const isOnline = await this.networkStatus.isOnline();
     const isThrottled = await this.isBatteryThrottled();
-
-    // If online, transport exists, and NOT throttled by battery, attempt immediate delivery first!
-    if (isOnline && this.transport && !isThrottled) {
+    if (isOnline && this.transport && !isThrottled && !this.isFlushing) {
       try {
         this.syncStatus = 'syncing';
         this.notify();
-        const receipt = await this.executeSubmit(envelope);
+        const receipt = await this.executeSubmit(existing?.envelope ?? envelope);
+        await this.onReceipt?.(envelope, receipt);
+        queue = await this.loadQueue();
+        await this.saveQueue(queue.filter((item) => item.envelope.id !== envelope.id));
         this.syncStatus = 'synced';
         this.lastSyncError = undefined;
         this.notify();
         return { status: 'synced', receipt };
       } catch (err: any) {
-        // Immediate attempt failed (e.g. transient 5xx or dropped connection) -> fall through to queue
         this.lastSyncError = err instanceof Error ? err.message : String(err);
-        
-        // If it's a non-retryable rejection (e.g. 400/422 validation failure), route immediately to DLQ
-        if (err?.retryable === false || err?.status === 400 || err?.status === 422) {
-          const item: QueuedSubmission<T> = {
-            envelope,
-            queuedAt: Date.now(),
-            lastAttemptAt: Date.now(),
-            lastError: this.lastSyncError,
-          };
-          await this.routeToDeadLetter(item, this.lastSyncError);
+        if (isNonRetryableResponse(err)) {
+          queue = await this.loadQueue();
+          const item = queue.find((queued) => queued.envelope.id === envelope.id);
+          if (item) {
+            item.lastAttemptAt = Date.now();
+            item.lastError = this.lastSyncError;
+            item.lastErrorCode = typeof err?.code === 'string' ? err.code : undefined;
+            await this.routeToDeadLetter(item, this.lastSyncError);
+            await this.saveQueue(queue.filter((queued) => queued.envelope.id !== envelope.id));
+          }
           this.syncStatus = 'error';
           this.notify();
           throw err;
         }
       }
     }
-
-    // Load, bound, and append to persistent FIFO queue
-    let queue = await this.loadQueue();
-
-    // Evict oldest if reaching capacity: route evicted item to DLQ to prevent silent data drop!
-    if (queue.length >= this.maxQueueSize) {
-      const evictedCount = queue.length - this.maxQueueSize + 1;
-      const evictedItems = queue.slice(0, evictedCount);
-      for (const evicted of evictedItems) {
-        await this.routeToDeadLetter(evicted, 'Evicted due to queue capacity overflow');
-      }
-      queue = queue.slice(evictedCount);
-    }
-
-    queue.push({
-      envelope,
-      queuedAt: Date.now(),
-      lastAttemptAt: Date.now(),
-      lastError: this.lastSyncError,
-    });
-
-    await this.saveQueue(queue);
 
     this.syncStatus = 'offline-queued';
     this.notify();
@@ -370,7 +390,8 @@ export class OfflineOutboxQueue<T = Record<string, unknown>> {
 
         const item = queue[0];
         try {
-          await this.executeSubmit(item.envelope);
+          const receipt = await this.executeSubmit(item.envelope);
+          await this.onReceipt?.(item.envelope, receipt);
           // Successful delivery: remove head of FIFO
           queue.shift();
           deliveredCount++;
@@ -380,9 +401,10 @@ export class OfflineOutboxQueue<T = Record<string, unknown>> {
           item.envelope.retryCount++;
           item.lastAttemptAt = Date.now();
           item.lastError = err instanceof Error ? err.message : String(err);
+          item.lastErrorCode = typeof err?.code === 'string' ? err.code : undefined;
           this.lastSyncError = item.lastError;
 
-          const isNonRetryable = err?.retryable === false || err?.status === 400 || err?.status === 422;
+          const isNonRetryable = isNonRetryableResponse(err);
           const exceededMaxRetries = item.envelope.retryCount >= this.maxRetries;
 
           if (isNonRetryable || exceededMaxRetries) {

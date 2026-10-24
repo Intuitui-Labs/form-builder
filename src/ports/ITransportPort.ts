@@ -8,6 +8,26 @@ export interface SubmissionEnvelope<T = Record<string, unknown>> {
   id: string; // Unique idempotency key (UUID/hash)
   formId: string;
   tenantId?: string;
+  /** Immutable attribution captured when the intent was created. */
+  context?: {
+    principalId: string;
+    profileUserId: string;
+    scopeId: string;
+    guestParticipantId?: string;
+    policyVersion?: string;
+    /** Adapter-owned opaque metadata needed to resume a remote submission workflow. */
+    transportMetadata?: Record<string, string>;
+    surveyTitle?: string;
+    displayName: string;
+    avatar: string;
+    surveyId: string;
+    variant?: string;
+    platform?: string;
+    durationMs?: number;
+    dwellMs?: Record<string, number>;
+    qualityFlags?: string[];
+    consentVersion?: string;
+  };
   values: T;
   submittedAt: string;
   retryCount: number;

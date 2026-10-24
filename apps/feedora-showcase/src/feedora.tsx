@@ -10,6 +10,7 @@ import {
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { FEEDORA_ENTITIES, FEEDORA_FEATURES } from './fixtures/seed';
 import { createStore } from './adapters/store';
+import { feedoraOutboxStorageKey, migrateLegacyFeedoraOutbox, transferFeedoraOutboxScope } from './adapters/FeedoraOutboxStorage';
 import { FeedoraContributionAdapter } from './adapters/FeedoraContributionAdapter';
 import { FeedoraProgressAdapter } from './adapters/FeedoraProgressAdapter';
 import { FeedoraRewardAdapter } from './adapters/FeedoraRewardAdapter';
@@ -18,11 +19,15 @@ import { HmsamMeasurementAdapter } from './adapters/HmsamMeasurementAdapter';
 import { LocalAuthAdapter } from './adapters/LocalAuthAdapter';
 import { SupabaseAuthAdapter } from './adapters/SupabaseAuthAdapter';
 import { DjangoAuthAdapter } from './adapters/DjangoAuthAdapter';
+import { getGuestCredential, setGuestCredential } from './adapters/guestCredentialStore';
 import { selectAuthPorts } from './authComposition';
 import { DjangoStudioAdapter } from './adapters/DjangoStudioAdapter';
 import { FEEDORA_AUTH_PROVIDER, FEEDORA_REMOTE } from './config';
 import type { ContributionProfile } from './domain/types';
+import { profileUserIdFromReceipt, recordRemoteSubmissionReceipt } from './domain/recordRemoteSubmissionReceipt';
+import { scopeRefFromWire } from './domain/identity';
 import { canonicalEntityId, uniqueEntities } from './domain/entities';
+import { prepareSurveyForParticipation } from './domain/prepareSurveyForParticipation';
 import type {
   AuthUser,
   ExportDataPayload,
@@ -62,29 +67,94 @@ export const psychometricAuditor = new DefaultPsychometricAuditor();
 export const qrAirDropPort = new QrAirDropAdapter();
 export const entities = uniqueEntities(FEEDORA_ENTITIES);
 
-export const outboxPort = new OfflineOutboxQueue<Record<string, unknown>>({
-  storageKey: 'feedora_mobile_outbox_queue',
+async function requestGuestSession(): Promise<{ identity: string; token: string }> {
+  const response = await fetch(`${FEEDORA_REMOTE.baseUrl}/api/v1/guest/session/`, { method: 'POST' });
+  if (!response.ok) throw new Error('Guest session unavailable');
+  const data = await response.json();
+  if (!data.guestParticipantId || !data.guestToken) throw new Error('Invalid guest session response');
+  return { identity: String(data.guestParticipantId), token: String(data.guestToken) };
+}
+
+function createAttemptUuid(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (marker) => {
+    const random = Math.floor(Math.random() * 16);
+    return (marker === 'x' ? random : (random & 0x3) | 0x8).toString(16);
+  });
+}
+
+function createFeedoraOutbox(ownerKey: string): OfflineOutboxQueue<Record<string, unknown>> {
+  return new OfflineOutboxQueue<Record<string, unknown>>({
+  storage: store,
+  storageKey: feedoraOutboxStorageKey(ownerKey),
+  autoFlushOnReconnect: false,
   transport: {
     submit: async (envelope) => {
       const res = await transportPort.submitResponse(
         envelope.formId,
         envelope.values,
         {
-          variant: envelope.experimentMetadata?.variantId,
-          platform: 'mobile',
+          variant: envelope.context?.variant ?? envelope.experimentMetadata?.variantId,
+          platform: envelope.context?.platform ?? 'mobile',
+          durationMs: envelope.context?.durationMs,
+          dwellMs: envelope.context?.dwellMs,
+          qualityFlags: envelope.context?.qualityFlags,
+          consentVersion: envelope.context?.consentVersion,
+          submissionId: envelope.id,
+          principalId: envelope.context?.principalId,
+          scope: scopeRefFromWire(
+            envelope.context?.scopeId === 'platform' ? 'platform' : 'organization',
+            envelope.context?.scopeId ?? envelope.tenantId,
+          ) ?? undefined,
+          scopeId: envelope.context?.scopeId ?? envelope.tenantId,
+          policyVersion: envelope.context?.policyVersion,
+          attemptId: envelope.context?.transportMetadata?.attemptId,
+          guestParticipantId: envelope.context?.guestParticipantId,
         },
       );
       if (!res.ok) {
-        throw new Error(`Outbox submission failed with HTTP status ${res.status}`);
+        const error = new Error(res.error || `Outbox submission failed with HTTP status ${res.status}`);
+        Object.assign(error, {
+          status: res.status,
+          code: res.code,
+          retryable: res.status === 0 || res.status >= 500 || res.code === 'guest_session_required',
+        });
+        throw error;
       }
       return {
         receiptId: String(res.responseId ?? envelope.id),
-        status: 'synced',
+        status: 'accepted',
         timestamp: new Date().toISOString(),
+        metadata: res as unknown as Record<string, unknown>,
       };
     },
   },
-});
+  onReceipt: async (envelope, receipt) => {
+    const result = receipt.metadata as import('./domain/ports/transportTypes').RemoteSubmitResult | undefined;
+    const context = envelope.context;
+    if (!context || !result?.responseId || !result.pointsEarned && result.pointsEarned !== 0) return;
+    const attemptStorageKey = context.transportMetadata?.attemptStorageKey;
+    if (attemptStorageKey) {
+      await store.removeItem(attemptStorageKey);
+    }
+    const canonicalUserId = profileUserIdFromReceipt(result, context.profileUserId);
+    const canonicalPrincipalId = result.user?.id !== undefined ? `user-${result.user.id}` : context.principalId;
+    await recordRemoteSubmissionReceipt(contributionPort, {
+      submissionId: envelope.id,
+      responseId: String(result.responseId),
+      principalId: canonicalPrincipalId,
+      userId: canonicalUserId,
+      scopeId: result.scopeId ?? context.scopeId,
+      surveyId: context.surveyId,
+      surveyTitle: context.surveyTitle ?? context.surveyId,
+      displayName: context.displayName,
+      avatar: context.avatar,
+      points: result.pointsEarned,
+      completedAt: result.acceptedAt ?? new Date().toISOString(),
+    });
+    notifyDataChanged();
+  },
+  });
+}
 
 // Tiny change bus so the three screens stay in sync without a global store.
 const listeners = new Set<() => void>();
@@ -113,6 +183,7 @@ interface FeedoraContextValue {
   // Auth state & actions
   authUser: AuthUser | null;
   guestUserId: string;
+  guestToken: string | null;
   signIn: (input: SignInInput) => Promise<AuthUser>;
   signUpRespondent: (input: SignUpRespondentInput) => Promise<AuthUser>;
   signUpCreator: (input: SignUpCreatorInput) => Promise<AuthUser>;
@@ -135,7 +206,7 @@ interface FeedoraContextValue {
   activeSurveyUuid: string | null;
   activeSurveyMeta: RemoteSurveyMeta | null;
   airDropSchema: FormSchema | null;
-  openSurvey: (uuid: string) => Promise<void>;
+  openSurvey: (uuid: string, options?: { confirmPolicyChange?: boolean }) => Promise<RemoteSurveyMeta>;
   openSurveyByCode: (code: string) => Promise<RemoteSurveyMeta>;
   openAirDropSurvey: (schema: FormSchema) => void;
   resetToDefaultSurvey: () => void;
@@ -156,9 +227,12 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
   const [version, setVersion] = useState(0);
   const [selectionHydratedFor, setSelectionHydratedFor] = useState<string | null>(null);
   const [guestUserId, setGuestUserId] = useState<string | null>(null);
+  const [guestToken, setGuestToken] = useState<string | null>(null);
 
   // Auth management
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => authPort.getCurrentUser());
+  const outboxOwnerKey = authUser ? `user:${authUser.id}` : `guest:${guestUserId ?? 'guest-user'}`;
+  const outboxPort = useMemo(() => createFeedoraOutbox(outboxOwnerKey), [outboxOwnerKey]);
   const [isAccountDrawerOpen, setAccountDrawerOpen] = useState(false);
   const [isWelcomeOpen, setIsWelcomeOpen] = useState(() => !authPort.getCurrentUser());
   const [previewRole, setPreviewRole] = useState<UserRole | null>(null);
@@ -186,13 +260,44 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     const initializeGuestIdentity = async () => {
-      let identity = await store.getItem('feedora_guest_identity');
-      if (!identity) {
-        identity = `guest-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-        await store.claimGuestIdentity('guest-user', identity);
-        await store.setItem('feedora_guest_identity', identity);
+      // Migrate the old shared queue before the app can accept a new response.
+      await migrateLegacyFeedoraOutbox(store);
+      const savedIdentity = await store.getItem('feedora_guest_identity');
+      let savedToken = await getGuestCredential();
+      if (!savedToken) {
+        // Migrate the first server credential from the previous SQLite/KV storage.
+        savedToken = await store.getItem('feedora_guest_token');
+        if (savedToken) {
+          try {
+            await setGuestCredential(savedToken);
+            await store.removeItem('feedora_guest_token');
+          } catch {
+            // Keep using the prior value for this run if platform credential storage is temporarily unavailable.
+          }
+        }
       }
-      if (!cancelled) setGuestUserId(identity);
+      if (savedIdentity && savedToken) {
+        transportPort.setGuestToken(savedToken);
+        if (!cancelled) { setGuestUserId(savedIdentity); setGuestToken(savedToken); }
+        return;
+      }
+      try {
+        const { identity, token } = await requestGuestSession();
+        if (savedIdentity && savedIdentity !== identity) {
+          await store.claimGuestIdentity(savedIdentity, identity);
+          await transferFeedoraOutboxScope(store, `guest:${savedIdentity}`, `guest:${identity}`);
+        }
+        await store.setItem('feedora_guest_identity', identity);
+        try { await setGuestCredential(token); } catch {
+          console.warn('Guest session is active for this run but could not be saved to platform credential storage.');
+        }
+        transportPort.setGuestToken(token);
+        if (!cancelled) { setGuestUserId(identity); setGuestToken(token); }
+      } catch {
+        const identity = savedIdentity || `guest-local-${Date.now().toString(36)}`;
+        await store.setItem('feedora_guest_identity', identity);
+        if (!cancelled) setGuestUserId(identity);
+      }
     };
 
     initializeGuestIdentity().catch(() => {
@@ -202,6 +307,47 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!guestUserId || guestToken || authUser) return;
+    let cancelled = false;
+    const timer = setInterval(() => {
+      void requestGuestSession().then(async ({ identity, token }) => {
+        if (guestUserId !== identity) {
+          await store.claimGuestIdentity(guestUserId, identity);
+          await transferFeedoraOutboxScope(store, `guest:${guestUserId}`, `guest:${identity}`);
+        }
+        await store.setItem('feedora_guest_identity', identity);
+        try { await setGuestCredential(token); } catch {
+          console.warn('Guest session is active for this run but could not be saved to platform credential storage.');
+        }
+        transportPort.setGuestToken(token);
+        if (!cancelled) { setGuestUserId(identity); setGuestToken(token); }
+      }).catch(() => {});
+    }, 15000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [guestUserId, guestToken, authUser?.id]);
+
+  useEffect(() => {
+    if (!guestToken || !authUser) return;
+    let cancelled = false;
+    void (async () => {
+      const claimedKey = `feedora_guest_claimed:${guestUserId}:${authUser.id}`;
+      if (await store.getItem(claimedKey)) return;
+      const response = await fetch(`${FEEDORA_REMOTE.baseUrl}/api/v1/guest/claim/`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'X-Feedora-Guest-Token': guestToken },
+      });
+      if (!response.ok) throw new Error('Guest progress claim failed');
+      if (guestUserId) await transferFeedoraOutboxScope(store, `guest:${guestUserId}`, `user:${authUser.id}`);
+      await store.claimGuestIdentity(guestUserId ?? '', String(authUser.id));
+      await store.setItem(claimedKey, '1');
+      if (!cancelled) setVersion((v) => v + 1);
+    })().catch((error) => console.warn('Could not attach guest progress to account:', error));
+    return () => { cancelled = true; };
+  }, [authUser?.id, guestToken, guestUserId]);
+
+  useEffect(() => () => outboxPort.destroy(), [outboxPort]);
 
   useEffect(() => {
     // Bootstrap auth session from server cookie
@@ -248,7 +394,22 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback((input: SignInInput) => authPort.signIn(input), []);
   const signUpRespondent = useCallback((input: SignUpRespondentInput) => authPort.signUpRespondent(input), []);
   const signUpCreator = useCallback((input: SignUpCreatorInput) => authPort.signUpCreator(input), []);
-  const signOut = useCallback(() => authPort.signOut(), []);
+  const signOut = useCallback(async () => {
+    await authPort.signOut();
+    try {
+      const { identity, token } = await requestGuestSession();
+      await store.setItem('feedora_guest_identity', identity);
+      try { await setGuestCredential(token); } catch {
+        console.warn('The new guest session could not be saved to platform credential storage.');
+      }
+      transportPort.setGuestToken(token);
+      setGuestUserId(identity);
+      setGuestToken(token);
+    } catch {
+      transportPort.setGuestToken(null);
+      setGuestToken(null);
+    }
+  }, []);
   const exportUserData = useCallback((format: 'json' | 'csv' | 'sql') => userDataExportPort.exportData(format), []);
   const restoreAuthSession = useCallback(() => authPort.init(), []);
 
@@ -261,10 +422,6 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
     const currentUserId = authUser?.id || guestUserId;
 
     (async () => {
-      if (authUser && authUser.id !== guestUserId) {
-        await store.claimGuestIdentity(guestUserId, String(authUser.id));
-        if (!cancelled) setVersion((v) => v + 1);
-      }
       const existing = await contributionPort.getProfile(currentUserId, entityId);
       if (!cancelled) setProfile(existing);
     })().catch((error) => {
@@ -279,12 +436,15 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
           const liveEntities = uniqueEntities(data.entities.map((e: any) => ({
             id: canonicalEntityId(String(e.entityId || `org-${e.id}`)),
             name: String(e.name),
-            type: (e.type || 'university') as any,
+            type: (e.scopeKind === 'platform' ? 'platform' : e.type || 'university') as any,
+            scopeKind: e.scopeKind === 'platform' ? 'platform' : 'organization',
             slug: String(e.name).toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-            accent: e.type === 'university' ? '#7A4FA8' : '#1F4D8F',
-            tagline: e.userRole ? `${e.userRole} · ${e.country || 'Campus research'}` : 'Research organization',
+            accent: e.scopeKind === 'platform' ? '#14140f' : e.type === 'university' ? '#7A4FA8' : '#1F4D8F',
+            tagline: e.scopeKind === 'platform' ? 'Platform-wide research and standing' : e.userRole ? `${e.userRole} · ${e.country || 'Campus research'}` : 'Research organization',
             userRole: e.userRole,
             country: e.country,
+            canManageAggregateSharing: Boolean(e.canManageAggregateSharing),
+            aggregateStatsSharingEnabled: Boolean(e.aggregateStatsSharingEnabled),
           })));
           if (liveEntities.length > 0) {
             setEntitiesList(liveEntities);
@@ -361,12 +521,14 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
         try {
           const res = await fetch(`${FEEDORA_REMOTE.baseUrl}/api/v1/respondent/history/`, {
             credentials: 'include',
+            headers: guestToken ? { 'X-Feedora-Guest-Token': guestToken } : {},
           });
           const hData = await res.json();
           if (hData.ok && Array.isArray(hData.history)) {
-            const seenIds = new Set(localHistory.map((h) => h.surveyId));
+            const seenIds = new Set(localHistory.map((h) => h.responseId ? `response:${h.responseId}` : h.submissionId ? `submission:${h.submissionId}` : ''));
             for (const item of hData.history) {
-              if (item.surveyUuid && !seenIds.has(item.surveyUuid)) {
+              const historyKey = item.responseId ? `response:${item.responseId}` : item.submissionId ? `submission:${item.submissionId}` : '';
+              if (item.surveyUuid && historyKey && !seenIds.has(historyKey)) {
                 mergedHistory.push({
                   entityId: item.entityId ? canonicalEntityId(String(item.entityId)) : entityId,
                   surveyId: item.surveyUuid,
@@ -374,8 +536,10 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
                   userId: currentUserId,
                   pointsEarned: item.pointsEarned,
                   completedAt: item.completedAt,
+                  responseId: String(item.responseId),
+                  submissionId: item.submissionId,
                 });
-                seenIds.add(item.surveyUuid);
+                seenIds.add(historyKey);
               }
             }
           }
@@ -398,7 +562,7 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [version, entityId, authUser, guestUserId]);
+  }, [version, entityId, authUser, guestUserId, guestToken]);
 
   const refresh = useCallback(() => {
     setVersion((v) => v + 1);
@@ -409,31 +573,44 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
   const [activeSurveyMeta, setActiveSurveyMeta] = useState<RemoteSurveyMeta | null>(null);
   const [airDropSchema, setAirDropSchema] = useState<FormSchema | null>(null);
 
-  const openSurvey = useCallback(async (uuid: string) => {
+  const openSurvey = useCallback(async (uuid: string, options?: { confirmPolicyChange?: boolean }) => {
+    const owner = authUser ? `user-${authUser.id}` : `guest-${guestUserId || 'unknown'}`;
+    const scopeId = entityId;
+    let meta: RemoteSurveyMeta;
     try {
-      const meta = await transportPort.fetchSurveyMeta(uuid);
-      setAirDropSchema(null);
-      setActiveSurveyUuid(uuid);
-      setActiveSurveyMeta(meta);
-      setVersion((v) => v + 1);
-    } catch (err) {
-      console.warn('Failed to fetch survey metadata:', err);
+      meta = await transportPort.fetchSurveyMeta(uuid);
+    } catch (error) {
+      const cached = await store.getItem(`feedora:survey-meta:v1:${uuid}`);
+      if (!cached) throw error;
+      meta = JSON.parse(cached) as RemoteSurveyMeta;
     }
-  }, []);
+    meta = await prepareSurveyForParticipation(uuid, meta, owner, scopeId, {
+      store,
+      transport: transportPort,
+      createAttemptId: createAttemptUuid,
+      confirmPolicyChange: options?.confirmPolicyChange,
+    });
+    setAirDropSchema(null);
+    setActiveSurveyUuid(uuid);
+    setActiveSurveyMeta(meta);
+    setVersion((v) => v + 1);
+    return meta;
+  }, [authUser, entityId, guestUserId]);
 
   const openSurveyByCode = useCallback(async (code: string) => {
-    try {
-      const meta = await transportPort.fetchSurveyMetaByCode(code);
-      setAirDropSchema(null);
-      setActiveSurveyUuid(meta.survey.uuid);
-      setActiveSurveyMeta(meta);
-      setVersion((v) => v + 1);
-      return meta;
-    } catch (err) {
-      console.warn('Failed to fetch survey metadata by code:', err);
-      throw err;
-    }
-  }, []);
+    const owner = authUser ? `user-${authUser.id}` : `guest-${guestUserId || 'unknown'}`;
+    const meta = await transportPort.fetchSurveyMetaByCode(code);
+    const prepared = await prepareSurveyForParticipation(meta.survey.uuid, meta, owner, entityId, {
+      store,
+      transport: transportPort,
+      createAttemptId: createAttemptUuid,
+    });
+    setAirDropSchema(null);
+    setActiveSurveyUuid(prepared.survey.uuid);
+    setActiveSurveyMeta(prepared);
+    setVersion((v) => v + 1);
+    return prepared;
+  }, [authUser, entityId, guestUserId]);
 
   const openAirDropSurvey = useCallback((schema: FormSchema) => {
     setAirDropSchema(schema);
@@ -488,6 +665,9 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
 
   const fetchEntitySurveys = useCallback(
     async (targetEntityId: string): Promise<any[]> => {
+      if (targetEntityId === 'platform') {
+        return transportPort.fetchPublicSurveys('platform');
+      }
       const numericId = targetEntityId.replace('org-', '');
         try {
           const res = await fetch(`${FEEDORA_REMOTE.baseUrl}/api/v1/entities/${numericId}/surveys/`, {
@@ -521,6 +701,7 @@ export function FeedoraProvider({ children }: { children: ReactNode }) {
         refresh,
         authUser,
         guestUserId: guestUserId ?? 'guest-user',
+        guestToken,
         signIn,
         signUpRespondent,
         signUpCreator,

@@ -7,19 +7,22 @@
  *   templates/.../add_features.html → the real badge set (Bronze/Silver/Gold)
  */
 
-export type EntityType = 'university' | 'school' | 'company' | 'research' | 'other';
+export type EntityType = 'university' | 'school' | 'company' | 'research' | 'other' | 'platform';
 
 /** Her `Organization` — a creator's organisation that hosts surveys. */
 export interface Entity {
   id: string;
   name: string;
   type: EntityType;
+  scopeKind?: 'organization' | 'platform';
   slug: string;
   accent: string;
   tagline: string;
   /** Her Organization.user_role, e.g. "Student". */
   userRole?: string;
   country?: string;
+  canManageAggregateSharing?: boolean;
+  aggregateStatsSharingEnabled?: boolean;
 }
 
 // ── Level curve (accounts/utils.py LEVELS) ────────────────────────────────

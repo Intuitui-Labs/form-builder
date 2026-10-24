@@ -69,6 +69,8 @@ export class DjangoStudioAdapter implements ICreatorStudioPort {
             questionsCount: s.questionsCount || 0,
             responsesCount: 0,
             createdAt: new Date().toISOString(),
+            scopeId: s.scopeId,
+            scopeKind: s.scopeKind,
           }));
         }
       }

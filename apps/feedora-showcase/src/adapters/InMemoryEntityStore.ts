@@ -22,6 +22,8 @@ export class InMemoryEntityStore implements IEntityStore {
     userId: string;
     pointsEarned: number;
     completedAt: string;
+    submissionId?: string;
+    responseId?: string;
   }> = [];
 
   constructor(private readonly entities: Entity[], seed?: SeedBundle) {
@@ -126,6 +128,21 @@ export class InMemoryEntityStore implements IEntityStore {
       ...record,
     });
     this.persistStorage();
+  }
+
+  async applySubmissionReceipt(record: import('../domain/ports/IEntityStore').SubmissionHistoryRecord, profile: ContributionProfile): Promise<boolean> {
+    const duplicate = this.history.some((item) =>
+      item.userId === record.userId &&
+      item.entityId === record.entityId &&
+      item.surveyId === record.surveyId &&
+      item.submissionId === record.submissionId,
+    );
+    if (duplicate) return false;
+
+    this.history.unshift({ id: this.history.length + 1, ...record });
+    this.profiles.set(this.key(profile.userId, profile.entityId), profile);
+    this.persistStorage();
+    return true;
   }
 
   async listUserHistory(userId: string) {

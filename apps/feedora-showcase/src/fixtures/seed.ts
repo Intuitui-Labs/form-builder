@@ -74,7 +74,18 @@ function toEntity(org: SeedOrganization): Entity {
   };
 }
 
-export const FEEDORA_ENTITIES: Entity[] = organizations.map(toEntity);
+export const FEEDORA_PLATFORM_SCOPE: Entity = {
+  id: 'platform',
+  name: 'Feedora Platform',
+  type: 'platform',
+  scopeKind: 'platform',
+  slug: 'feedora-platform',
+  accent: '#14140f',
+  tagline: 'Platform-wide research and standing',
+  userRole: 'Platform community',
+};
+
+export const FEEDORA_ENTITIES: Entity[] = [...organizations.map(toEntity), FEEDORA_PLATFORM_SCOPE];
 export const FEEDORA_ENTITY: Entity = FEEDORA_ENTITIES[0]!;
 
 /** Survey.features of her latest HMSAM survey (survey id 24). */

@@ -2,7 +2,7 @@
 title: "Documentation Directory Index"
 status: "active"
 created: 2026-06-12
-updated: 2026-10-15
+updated: 2026-10-23
 author: "Naveen"
 scribe: "Antigravity"
 tags: [index, index-map]
@@ -16,9 +16,11 @@ Welcome to the technical documentation library for `@intuitui-labs/form-builder-
 
 *   [Documentation SOP](./docs-sop.md) — Official standard operating procedure for platform documentation structure and YAML frontmatter.
 *   [Architecture Documentation](./architecture/enterprise-form-platform-roadmap.md)
+    *   [Feedora Scope Rewards and Regression Audit](../apps/feedora-showcase/docs/architecture/2026-10-22-scope-rewards-and-regression-audit.md) — Changed-file behavior audit and the platform/organization reward and aggregate-sharing contract.
+    *   [Feedora Phase 1 Ownership Hardening](../apps/feedora-showcase/docs/architecture/2026-10-23-phase-1-ownership-hardening.md) — Principal, membership, creator/scope separation, migration quarantine, and hostile acceptance criteria.
     *   [Enterprise Form Platform Roadmap](./architecture/enterprise-form-platform-roadmap.md) — Strategic execution pillars and architectural evolution.
     *   [Conditional Branching & Dynamic Visibility Engine](./architecture/conditional-branching-and-jump-logic.md) — Pure TypeScript rule evaluation, `visibleIf`, `jumpRules`, non-linear rewinding, and branch diversion protection.
-    *   [Offline-First Persistence, Draft Management & Outbox Queue](./architecture/offline-first-persistence-and-outbox.md) — Hexagonal storage ports, debounced draft auto-saving, 14-day TTL outbox queue, and auto-reconnect synchronization.
+    *   [Offline-First Persistence, Draft Management & Outbox Queue](./architecture/offline-first-persistence-and-outbox.md) — Hexagonal storage ports, debounced draft auto-saving, durable no-age-drop submission queue, and auto-reconnect synchronization.
     *   [Meaningful Progress & Rewardification Architecture](./architecture/meaningful-progress-and-rewardification.md) — Behavioral psychology, 2026 UX research findings, and hexagonal architecture for reciprocal value loops in multi-stage forms.
     *   [Enterprise Multi-Version Matrix Testing Strategy](./architecture/multi-version-testing-strategy.md) — Modern monorepo fixture, tarball packaging, and CI matrix testing architecture for cross-SDK verification.
     *   [Form UX Heuristics, Common Pitfalls & Engine Alignment Audit](./architecture/form-ux-heuristics-and-pitfalls-audit.md) — Comprehensive Baymard Institute, Nielsen Norman Group, and WCAG 1.3.5 heuristics audit, mobile keyboard traps, and engine alignment matrix.
@@ -95,7 +97,7 @@ Welcome to the technical documentation library for `@intuitui-labs/form-builder-
     *   Outbound ports: `IStoragePort`, `INetworkStatusPort`, `ITransportPort` (0 kB core dependencies).
     *   Adapters: `MemoryStorageAdapter`, `WebStorageAdapter`, `AlwaysOnlineNetworkAdapter`, `WebNetworkStatusAdapter`, `CallbackTransportAdapter`.
     *   `DraftManager`: Debounced auto-saving on user input, session snapshot persistence, and dual auto/prompted restoration.
-    *   `OfflineOutboxQueue`: Persistent FIFO queue with 14-day TTL, 50-item capacity limit, and automatic reconnection flush with exponential backoff.
+    *   `OfflineOutboxQueue`: Persistent FIFO queue that retains pending intents, rejects new submissions at its 50-item limit, and flushes on reconnection with exponential backoff.
     *   `FormAffordanceState.persistence`: Native UI projection of draft and sync states.
 *   **Hexagonal Schema Validation**:
     *   `ISchemaValidator<T>` and `StandardSchemaV1` specifications supporting zero-dependency `PureSchemaAdapter`, `ZodSchemaAdapter`, and `StandardSchemaAdapter`.

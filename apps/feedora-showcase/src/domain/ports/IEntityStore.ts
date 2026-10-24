@@ -21,6 +21,8 @@ export interface IEntityStore {
 
   /** Submission history tracking for respondent profile. */
   recordSurveyResponse(record: SubmissionHistoryRecord): Promise<void>;
+  /** Atomically deduplicate and persist a server-confirmed submission plus its profile projection. */
+  applySubmissionReceipt(record: SubmissionHistoryRecord, profile: ContributionProfile): Promise<boolean>;
   listUserHistory(userId: string): Promise<SubmissionHistoryRecord[]>;
   getPointsByEntity(userId: string): Promise<Record<string, number>>;
   /** Atomically transfer a guest principal's profiles and history to an account. */
@@ -40,6 +42,8 @@ export interface SubmissionHistoryRecord {
   userId: string;
   pointsEarned: number;
   completedAt: string;
+  submissionId?: string;
+  responseId?: string;
 }
 
 /** Everything needed to prime a fresh store from her real Django data. */

@@ -18,16 +18,25 @@ export interface RemoteSurveyQuestion {
 }
 
 import type { SurveyFeatures } from '../types';
+import type { PrincipalId, ScopeId, ScopeRef } from '../identity';
 
 export interface RemoteSurveyMeta {
   csrfToken?: string;
+  accessGrant?: string;
   survey: {
     id: number;
     uuid: string;
+    scopeId?: ScopeId;
+    scopeKind?: 'platform' | 'organization';
+    scope?: ScopeRef;
+    policyVersion?: string;
+    policyConfirmationRequired?: boolean;
+    attemptId?: string;
+    attemptStorageKey?: string;
     title: string;
     description: string;
     is_hmsam: boolean;
-    access_code: string;
+    access_code?: string;
     accessPolicy?: import('@intuitui-labs/form-builder-engine').FormAccessPolicy;
     prerequisites?: string[];
     sequenceOrder?: number;
@@ -49,7 +58,7 @@ export interface RemoteSurveyMeta {
 export interface RemoteSurveyCatalogItem {
   id: number;
   uuid: string;
-  accessCode: string;
+  accessCode?: string;
   title: string;
   description: string;
   isHmsam: boolean;
@@ -64,6 +73,12 @@ export interface RemoteSurveyCatalogItem {
   unlockDelayMs?: number;
   minScorePercent?: number;
   accessCodeRequired?: boolean;
+  eligibility?: {
+    eligible: boolean;
+    policyVersion: string;
+    evaluatedAt: string;
+    reasons: Array<{ code: string; [key: string]: unknown }>;
+  };
   requiresAccount?: boolean;
   attemptsUsed?: number;
   lastCompletedAt?: string | null;
@@ -79,7 +94,20 @@ export interface RemoteSubmitResult {
   unlocksAt?: string;
   responseId?: number;
   submissionId?: string;
+  principalId?: PrincipalId;
+  scopeId?: ScopeId;
+  scopeKind?: 'platform' | 'organization';
+  scope?: ScopeRef;
+  policyVersion?: string;
+  attemptId?: string;
+  acceptedAt?: string;
+  replayed?: boolean;
   pointsEarned?: number;
+  /** Total points in the returned survey's scope; does not combine scopes. */
+  scopeTotalPoints?: number;
+  /** Legacy account-wide total. Use platformPoints/scopePoints for scoped UX. */
+  accountTotalPoints?: number;
+  platformPoints?: number;
   variableBonus?: number;
   bonusLabel?: string;
   negativeReinforcement?: {
@@ -94,6 +122,8 @@ export interface RemoteSubmitResult {
 
 export interface RemoteLeaderboardResult {
   ok: boolean;
+  scopeId?: string;
+  scopeKind?: 'platform' | 'organization';
   totalContributors: number;
   contributors: Array<{
     userId: string;

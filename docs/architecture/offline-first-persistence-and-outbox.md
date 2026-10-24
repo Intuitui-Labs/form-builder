@@ -2,7 +2,7 @@
 title: "Offline-First Persistence, Draft Management & Outbox Queue"
 status: "active"
 created: 2026-10-11
-updated: 2026-10-11
+updated: 2026-10-22
 author: "Naveen"
 scribe: "Antigravity"
 tags: [architecture, offline, persistence, outbox, storage, netinfo, hexagonal]
@@ -36,7 +36,7 @@ graph TD
 
     subgraph Core Engine Persistence Layer
         DM[DraftManager: Debounced auto-save & resume]
-        OQ[OfflineOutboxQueue: 14-day TTL & 50-item limit]
+        OQ[OfflineOutboxQueue: durable intents & 50-item limit]
     end
 
     subgraph Presentation & Affordances
@@ -173,9 +173,12 @@ When a user taps **Submit** while disconnected from the network:
 3. The working draft is cleanly removed (since the submission is safely enqueued).
 4. `getAffordanceState().persistence` transitions to `syncStatus: 'offline-queued'`.
 
-### Eviction & Delivery Rules:
-* **14-Day TTL**: Submissions older than 14 days (`14 * 86,400,000 ms`) are purged to prevent stale submissions.
-* **50-Item Capacity**: When the queue reaches 50 entries, the oldest pending items are evicted.
+### Retention & Delivery Rules:
+* **No age-based deletion**: Pending responses remain until the server accepts them or they are explicitly rejected and preserved for recovery. The legacy `ttlMs` option is accepted for source compatibility but is deprecated and ignored.
+* **50-Item Capacity**: When the active queue reaches 50 entries, a new submission is rejected with a recoverable capacity message. Existing saved intents are never evicted.
+* **Persist before sending**: An intent is written durably before any network request. Server idempotency allows the same intent to be retried after a timeout or process restart.
+* **Receipt before removal**: Hosts can reconcile the canonical server receipt before the active intent is removed. A failed reconciliation leaves the intent recoverable and replayable.
+* **Dead-letter retention**: Rejected intents are preserved in the DLQ and are not silently capped or discarded. Hosts should provide a recovery/export path and monitor storage use.
 * **Reconnection Auto-Flush**: Upon `INetworkStatusPort` emitting `isOnline: true`, the queue flushes pending items in FIFO order with exponential backoff (`baseDelayMs: 1000`, `maxRetries: 5`).
 * **Manual Flush**: The host application can trigger synchronization manually via `manager.flushOutbox()`.
 

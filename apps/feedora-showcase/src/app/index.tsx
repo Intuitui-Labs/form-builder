@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Text,
   View,
   StyleSheet,
   Modal,
+  ScrollView,
   TextInput,
   Pressable,
   LayoutAnimation,
@@ -52,6 +53,7 @@ import {
   psychometricAuditor,
   qrAirDropPort,
 } from '../feedora';
+import { profileUserIdFromReceipt, recordRemoteSubmissionReceipt } from '../domain/recordRemoteSubmissionReceipt';
 import { FEEDORA_REMOTE, remoteEnabled } from '../config';
 import { pointsForAnswer } from '../domain/points';
 import { convertRemoteSurveyToSchema } from '../domain/surveySchemaConverter';
@@ -59,8 +61,18 @@ import { colors, radii, sansFont, serifFont } from '../theme';
 import type { ConstructReport } from '../domain/ports/measurementTypes';
 import { FEEDORA_BADGES, type BadgeDefinition } from '../domain/types';
 import { ScopedDraftStorage } from '../adapters/ScopedDraftStorage';
+import { policyReviewSummary } from '../domain/policyReviewSummary';
+import { isParticipationLocked } from '../domain/eligibilityPresentation';
+import { recoverAdmissionDeniedResponse } from '../domain/recoverAdmissionDeniedResponse';
+import type { RemoteSurveyMeta } from '../domain/ports/transportTypes';
 
 type Values = Record<string, unknown>;
+
+function createSubmissionId(): string {
+  const cryptoApi = globalThis.crypto as Crypto | undefined;
+  if (cryptoApi?.randomUUID) return cryptoApi.randomUUID();
+  return `sub_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}`;
+}
 
 /** Bridges the engine's reward stream into React state (toast). */
 class CollectingRewardNotifier implements IFeedbackNotifierPort {
@@ -97,10 +109,25 @@ export default function SurveyScreen() {
   const [totalEarned, setTotalEarned] = useState(0);
   const [lastConstructs, setLastConstructs] = useState<ConstructReport[] | null>(null);
   const [syncNote, setSyncNote] = useState<string | null>(null);
+  const [policyReviewMeta, setPolicyReviewMeta] = useState<RemoteSurveyMeta | null>(null);
+  const [policyReviewSubmissionId, setPolicyReviewSubmissionId] = useState<string | null>(null);
+  const [policyReviewBusy, setPolicyReviewBusy] = useState(false);
   const [hasRespondentDraft, setHasRespondentDraft] = useState(false);
   const [auditNotice, setAuditNotice] = useState<string | null>(null);
   const [unlockedBadge, setUnlockedBadge] = useState<BadgeDefinition | null>(null);
   const [voucherCopied, setVoucherCopied] = useState(false);
+  const pendingSubmissionIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const pendingSubmissionId = pendingSubmissionIdRef.current;
+    if (!submitted || !pendingSubmissionId) return;
+    const confirmedReceipt = submissionHistory.find((item) => item.submissionId === pendingSubmissionId);
+    if (!confirmedReceipt) return;
+
+    setTotalEarned(confirmedReceipt.pointsEarned);
+    setSyncNote('Response saved to the research server. Your points are confirmed.');
+    pendingSubmissionIdRef.current = null;
+  }, [submissionHistory, submitted]);
 
   // Institution Selector & Research Arm State (Defects 1 & 15 UX)
   const [consented, setConsented] = useState(true);
@@ -110,6 +137,12 @@ export default function SurveyScreen() {
   const experimentVariant = activeSurveyMeta?.experiment?.variant ?? researchArm;
   const isGamified = experimentVariant === 'gamified';
 
+  useEffect(() => {
+    if (activeSurveyMeta?.survey.policyConfirmationRequired) {
+      setPolicyReviewMeta(activeSurveyMeta);
+    }
+  }, [activeSurveyMeta]);
+
   // AirDrop / QR Import Modal State
   const [isAirDropModalOpen, setIsAirDropModalOpen] = useState(false);
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
@@ -118,14 +151,15 @@ export default function SurveyScreen() {
   const [importingLoading, setImportingLoading] = useState(false);
 
   // Universal Link & QR Deep Linking Auto-Loader
-  const params = useLocalSearchParams<{ code?: string; survey?: string }>();
+  const params = useLocalSearchParams<{ code?: string; survey?: string; catalog?: string }>();
   useEffect(() => {
     if (params.code) {
       openSurveyByCode(params.code).catch(() => {});
     } else if (params.survey) {
       openSurvey(params.survey).catch(() => {});
     }
-  }, [params.code, params.survey]);
+    if (params.catalog === '1') setIsCatalogOpen(true);
+  }, [params.code, params.survey, params.catalog]);
 
   const currentSchema = useMemo(() => {
     if (airDropSchema) {
@@ -238,7 +272,12 @@ export default function SurveyScreen() {
     activeSurveyMeta?.features,
   ]);
   const attemptLimitReached = activeAccessEvaluation.reason === 'max_attempts_reached';
-  const surveyAccessLocked = !activeAccessEvaluation.canStart;
+  const surveyAccessLocked = isParticipationLocked({
+    source: activeSurveyMeta && !airDropSchema ? 'remote' : 'local',
+    hasServerReservation: Boolean(activeSurveyMeta?.survey.attemptId),
+    policyConfirmationRequired: Boolean(activeSurveyMeta?.survey.policyConfirmationRequired),
+    localCanStart: activeAccessEvaluation.canStart,
+  });
 
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -348,8 +387,6 @@ export default function SurveyScreen() {
     for (const [key, value] of Object.entries(values)) {
       if (typeof value === 'number' && !Number.isNaN(value)) numericItems[key] = value;
     }
-    await store.addResponse(numericItems);
-
     // Run psychometric quality & anti-fraud audit
     const questionsMeta: QuestionMetadata[] = [];
     for (const page of currentSchema.pages) {
@@ -413,126 +450,208 @@ export default function SurveyScreen() {
     const currentName = authUser?.displayName || 'Contributor';
     const currentAvatar = authUser?.avatar || '🎙️';
 
-    const prevCompleted = profile?.surveysCompleted ?? 0;
-    const recordedProfile = await contributionPort.recordContribution({
-      userId: currentUserId,
-      displayName: currentName,
-      avatar: currentAvatar,
-      entityId,
-      formId: currentSchema.id,
-      points: earned,
-      isCompletion: true,
-    });
-    const newCompleted = recordedProfile.surveysCompleted;
-    const newlyUnlocked = isGamified
-      ? (FEEDORA_BADGES.find(
-          (b) => prevCompleted < b.minResponses && newCompleted >= b.minResponses,
-        ) || null)
-      : null;
-    setUnlockedBadge(newlyUnlocked);
-
-    await store.recordSurveyResponse({
-      entityId,
-      surveyId: currentSchema.id,
-      surveyTitle: currentSchema.title,
-      userId: currentUserId,
-      pointsEarned: earned,
-      completedAt: new Date().toISOString(),
-    });
-
     const targetUuid = activeSurveyUuid || FEEDORA_REMOTE.surveyUuid;
+    const submissionId = createSubmissionId();
+    const principalId = authUser ? `user-${authUser.id}` : guestUserId;
+    const scopeId = activeSurveyMeta?.survey?.scopeId ?? entityId;
+    const scopeRef = activeSurveyMeta?.survey?.scope;
+    const prevCompleted = profile?.surveysCompleted ?? 0;
+    let finalEarned = earned;
+    let recordedProfile: Awaited<ReturnType<typeof contributionPort.getProfile>> = null;
 
     if (remoteEnabled && !airDropSchema) {
+      const intentContext = {
+        principalId,
+        profileUserId: currentUserId,
+        scopeId,
+        scopeRef,
+        guestParticipantId: authUser ? undefined : guestUserId,
+        policyVersion: activeSurveyMeta?.survey?.policyVersion,
+        transportMetadata: {
+          attemptId: activeSurveyMeta?.survey?.attemptId ?? '',
+          attemptStorageKey: activeSurveyMeta?.survey?.attemptStorageKey ?? '',
+        },
+        surveyTitle: currentSchema.title,
+        displayName: currentName,
+        avatar: currentAvatar,
+        surveyId: targetUuid,
+        variant: experimentVariant,
+        platform: Platform.OS,
+        durationMs: Date.now() - surveyStartTimeRef.current,
+        dwellMs: (audit.metrics ? { avgDwellMs: audit.metrics.averageDwellMs } : {}) as Record<string, number>,
+        qualityFlags: audit.flags,
+        consentVersion: '1.0',
+      };
+      const enqueueIntent = async () => outboxPort.enqueue({
+        id: submissionId,
+        formId: targetUuid,
+        tenantId: scopeId,
+        context: intentContext,
+        values: values as Record<string, unknown>,
+        submittedAt: new Date().toISOString(),
+        retryCount: 0,
+        experimentMetadata: {
+          experimentKey: 'hmsam-gamification-study',
+          variantId: experimentVariant,
+        },
+      });
+
       try {
-        const durationMs = Date.now() - surveyStartTimeRef.current;
-        const result = await transportPort.submitResponse(targetUuid, values, {
-          variant: experimentVariant,
-          platform: 'mobile',
-          durationMs,
-          dwellMs: audit.metrics ? { avgDwellMs: audit.metrics.averageDwellMs } : {},
-          qualityFlags: audit.flags,
-          consentVersion: '1.0',
-          guestParticipantId: authUser ? undefined : guestUserId,
-        });
-        if (result.ok) {
-          let note = "Synced directly to Gihini's Django research database.";
+        const queued = await enqueueIntent();
+        const result = queued.receipt?.metadata as import('../domain/ports/transportTypes').RemoteSubmitResult | undefined;
+
+        if (queued.status === 'synced' && result?.ok && result.responseId !== undefined) {
+          recordedProfile = await recordRemoteSubmissionReceipt(contributionPort, {
+            submissionId,
+            responseId: String(result.responseId),
+            principalId,
+            userId: profileUserIdFromReceipt(result, currentUserId),
+            scopeId: result.scopeId ?? scopeId,
+            surveyId: targetUuid,
+            surveyTitle: currentSchema.title,
+            displayName: currentName,
+            avatar: currentAvatar,
+            points: result.pointsEarned ?? 0,
+            completedAt: result.acceptedAt ?? new Date().toISOString(),
+          });
+          notifyDataChanged();
+          finalEarned = result.pointsEarned ?? 0;
+          let note = result.replayed
+            ? 'Your saved response was confirmed by the research server.'
+            : 'Response saved to the research server.';
           if (result.variableBonus && result.variableBonus > 0) {
-            note += ` (${result.bonusLabel ?? '🎲 Surprise Insight Boost!'} +${result.variableBonus} pts)`;
+            note += ` (+${result.variableBonus} points)`;
           }
           if (result.negativeReinforcement?.enabled && result.negativeReinforcement.perk_description) {
             note += ` · ${result.negativeReinforcement.perk_description}`;
           }
           setSyncNote(note);
-
-          // Real-time synchronization: sync exact authoritative server points
-          if (result.pointsEarned !== undefined && result.pointsEarned > 0) {
-            setTotalEarned(result.pointsEarned);
-          }
-          if (result.totalPoints !== undefined && profile) {
-            profile.totalPoints = result.totalPoints;
-            profile.standing = contributionPort.standingFor(result.totalPoints);
-            await store.putProfile(profile);
-          }
-        } else if (result.status >= 400 && result.status < 500) {
-          const availableAt = result.unlocksAt ? ` Available ${new Date(result.unlocksAt).toLocaleString()}.` : '';
-          setSyncNote(`${result.error || 'This survey is currently locked by its access policy.'}${availableAt}`);
+          await restoreAuthSession();
         } else {
-          await outboxPort.enqueue({
-            id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-            formId: targetUuid,
-            values: values as Record<string, unknown>,
-            submittedAt: new Date().toISOString(),
-            retryCount: 0,
-            experimentMetadata: {
-              experimentKey: 'hmsam-gamification-study',
-              variantId: experimentVariant,
-            },
-          });
-          setSyncNote(`Saved to resilient offline outbox (server HTTP ${result.status}) — will auto-sync upon reconnection.`);
+          finalEarned = 0;
+          pendingSubmissionIdRef.current = submissionId;
+          setSyncNote('Response saved on this device and waiting to sync. Points will appear after the server confirms it.');
         }
-        await restoreAuthSession();
-      } catch {
-        await outboxPort.enqueue({
-          id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-          formId: targetUuid,
-          values: values as Record<string, unknown>,
-          submittedAt: new Date().toISOString(),
-          retryCount: 0,
-          experimentMetadata: {
-            experimentKey: 'hmsam-gamification-study',
-            variantId: experimentVariant,
-          },
-        });
-        setSyncNote('Saved to resilient offline outbox — research server unreachable, will auto-sync upon reconnection.');
+      } catch (error) {
+        const status = Number((error as { status?: number }).status);
+        const code = (error as { code?: string }).code;
+        if (code === 'policy_changed') {
+          try {
+            const reviewMeta = await openSurvey(targetUuid);
+            setPolicyReviewMeta(reviewMeta);
+            setPolicyReviewSubmissionId(submissionId);
+            setSyncNote('Your answers are saved. Review the current rules before sending them again.');
+          } catch (reviewError) {
+            setSyncNote(`Your response is preserved on this device. Current rules require attention: ${(reviewError as Error).message}`);
+          }
+          return;
+        }
+        if (status >= 400 && status < 500) {
+          setSyncNote((error as Error).message || 'The current survey rules do not allow this response.');
+          try {
+            await openSurvey(targetUuid);
+            setRunKey((key) => key + 1);
+          } catch (refreshError) {
+            // Keep the current answers visible when admission or account state
+            // has expired. The saved outbox item remains available for recovery.
+            const refreshCode = (refreshError as { code?: string }).code;
+            if (refreshCode === 'access_code_required' || refreshCode === 'access_grant_invalid') {
+              setSyncNote('Your answers are saved on this device. Verify the survey access code again to continue syncing.');
+              setIsCatalogOpen(true);
+            } else if (refreshCode === 'account_required') {
+              setSyncNote('Your answers are saved on this device. Sign in to continue syncing.');
+              openAuthModal();
+            } else {
+              setSyncNote(`Your answers are saved on this device. The survey could not refresh: ${(refreshError as Error).message}`);
+            }
+          }
+          return;
+        }
+        try {
+          await enqueueIntent();
+          finalEarned = 0;
+          pendingSubmissionIdRef.current = submissionId;
+          setSyncNote('Response saved on this device and waiting to sync. Points will appear after the server confirms it.');
+        } catch {
+          setSyncNote(`Could not save this response for sync: ${(error as Error).message}`);
+          setRunKey((key) => key + 1);
+          return;
+        }
       }
     } else if (airDropSchema) {
+      await store.addResponse(numericItems);
+      recordedProfile = await contributionPort.recordContribution({
+        userId: currentUserId,
+        displayName: currentName,
+        avatar: currentAvatar,
+        entityId,
+        formId: currentSchema.id,
+        points: earned,
+        isCompletion: true,
+      });
+      await store.recordSurveyResponse({
+        entityId,
+        surveyId: currentSchema.id,
+        surveyTitle: currentSchema.title,
+        userId: currentUserId,
+        pointsEarned: earned,
+        completedAt: new Date().toISOString(),
+      });
       setSyncNote('Saved to local offline SQLite storage (AirDrop peer survey).');
     } else {
+      await store.addResponse(numericItems);
+      recordedProfile = await contributionPort.recordContribution({
+        userId: currentUserId,
+        displayName: currentName,
+        avatar: currentAvatar,
+        entityId,
+        formId: currentSchema.id,
+        points: earned,
+        isCompletion: true,
+      });
+      await store.recordSurveyResponse({
+        entityId,
+        surveyId: currentSchema.id,
+        surveyTitle: currentSchema.title,
+        userId: currentUserId,
+        pointsEarned: earned,
+        completedAt: new Date().toISOString(),
+      });
       setSyncNote('Saved to this device (remote sync is off).');
     }
 
+    const newlyUnlocked = isGamified && recordedProfile
+      ? FEEDORA_BADGES.find((badge) => prevCompleted < badge.minResponses && recordedProfile!.surveysCompleted >= badge.minResponses) ?? null
+      : null;
+    setUnlockedBadge(newlyUnlocked);
     notifyDataChanged();
-    setTotalEarned(earned);
+    setTotalEarned(finalEarned);
     LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
     setSubmitted(true);
   };
 
   const rewardHandlerRef = useRef(handleReward);
-  rewardHandlerRef.current = handleReward;
+  useLayoutEffect(() => {
+    rewardHandlerRef.current = handleReward;
+  });
   const notifier = useMemo(
     () => new CollectingRewardNotifier((reward) => rewardHandlerRef.current(reward)),
     [],
   );
   const submitHandlerRef = useRef(handleSubmit);
-  submitHandlerRef.current = handleSubmit;
+  useLayoutEffect(() => {
+    submitHandlerRef.current = handleSubmit;
+  });
 
   const draftStorage = useMemo(
     () => new ScopedDraftStorage(
       store,
-      `${authUser?.id || guestUserId || 'guest'}:${entityId}:${currentSchema.id}`,
-      authUser && guestUserId ? `${guestUserId}:${entityId}:${currentSchema.id}` : undefined,
+      `${authUser?.id || guestUserId || 'guest'}:${activeSurveyMeta?.survey?.scopeId ?? entityId}:${currentSchema.id}`,
+      authUser && guestUserId
+        ? `${guestUserId}:${activeSurveyMeta?.survey?.scopeId ?? entityId}:${currentSchema.id}`
+        : undefined,
     ),
-    [authUser?.id, guestUserId, entityId, currentSchema.id],
+    [authUser?.id, guestUserId, entityId, currentSchema.id, activeSurveyMeta?.survey?.scopeId],
   );
 
   const manager = useMemo(
@@ -607,6 +726,7 @@ export default function SurveyScreen() {
     setToast(null);
     setSubmitted(false);
     setTotalEarned(0);
+    pendingSubmissionIdRef.current = null;
     setLastConstructs(null);
     setSyncNote(null);
     setAuditNotice(null);
@@ -614,6 +734,69 @@ export default function SurveyScreen() {
     setVoucherCopied(false);
     surveyStartTimeRef.current = Date.now();
     setRunKey((k) => k + 1);
+  };
+
+  const deferPolicyReview = () => {
+    setPolicyReviewMeta(null);
+    setPolicyReviewSubmissionId(null);
+    resetToDefaultSurvey();
+    startOver();
+  };
+
+  const confirmPolicyReview = async () => {
+    if (!policyReviewMeta || policyReviewBusy) return;
+    setPolicyReviewBusy(true);
+    try {
+      const prepared = await openSurvey(policyReviewMeta.survey.uuid, { confirmPolicyChange: true });
+      const deadLetters = await outboxPort.getDeadLetterQueue();
+      const savedSubmission = policyReviewSubmissionId
+        ? deadLetters.find((item) => item.envelope.id === policyReviewSubmissionId)
+        : deadLetters.find((item) =>
+            item.envelope.formId === prepared.survey.uuid
+            && item.lastErrorCode === 'policy_changed'
+            && item.envelope.context?.scopeId === prepared.survey.scopeId
+            && item.envelope.context?.policyVersion !== prepared.survey.policyVersion,
+          );
+
+      if (savedSubmission) {
+        const rebound = await outboxPort.rebindDeadLetterContext(savedSubmission.envelope.id, {
+          policyVersion: prepared.survey.policyVersion,
+          scopeId: prepared.survey.scope?.id
+            ?? (prepared.survey.scopeKind === 'platform'
+              ? 'platform'
+              : prepared.survey.scopeId ?? savedSubmission.envelope.context?.scopeId ?? entityId),
+          transportMetadata: {
+            attemptId: prepared.survey.attemptId ?? '',
+            attemptStorageKey: prepared.survey.attemptStorageKey ?? '',
+          },
+        });
+        if (!rebound || !await outboxPort.retryDeadLetter(savedSubmission.envelope.id)) {
+          throw new Error('The saved response is still available, but could not be prepared for retry. Try again.');
+        }
+        await outboxPort.flush(true);
+        const rejectedAgain = (await outboxPort.getDeadLetterQueue()).find(
+          (item) => item.envelope.id === savedSubmission.envelope.id,
+        );
+        if (rejectedAgain) {
+          setSyncNote(`Your answers remain saved. The server needs another check: ${rejectedAgain.lastError ?? 'review the current rules and try again.'}`);
+          setPolicyReviewSubmissionId(savedSubmission.envelope.id);
+          return;
+        }
+        setSubmitted(true);
+        setSyncNote(await outboxPort.getPendingCount()
+          ? 'Your response is saved under the updated rules and waiting to sync.'
+          : 'Your saved response was sent under the updated rules.');
+      } else {
+        setSyncNote('The current rules are accepted. Your saved answers are ready to continue.');
+      }
+
+      setPolicyReviewMeta(null);
+      setPolicyReviewSubmissionId(null);
+    } catch (error) {
+      setSyncNote(`Your answers remain saved. ${(error as Error).message}`);
+    } finally {
+      setPolicyReviewBusy(false);
+    }
   };
 
   const isCover = currentPage?.role === 'cover';
@@ -1093,14 +1276,71 @@ export default function SurveyScreen() {
         </View>
       </Modal>
 
+      <Modal
+        visible={Boolean(policyReviewMeta)}
+        transparent
+        animationType="fade"
+        onRequestClose={deferPolicyReview}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Survey rules have changed</Text>
+                <Text style={styles.modalSub}>{policyReviewMeta?.survey.title}</Text>
+              </View>
+            </View>
+            <Text style={styles.modalDesc}>
+              Your answers remain saved on this device. Review the current rules before continuing. If a response was rejected under the earlier rules, continuing resends the same answers and submission ID under the current attempt.
+            </Text>
+            <ScrollView style={{ maxHeight: 260 }} contentContainerStyle={{ gap: 8 }}>
+              {policyReviewMeta ? policyReviewSummary(policyReviewMeta).map((line) => (
+                <Text key={line} style={styles.modalDesc}>• {line}</Text>
+              )) : null}
+            </ScrollView>
+            {syncNote ? <Text style={styles.modalErrorText}>{syncNote}</Text> : null}
+            <View style={styles.modalBtnRow}>
+              <View style={{ flex: 1 }}>
+                <ActionButton label="Keep draft for later" secondary onPress={deferPolicyReview} disabled={policyReviewBusy} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <ActionButton
+                  label={policyReviewBusy ? 'Updating…' : 'Continue with saved answers'}
+                  onPress={() => void confirmPolicyReview()}
+                  disabled={policyReviewBusy}
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <SurveyCatalogModal
         visible={isCatalogOpen}
         onClose={() => setIsCatalogOpen(false)}
         onSelectSurvey={async (uuid) => {
-          await openSurvey(uuid);
+          const prepared = await openSurvey(uuid);
           startOver();
+          try {
+            const recovery = await recoverAdmissionDeniedResponse(outboxPort, {
+              surveyId: uuid,
+              policyVersion: prepared.survey.policyVersion,
+              scopeId: prepared.survey.scope?.id
+                ?? (prepared.survey.scopeKind === 'platform' ? 'platform' : prepared.survey.scopeId ?? entityId),
+              attemptId: prepared.survey.attemptId,
+              attemptStorageKey: prepared.survey.attemptStorageKey,
+            });
+            if (recovery.status === 'still-rejected') {
+              setSyncNote('Access is verified. Your saved answers remain on this device and still need a server check.');
+            } else if (recovery.status === 'synced') {
+              setSyncNote('Access is verified and your saved response has synced.');
+            } else if (recovery.status === 'retry-unavailable') {
+              setSyncNote('Access is verified. Your saved response remains on this device and can be retried from the sync notice.');
+            }
+          } catch (syncError) {
+            setSyncNote(`Access is verified. Your saved response remains on this device: ${(syncError as Error).message}`);
+          }
         }}
-        completedSurveyIds={completedSurveyIds}
         submissionHistory={submissionHistory}
       />
 

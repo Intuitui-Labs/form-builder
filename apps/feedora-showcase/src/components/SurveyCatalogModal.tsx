@@ -12,7 +12,7 @@ import {
 import { useFeedora, transportPort } from '../feedora';
 import { Tag } from './FeedoraUi';
 import { colors, radii, serifFont } from '../theme';
-import { BatteryEngine, FormKind, FormAccessPolicy } from '@intuitui-labs/form-builder-engine';
+import { describeEligibilityReason, type EligibilityReasonForDisplay } from '../domain/eligibilityPresentation';
 import type { RemoteSurveyCatalogItem } from '../domain/ports/transportTypes';
 import type { SubmissionHistoryRecord } from '../domain/ports/IEntityStore';
 
@@ -24,7 +24,6 @@ interface SurveyCatalogModalProps {
   visible: boolean;
   onClose: () => void;
   onSelectSurvey: (uuid: string) => Promise<void>;
-  completedSurveyIds?: Set<number | string>;
   submissionHistory?: SubmissionHistoryRecord[];
 }
 
@@ -32,7 +31,6 @@ export function SurveyCatalogModal({
   visible,
   onClose,
   onSelectSurvey,
-  completedSurveyIds = new Set(),
   submissionHistory = [],
 }: SurveyCatalogModalProps) {
   const { activeSurveyUuid, entityId, authUser, guestUserId, openAuthModal } = useFeedora();
@@ -52,25 +50,7 @@ export function SurveyCatalogModal({
     transportPort
       .fetchPublicSurveys(entityId, authUser ? undefined : guestUserId)
       .then((items) => {
-        const enriched: SurveyCatalogItem[] = items.map((item) => {
-          const kind: FormKind = (item.kind as FormKind) || (item.isHmsam
-            ? 'survey'
-            : item.title.toLowerCase().includes('quiz')
-            ? 'quiz'
-            : item.title.toLowerCase().includes('exam')
-            ? 'exam'
-            : item.title.toLowerCase().includes('intake')
-            ? 'intake'
-            : 'survey');
-
-          const accessPolicy: FormAccessPolicy = (item.accessPolicy as FormAccessPolicy) || BatteryEngine.getDefaultAccessPolicy(kind);
-
-          return {
-            ...item,
-            kind,
-            accessPolicy,
-          };
-        });
+        const enriched: SurveyCatalogItem[] = items;
 
         if (!cancelled) setSurveys(enriched);
       })
@@ -97,7 +77,6 @@ export function SurveyCatalogModal({
     return surveys.filter((s) => {
       const matchSearch =
         s.title.toLowerCase().includes(search.toLowerCase()) ||
-        s.accessCode.toLowerCase().includes(search.toLowerCase()) ||
         s.description.toLowerCase().includes(search.toLowerCase());
       if (!matchSearch) return false;
       if (activeTab === 'hmsam') return s.isHmsam;
@@ -110,115 +89,47 @@ export function SurveyCatalogModal({
     });
   }, [surveys, search, activeTab]);
 
-  const accessBySurveyId = useMemo(() => {
-    const scopedRecords = submissionHistory.filter((record) => record.entityId === entityId);
-    const normalizedHistory = scopedRecords.map((record) => {
-      const sourceId = String(record.surveyId);
-      const match = surveys.find((survey) =>
-        sourceId === survey.uuid || sourceId === String(survey.id) ||
-        (survey.isHmsam && (sourceId === 'hmsam' || sourceId === 'hmsam-38')),
-      );
-      return {
-        formId: match?.uuid ?? sourceId,
-        completedAt: record.completedAt,
-        isCompleted: true,
-        attemptNumber: 1,
-      };
-    });
-    for (const survey of surveys) {
-      const hasHistory = normalizedHistory.some((record) => record.formId === survey.uuid);
-      const completedLocally = completedSurveyIds.has(survey.uuid) || completedSurveyIds.has(survey.id) ||
-        (survey.isHmsam && (completedSurveyIds.has('hmsam') || completedSurveyIds.has('hmsam-38')));
-      if (!hasHistory && completedLocally) {
-        normalizedHistory.push({
-          formId: survey.uuid,
-          completedAt: new Date(0).toISOString(),
-          isCompleted: true,
-          attemptNumber: 1,
-        });
-      }
-    }
-    for (const survey of surveys) {
-      const existingAttempts = normalizedHistory.filter((record) => record.formId === survey.uuid && record.isCompleted !== false).length;
-      const serverAttempts = Math.max(0, Number(survey.attemptsUsed) || 0);
-      for (let index = existingAttempts; index < serverAttempts; index += 1) {
-        normalizedHistory.push({
-          formId: survey.uuid,
-          completedAt: survey.lastCompletedAt || new Date(0).toISOString(),
-          isCompleted: true,
-          attemptNumber: index + 1,
-        });
-      }
-    }
+  const knownSurveyTitles = useMemo(
+    () => new Map(surveys.map((survey) => [survey.uuid, survey.title])),
+    [surveys],
+  );
+  const serverLockDescription = (reason: EligibilityReasonForDisplay) =>
+    describeEligibilityReason(reason, knownSurveyTitles);
 
-    const evaluations = new Map<string, ReturnType<typeof BatteryEngine.evaluateNodeAccess>>();
-    for (const survey of surveys) {
-      const sequencePrerequisites = survey.enforceSequence && survey.sequenceGroup && survey.sequenceOrder !== undefined
-        ? surveys
-            .filter((candidate) => candidate.sequenceGroup === survey.sequenceGroup &&
-              candidate.sequenceOrder !== undefined && candidate.sequenceOrder < survey.sequenceOrder!)
-            .map((candidate) => candidate.uuid)
-        : [];
-      const prerequisites = [...new Set([...(survey.prerequisites ?? []), ...sequencePrerequisites])];
-      const node = {
-        id: survey.uuid,
-        schemaId: survey.uuid,
-        title: survey.title,
-        kind: survey.kind ?? 'survey' as FormKind,
-        stage: 'baseline' as const,
-        sequenceOrder: survey.sequenceOrder ?? survey.id,
-        accessPolicy: survey.accessPolicy,
-        ...(prerequisites.length || survey.unlockDelayMs || survey.minScorePercent !== undefined
-          ? {
-              prerequisites: {
-                completedFormIds: prerequisites,
-                ...(survey.unlockDelayMs ? { unlockDelayMs: survey.unlockDelayMs } : {}),
-                ...(survey.minScorePercent !== undefined ? { minScorePercent: survey.minScorePercent } : {}),
-              },
-            }
-          : {}),
-      };
-      evaluations.set(survey.uuid, BatteryEngine.evaluateNodeAccess(node, normalizedHistory));
-    }
-    return evaluations;
-  }, [submissionHistory, completedSurveyIds, entityId, surveys]);
-
-  const lockDescription = (item: SurveyCatalogItem, evaluation: ReturnType<typeof BatteryEngine.evaluateNodeAccess>) => {
-    if (item.requiresAccount && !authUser) return 'Sign in to start and save progress on this survey.';
-    if (item.accessCodeRequired) return 'An access code is required to start this survey.';
-    if (evaluation.reason === 'prerequisite_unmet') {
-      const titles = (evaluation.missingFormIds ?? [])
-        .map((id) => surveys.find((survey) => survey.uuid === id)?.title)
-        .filter(Boolean);
-      return `Complete ${titles.join(', ') || 'the required survey'} first.`;
-    }
-    if (evaluation.reason === 'score_threshold_unmet') return 'A required score has not been reached yet.';
-    if (evaluation.reason === 'cooldown_active' || evaluation.reason === 'time_locked') {
-      return evaluation.unlocksAt
-        ? `Available ${new Date(evaluation.unlocksAt).toLocaleString()}.`
-        : 'This survey is temporarily locked.';
-    }
-    if (evaluation.reason === 'max_attempts_reached') return 'You have reached the attempt limit for this survey.';
-    return 'This survey is not available yet.';
+  const hasCompletion = (survey: SurveyCatalogItem) => {
+    const historyCompletion = submissionHistory.some((record) =>
+      record.entityId === entityId &&
+      (String(record.surveyId) === survey.uuid || String(record.surveyId) === String(survey.id)),
+    );
+    return historyCompletion || (Number(survey.attemptsUsed) || 0) > 0;
   };
 
   const handleSurveyClick = async (survey: SurveyCatalogItem) => {
-    const evaluation = accessBySurveyId.get(survey.uuid)!;
-    if (survey.requiresAccount && !authUser) {
+    if (!survey.eligibility) {
+      alert('Refresh the survey list to check whether this survey is available.');
+      return;
+    }
+    const serverReasons = survey.eligibility?.reasons ?? [];
+    const serverRequiresAccount = serverReasons.some((reason) => reason.code === 'account_required');
+    if ((survey.requiresAccount || serverRequiresAccount) && !authUser) {
       alert('Sign in to start this survey and save your progress.');
       openAuthModal();
       return;
     }
-    if (evaluation.isLocked) {
-      alert(`🔒 ${lockDescription(survey, evaluation)}`);
+    const nonCodeServerLock = serverReasons.find((reason) => reason.code !== 'access_code_required');
+    if (nonCodeServerLock) {
+      alert(`🔒 ${serverLockDescription(nonCodeServerLock)}`);
       return;
     }
-
-    // Check code lock if required
-    if (survey.accessCodeRequired) {
+    if (serverReasons.some((reason) => reason.code === 'access_code_required') || survey.accessCodeRequired) {
       setSelectedSurveyForCode(survey);
       setEnteredCode('');
       setCodeError(null);
+      return;
+    }
+    if (survey.eligibility.eligible === false) {
+      const reason = serverReasons[0] ?? { code: 'survey_unavailable' };
+      alert(`🔒 ${serverLockDescription(reason)}`);
       return;
     }
 
@@ -232,12 +143,14 @@ export function SurveyCatalogModal({
 
   const handleVerifyCode = async () => {
     if (!selectedSurveyForCode) return;
-    if (enteredCode.trim().toUpperCase() === selectedSurveyForCode.accessCode.toUpperCase()) {
-      setSelectedSurveyForCode(null);
+    setCodeError(null);
+    try {
+      await transportPort.verifySurveyAccessCode(selectedSurveyForCode.uuid, enteredCode);
       await onSelectSurvey(selectedSurveyForCode.uuid);
+      setSelectedSurveyForCode(null);
       onClose();
-    } else {
-      setCodeError(`Invalid code. Expected access code for "${selectedSurveyForCode.title}".`);
+    } catch (error) {
+      setCodeError(error instanceof Error ? error.message : 'That access code could not be verified.');
     }
   };
 
@@ -262,7 +175,7 @@ export function SurveyCatalogModal({
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
             style={styles.searchInput}
-            placeholder="Search by title, access code, or topic…"
+            placeholder="Search by title or topic…"
             placeholderTextColor={colors.faint}
             value={search}
             onChangeText={setSearch}
@@ -322,9 +235,8 @@ export function SurveyCatalogModal({
             ) : (
               filtered.map((item, index) => {
                 const isActive = item.uuid === activeSurveyUuid;
-                const evaluation = accessBySurveyId.get(item.uuid)!;
-                const isCompleted = evaluation.isCompleted;
-                const isLocked = evaluation.isLocked || item.accessCodeRequired === true || (item.requiresAccount === true && !authUser);
+                const isCompleted = hasCompletion(item);
+                const isLocked = !item.eligibility || item.eligibility.eligible === false;
                 const canRetake = !isLocked && isCompleted;
 
                 return (
@@ -374,7 +286,7 @@ export function SurveyCatalogModal({
                     {isLocked ? (
                       <View style={styles.prereqNotice}>
                         <Text style={styles.prereqText}>
-                          🔒 {lockDescription(item, evaluation)}
+                          🔒 {serverLockDescription(item.eligibility?.reasons[0] ?? { code: 'survey_unavailable' })}
                         </Text>
                       </View>
                     ) : (
@@ -406,7 +318,7 @@ export function SurveyCatalogModal({
                 </Text>
                 <TextInput
                   style={styles.codeInput}
-                  placeholder={`e.g. ${selectedSurveyForCode.accessCode}`}
+                  placeholder="Enter access code"
                   placeholderTextColor={colors.faint}
                   value={enteredCode}
                   onChangeText={setEnteredCode}

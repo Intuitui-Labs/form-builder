@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { StyleSheet, Text, View, Pressable, LayoutAnimation } from 'react-native';
+import { router } from 'expo-router';
 import { useFeedora } from '../feedora';
 import { FEEDORA_REMOTE } from '../config';
 import { colors, radii } from '../theme';
@@ -8,6 +9,10 @@ export function OfflineSyncBanner() {
   const { outboxPort, refresh } = useFeedora();
   const [backendReachable, setBackendReachable] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
+  const [actionCount, setActionCount] = useState(0);
+  const [actionMessage, setActionMessage] = useState('');
+  const [actionCode, setActionCode] = useState<string | undefined>();
+  const [actionSurveyId, setActionSurveyId] = useState<string | undefined>();
   const [isSyncing, setIsSyncing] = useState(false);
   const [showSyncedToast, setShowSyncedToast] = useState(false);
   const prevPendingRef = useRef(0);
@@ -52,6 +57,33 @@ export function OfflineSyncBanner() {
     }
   }, [outboxPort, isSyncing, refresh]);
 
+  const handleRetryNeedsAction = useCallback(async () => {
+    if (!outboxPort || isSyncing) return;
+    const [first] = await outboxPort.getDeadLetterQueue();
+    if (first?.lastErrorCode === 'policy_changed' && first.envelope.formId) {
+      router.push({ pathname: '/', params: { survey: first.envelope.formId } });
+      return;
+    }
+    if (
+      ['access_code_required', 'access_grant_invalid'].includes(first?.lastErrorCode ?? '')
+      && first?.envelope.formId
+    ) {
+      router.push({ pathname: '/', params: { catalog: '1' } });
+      return;
+    }
+    setIsSyncing(true);
+    try {
+      if (first && await outboxPort.retryDeadLetter(first.envelope.id)) await outboxPort.flush(true);
+      const remaining = await outboxPort.getDeadLetterQueue();
+      setActionCount(remaining.length);
+      setActionCode(remaining[0]?.lastErrorCode);
+      setActionSurveyId(remaining[0]?.envelope.formId);
+      setPendingCount(await outboxPort.getPendingCount());
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [outboxPort, isSyncing]);
+
   useEffect(() => {
     if (!outboxPort) return;
 
@@ -60,11 +92,23 @@ export function OfflineSyncBanner() {
       setPendingCount(count);
       prevPendingRef.current = count;
     });
+    outboxPort.getDeadLetterQueue().then((items) => {
+      setActionCount(items.length);
+      setActionMessage(items[0]?.lastError ?? 'The server needs a rule or account check before accepting this response.');
+      setActionCode(items[0]?.lastErrorCode);
+      setActionSurveyId(items[0]?.envelope.formId);
+    });
 
     const unsub = outboxPort.subscribe((q) => {
       q.getPendingCount().then((count) => {
         setPendingCount(count);
         prevPendingRef.current = count;
+      });
+      q.getDeadLetterQueue().then((items) => {
+        setActionCount(items.length);
+        setActionMessage(items[0]?.lastError ?? 'The server needs a rule or account check before accepting this response.');
+        setActionCode(items[0]?.lastErrorCode);
+        setActionSurveyId(items[0]?.envelope.formId);
       });
     });
 
@@ -85,6 +129,28 @@ export function OfflineSyncBanner() {
       clearInterval(timer);
     };
   }, [outboxPort, checkConnectivity, handleSync]);
+
+  if (actionCount > 0) {
+    return (
+      <View style={styles.actionBanner}>
+        <View style={styles.textCol}>
+          <Text style={styles.actionTitle}>{actionCount} response{actionCount > 1 ? 's need' : ' needs'} attention</Text>
+          <Text style={styles.actionSub} numberOfLines={2}>
+            Saved on this device · {actionMessage || 'Check the survey rules or account, then retry.'}
+          </Text>
+        </View>
+        <Pressable style={styles.retryBtn} onPress={handleRetryNeedsAction} disabled={isSyncing || (actionCode === 'policy_changed' && !actionSurveyId)}>
+          <Text style={styles.retryBtnText}>
+            {actionCode === 'policy_changed'
+              ? 'Review rules'
+              : ['access_code_required', 'access_grant_invalid'].includes(actionCode ?? '')
+                ? 'Verify access'
+                : isSyncing ? 'Retrying…' : 'Retry'}
+          </Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   if (showSyncedToast) {
     return (
@@ -183,6 +249,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
   },
+  actionBanner: {
+    backgroundColor: '#FFF7ED',
+    borderBottomWidth: 1,
+    borderBottomColor: '#FED7AA',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  actionTitle: { fontSize: 12.5, fontWeight: '800', color: '#9A3412' },
+  actionSub: { fontSize: 11, color: '#7C2D12', marginTop: 1 },
   pendingTitle: {
     fontSize: 12.5,
     fontWeight: '800',

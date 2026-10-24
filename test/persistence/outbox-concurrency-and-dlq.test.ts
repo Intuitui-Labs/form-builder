@@ -91,9 +91,9 @@ describe('OfflineOutboxQueue - Distributed Locking, Concurrency & DLQ Management
       }
     }
 
-    // DLQ must be capped at 25 items to protect local storage
+    // Rejected submissions remain available for user recovery.
     const dlq = await outbox.getDeadLetterQueue();
-    expect(dlq.length).toBe(25);
+    expect(dlq.length).toBe(30);
     expect(dlq[dlq.length - 1].envelope.id).toBe('dead_env_29');
 
     // Operator retries an envelope from the DLQ
@@ -103,10 +103,68 @@ describe('OfflineOutboxQueue - Distributed Locking, Concurrency & DLQ Management
 
     // Should now be removed from DLQ and placed in active pending queue
     const updatedDlq = await outbox.getDeadLetterQueue();
-    expect(updatedDlq.length).toBe(24);
+    expect(updatedDlq.length).toBe(29);
     expect(updatedDlq.some((i) => i.envelope.id === targetId)).toBe(false);
 
     const pendingCount = await outbox.getPendingCount();
     expect(pendingCount).toBe(1);
+  });
+
+  it('rebinds only policy metadata after consent while preserving the original submission id and answers', async () => {
+    const storage = new MemoryStorageAdapter();
+    const rejection = Object.assign(new Error('Survey rules changed.'), {
+      status: 409,
+      code: 'policy_changed',
+      retryable: false,
+    });
+    const originalAnswers = { Q1: 'saved answer', Q2: ['a', 'b'] };
+    const oldContext = {
+      principalId: 'user-9',
+      profileUserId: '9',
+      scopeId: 'org-4',
+      policyVersion: 'old-policy',
+      transportMetadata: { attemptId: 'old-attempt', attemptStorageKey: 'attempt-key' },
+      displayName: 'Respondent',
+      avatar: 'R',
+      surveyId: 'survey-1',
+    };
+    const submit = vi.fn().mockRejectedValueOnce(rejection).mockResolvedValueOnce({
+      receiptId: 'receipt-1', status: 'accepted', timestamp: new Date().toISOString(),
+    });
+    const outbox = new OfflineOutboxQueue({
+      storage,
+      networkStatus: new AlwaysOnlineNetworkAdapter(),
+      transport: { submit },
+      storageKey: 'policy-rebind-outbox',
+      autoFlushOnReconnect: false,
+    });
+    const envelope = {
+      id: 'stable-submission-id',
+      formId: 'survey-1',
+      tenantId: 'org-4',
+      context: oldContext,
+      values: originalAnswers,
+      submittedAt: new Date().toISOString(),
+      retryCount: 0,
+    };
+
+    await expect(outbox.enqueue(envelope)).rejects.toMatchObject({ code: 'policy_changed' });
+    const rebound = await outbox.rebindDeadLetterContext(envelope.id, {
+      policyVersion: 'new-policy',
+      transportMetadata: { attemptId: 'new-attempt' },
+    });
+    expect(rebound).toBe(true);
+    expect(await outbox.retryDeadLetter(envelope.id)).toBe(true);
+    await outbox.flush(true);
+
+    expect(submit).toHaveBeenLastCalledWith(expect.objectContaining({
+      id: envelope.id,
+      values: originalAnswers,
+      context: expect.objectContaining({
+        policyVersion: 'new-policy',
+        transportMetadata: { attemptId: 'new-attempt', attemptStorageKey: 'attempt-key' },
+      }),
+    }));
+    expect(await outbox.getDeadLetterQueue()).toHaveLength(0);
   });
 });
